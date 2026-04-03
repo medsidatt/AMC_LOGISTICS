@@ -1,0 +1,133 @@
+/* ── Select2 validation feedback ──────────── */
+.select2-invalid-feedback {
+    display: block;
+    color: #dc3545;
+    font-size: 80%;
+}
+
+/* ── Mobile-first driver experience ─────────── */
+
+/* On mobile: larger touch targets */
+@media (max-width: 767.98px) {
+
+    /* Bigger buttons for touch */
+    .btn {
+        min-height: 44px;
+        padding: 0.5rem 1rem;
+    }
+    .btn-lg {
+        min-height: 52px;
+        font-size: 1.1rem;
+    }
+
+    /* Stack KPI cards vertically with less gap */
+    .icon-big {
+        font-size: 2rem !important;
+    }
+
+    /* Compact card bodies */
+    .card-body {
+        padding: 0.75rem;
+    }
+    .card-header {
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Table: smaller text, touch-friendly rows */
+    .table-sm td, .table-sm th {
+        padding: 0.5rem 0.4rem;
+        font-size: 0.85rem;
+    }
+
+    /* Page title smaller */
+    .content-header-title {
+        font-size: 1.1rem;
+    }
+
+    /* Breadcrumbs: hide on mobile to save space */
+    .breadcrumb-wrapper {
+        display: none;
+    }
+
+    /* Form fields: full width labels */
+    .form-group label {
+        font-size: 0.9rem;
+    }
+
+    /* Checklist form: compact spacing */
+    .checklist-form .form-group {
+        margin-bottom: 0.5rem;
+    }
+
+    /* Driver sidebar: minimal width */
+    .main-menu {
+        width: 220px;
+    }
+
+    /* Content: reduce padding when sidebar hidden */
+    .app-content {
+        padding: 0.5rem;
+    }
+    .content-wrapper {
+        padding: 0;
+    }
+
+    /* Pagination: bigger touch targets */
+    .page-link {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Badge: readable on mobile */
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.3em 0.5em;
+    }
+
+    /* Input group: prevent overflow */
+    .input-group {
+        flex-wrap: nowrap;
+    }
+
+    /* Modal: full width on mobile */
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    /* Checklist issue cards: stack properly */
+    .border.rounded.p-2 {
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* ── Driver-specific status indicators ──────── */
+.checklist-done {
+    background: #e8f5e9;
+    border-left: 4px solid #28d094;
+}
+.checklist-pending {
+    background: #fff3e0;
+    border-left: 4px solid #ff9149;
+}
+
+/* ── Touch-friendly checkboxes ──────────────── */
+@media (max-width: 767.98px) {
+    .form-check-input {
+        width: 1.25em;
+        height: 1.25em;
+        margin-top: 0.15em;
+    }
+    .form-check-label {
+        padding-left: 0.25rem;
+        font-size: 0.95rem;
+    }
+}
+
+/* ── Improved table responsive ──────────────── */
+.table-responsive {
+    -webkit-overflow-scrolling: touch;
+}
