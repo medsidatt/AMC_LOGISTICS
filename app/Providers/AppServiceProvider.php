@@ -3,13 +3,19 @@
 namespace App\Providers;
 
 use Carbon\Carbon;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
+use SocialiteProviders\Azure\AzureExtendSocialite;
 use SocialiteProviders\Azure\Provider as AzureProvider;
+use SocialiteProviders\Manager\SocialiteWasCalled;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -25,12 +31,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-
         // Manually register the 'azure' driver
         Socialite::extend('azure', function ($app) {
             $config = $app['config']['services.azure'];
             return Socialite::buildProvider(AzureProvider::class, $config);
         });
+
+        // Socialite event listener
+        Event::listen(SocialiteWasCalled::class, AzureExtendSocialite::class.'@handle');
 
         Carbon::setLocale('fr');
 
@@ -70,7 +78,9 @@ class AppServiceProvider extends ServiceProvider
             return Route::get($uri, $action)->middleware('ajax');
         });
 
-        // update total leave from the hire date each month 2 days
-
+        // Rate limiting for API
+        RateLimiter::for('api', function (Request $request) {
+            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }
