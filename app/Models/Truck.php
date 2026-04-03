@@ -28,7 +28,7 @@ class Truck extends Model
 
     public function transporter(): BelongsTo
     {
-        return $this->belongsTo(Transporter::class);
+        return $this->belongsTo(Transporter::class)->withTrashed();
     }
 
     public function transportTrackings(): HasMany

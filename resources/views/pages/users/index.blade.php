@@ -7,11 +7,11 @@
             <div class="card-header">
 
             </div>
-            <div class="card-body">
+            <div class="card-body table-responsive">
                 <table
                     data-column="id,name,email,status,action"
                     data-url="{{ route('users.index') }}"
-                    class="table table-striped table-bordered w-100"
+                    class="table table-striped table-bordered w-100 dt-responsive nowrap"
                 >
                     <thead>
                     <tr>

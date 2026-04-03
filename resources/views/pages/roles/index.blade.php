@@ -5,8 +5,8 @@
 >
     <section class="">
         <div class="card">
-            <div class="card-body">
-                <table class="table table-striped table-bordered w-100"
+            <div class="card-body table-responsive">
+                <table class="table table-striped table-bordered w-100 dt-responsive nowrap"
                     data-column="id,name,permissions,action"
                        data-url="{{ route('roles.index') }}"
                 >

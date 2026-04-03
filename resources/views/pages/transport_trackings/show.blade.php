@@ -51,7 +51,7 @@
 
     {{-- ===================== GAP ===================== --}}
     @php
-        $gap = ($tracking->provider_net_weight ?? 0) - ($tracking->client_net_weight ?? 0);
+        $gap = $tracking->gap ?? 0;
     @endphp
 
     <div class="mb-2">
@@ -62,10 +62,10 @@
 
         @if($gap == 0)
             <span class="badge bg-success">0 (Pas d'écart)</span>
-        @elseif($gap > 0)
-            <span class="badge bg-danger">{{ $gap }} T Perte</span>
+        @elseif($gap < 0)
+            <span class="badge bg-danger">{{ number_format(abs($gap), 2) }} T Perte</span>
         @else
-            <span class="badge bg-warning">{{ abs($gap) }} T Gain</span>
+            <span class="badge bg-warning">{{ number_format($gap, 2) }} T Gain</span>
         @endif
     </div>
 

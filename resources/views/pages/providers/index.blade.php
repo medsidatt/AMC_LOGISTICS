@@ -3,9 +3,9 @@
     :actions="$actions"
 >
     <div class="card">
-        <div class="card-body">
+        <div class="card-body table-responsive">
             <table
-                class="table table-striped table-bordered w-100"
+                class="table table-striped table-bordered w-100 dt-responsive nowrap"
                 data-url="{{ route('providers.index') }}"
                 data-column='id,name,phone,email,address,website,actions'
             >
