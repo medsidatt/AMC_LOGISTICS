@@ -4,11 +4,11 @@
 >
     <section>
         <div class="card">
-            <div class="card-body">
+            <div class="card-body table-responsive">
                 <table
                     data-column="id,email,created_at,expires_at,action"
                     data-url="{{ route('invitation.index') }}"
-                    class="table responsive w-100"
+                    class="table responsive w-100 dt-responsive nowrap"
                 >
                     <thead>
                     <tr>

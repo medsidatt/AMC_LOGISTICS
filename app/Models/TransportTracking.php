@@ -42,19 +42,19 @@ class TransportTracking extends Model
     // driver
     public function driver(): BelongsTo
     {
-        return $this->belongsTo(Driver::class);
+        return $this->belongsTo(Driver::class)->withTrashed();
     }
 
     // truck
     public function truck(): BelongsTo
     {
-        return $this->belongsTo(Truck::class);
+        return $this->belongsTo(Truck::class)->withTrashed();
     }
 
     // provider
     public function provider(): BelongsTo
     {
-        return $this->belongsTo(Provider::class);
+        return $this->belongsTo(Provider::class)->withTrashed();
     }
 
     // gap
@@ -87,7 +87,7 @@ class TransportTracking extends Model
 
         do {
             $reference = 'AMC' . str_pad($next, 5, '0', STR_PAD_LEFT);
-            $exists = self::where('reference', $reference)->exists();
+            $exists = self::withTrashed()->where('reference', $reference)->exists();
             $next++;
         } while ($exists);
 

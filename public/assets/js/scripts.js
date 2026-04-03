@@ -14,12 +14,39 @@ $(document).ready(function () {
         let columns = table.data('column').split(',');
         let url = table.data('url');
         let params = table.data('params');
+        let priorities = table.data('priorities');
+        let priorityMap = {};
+        if (priorities) {
+            String(priorities).split(',').forEach(function (val, idx) {
+                priorityMap[idx] = parseInt(val);
+            });
+        }
+
+        // Build columnDefs: first column and actions (last) always visible
+        let columnDefs = [
+            { responsivePriority: 1, targets: 0 },
+            { responsivePriority: 2, targets: -1 }
+        ];
+        // Apply custom priorities from data-priorities attribute
+        Object.keys(priorityMap).forEach(function (idx) {
+            columnDefs.push({ responsivePriority: priorityMap[idx], targets: parseInt(idx) });
+        });
+
+        // Use simple prev/next on mobile, full numbers on desktop
+        let isMobile = window.innerWidth < 768;
         const dataTable = table.DataTable({
             processing: true,
             serverSide: true,
             search: true,
-            responsive: true,
-            columnDefs: [{responsivePriority: 1, targets: -1}],
+            pagingType: isMobile ? 'simple' : 'simple_numbers',
+            responsive: {
+                details: {
+                    type: 'column',
+                    target: 'tr'
+                }
+            },
+            autoWidth: false,
+            columnDefs: columnDefs,
             ajax: {
                 url: url, type: 'GET', data: function (d) {
                     d.customRequest = {}

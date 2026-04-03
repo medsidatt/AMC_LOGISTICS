@@ -13,10 +13,10 @@
                placeholder="{{ __('global.all') }}"
               />
         </div>
-        <div class="card-body">
+        <div class="card-body table-responsive">
             <table
                 id="project-table"
-                class="table table-striped table-bordered w-100"
+                class="table table-striped table-bordered w-100 dt-responsive nowrap"
                 data-url="{{ route('projects.index') }}"
                 data-column='logo,name,entity_id,start_date,end_date,address,phone,email,actions'
             >

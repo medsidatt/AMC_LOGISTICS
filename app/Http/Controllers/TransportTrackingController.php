@@ -135,11 +135,11 @@ class TransportTrackingController extends Controller
                     if ($gap < 0) {
                         $bgClass = 'danger';
                         $icon = '<i class="fas fa-arrow-down fa-xs"></i>';
-                    } elseif ($gap <= 0.5) {
-                        $bgClass = 'warning';
+                    } elseif ($gap == 0) {
+                        $bgClass = 'success';
                         $icon = '<i class="fas fa-equals fa-xs"></i>';
                     } else {
-                        $bgClass = 'success';
+                        $bgClass = 'warning';
                         $icon = '<i class="fas fa-arrow-up fa-xs"></i>';
                     }
                     return '<span class="badge badge-' . $bgClass . '" style="font-size:0.8rem;">'
@@ -586,8 +586,13 @@ class TransportTrackingController extends Controller
     {
         $transportTracking->load('documents');
 
-        $transporters = Transporter::all();
-        $trucks = Truck::get()
+        // Include soft-deleted records that are currently assigned to this tracking
+        $transporters = Transporter::when($transportTracking->truck?->transporter_id, function ($q, $id) {
+            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
+        })->get();
+        $trucks = Truck::when($transportTracking->truck_id, function ($q, $id) {
+                $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
+            })->get()
             ->map(function ($truck) {
                 return [
                     'id' => $truck->id,
@@ -596,8 +601,12 @@ class TransportTrackingController extends Controller
                     'transporter_id' => $truck?->transporter_id,
                 ];
             });
-        $drivers = Driver::all();
-        $providers = Provider::all();
+        $drivers = Driver::when($transportTracking->driver_id, function ($q, $id) {
+            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
+        })->get();
+        $providers = Provider::when($transportTracking->provider_id, function ($q, $id) {
+            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
+        })->get();
         $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
             return [
                 'id' => $product,
@@ -766,13 +775,8 @@ class TransportTrackingController extends Controller
      */
     public function destroy(TransportTracking $transportTracking)
     {
-        // Delete all associated documents
-        foreach ($transportTracking->documents as $document) {
-            if (Storage::disk('public')->exists($document->file_path)) {
-                Storage::disk('public')->delete($document->file_path);
-            }
-            $document->delete();
-        }
+        // Soft-delete all associated documents (files kept on disk for restore)
+        $transportTracking->documents()->delete();
 
         $transportTracking->delete();
         return response()->json([

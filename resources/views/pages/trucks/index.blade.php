@@ -88,12 +88,13 @@
 
 
     <div class="card">
-        <div class="card-body">
+        <div class="card-body table-responsive">
             <table
-                class="table table-striped table-bordered w-100"
+                class="table table-striped table-bordered w-100 dt-responsive nowrap"
                 data-url="{{ route('trucks.index') }}"
                 data-column='id,matricule,is_active,maintenance_type,current_counter,last_maintenance_counter,next_maintenance_counter,maintenance_due,total_rotations,transporter_id,actions'
                 data-order='[]'
+                data-priorities="10,1,3,4,5,7,8,2,6,9,2"
             >
                 <thead>
                 <tr>

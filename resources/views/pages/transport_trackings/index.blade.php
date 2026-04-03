@@ -1,13 +1,14 @@
 <x-layouts.main
     :title="__('Suivi stock')"
     :actions="$actions">
-    <div class="card">
-        <div class="card-header">
-            <div class="row">
-                {{-- 🔹 Date Range (Delivery Date) --}}
+
+    {{-- Filters --}}
+    <div class="card shadow-sm mb-1">
+        <div class="card-body py-1">
+            <div class="row align-items-end">
                 <x-forms.input
                     data-filter="start_date"
-                    class="col-6"
+                    class="col-6 col-lg-2"
                     name="start_date"
                     label="{{ __('Du') }}"
                     type="date"
@@ -16,18 +17,16 @@
                 />
                 <x-forms.input
                     data-filter="end_date"
-                    class="col-6"
+                    class="col-6 col-lg-2"
                     name="end_date"
                     label="{{ __('Au') }}"
                     type="date"
                     :value="$filters['end_date'] ?? ''"
                     placeholder="{{ __('Date de fin') }}"
                 />
-
-                {{-- 🔹 Select Filters --}}
                 <x-forms.select
                     data-filter="provider_id_filter"
-                    class="col-6 col-lg-3"
+                    class="col-6 col-lg-2"
                     name="provider_id_filter"
                     label="{{ __('Fournisseurs') }}"
                     :options="$providers"
@@ -36,7 +35,7 @@
                 />
                 <x-forms.select
                     data-filter="transporter_id_filter"
-                    class="col-6 col-lg-3"
+                    class="col-6 col-lg-2"
                     name="transporter_id_filter"
                     label="{{ __('Transporteurs') }}"
                     :options="$transporters"
@@ -45,7 +44,7 @@
                 />
                 <x-forms.select
                     data-filter="truck_id_filter"
-                    class="col-6 col-lg-3"
+                    class="col-6 col-lg-2"
                     name="truck_id_filter"
                     label="{{ __('Camions') }}"
                     :options="$trucks"
@@ -55,7 +54,7 @@
                 />
                 <x-forms.select
                     data-filter="driver_id_filter"
-                    class="col-6 col-lg-3"
+                    class="col-6 col-lg-2"
                     name="driver_id_filter"
                     label="{{ __('Conducteurs') }}"
                     :options="$drivers"
@@ -64,13 +63,17 @@
                 />
             </div>
         </div>
+    </div>
 
-        <div class="card-body">
+    {{-- Table --}}
+    <div class="card shadow-sm">
+        <div class="card-body table-responsive">
             <table
-                class="table table-striped table-bordered w-100"
+                class="table table-striped w-100 dt-responsive nowrap"
                 data-url="{{ route('transport_tracking.index') }}"
                 data-column="reference,client_date,provider_net_weight,client_net_weight,gap,actions"
                 data-default-order="0,desc"
+                data-priorities="1,3,4,5,6,2"
             >
                 <thead>
                 <tr>
@@ -82,9 +85,7 @@
                     <th>{{ __('Actions') }}</th>
                 </tr>
                 </thead>
-                <tbody>
-                {{-- Data will be populated here by DataTables --}}
-                </tbody>
+                <tbody></tbody>
             </table>
         </div>
     </div>
