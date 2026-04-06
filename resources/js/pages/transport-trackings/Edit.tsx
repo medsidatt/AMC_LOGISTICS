@@ -1,12 +1,12 @@
 import { Head, useForm, router } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import Badge from '@/components/ui/Badge';
-import { ArrowLeft, Download, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, FileText, Image, X } from 'lucide-react';
 
 interface Document {
     id: number;
@@ -79,6 +79,8 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
         files: [] as File[],
     });
 
+    const [fileList, setFileList] = useState<File[]>([]);
+
     useEffect(() => {
         const gross = parseFloat(String(form.data.provider_gross_weight));
         const tare = parseFloat(String(form.data.provider_tare_weight));
@@ -91,13 +93,32 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
         if (!isNaN(gross) && !isNaN(tare)) form.setData('client_net_weight', String(gross - tare));
     }, [form.data.client_gross_weight, form.data.client_tare_weight]);
 
+    const addFiles = (newFiles: FileList | null) => {
+        if (!newFiles) return;
+        const updated = [...fileList, ...Array.from(newFiles)];
+        setFileList(updated);
+        form.setData('files', updated);
+    };
+
+    const removeNewFile = (index: number) => {
+        const updated = fileList.filter((_, i) => i !== index);
+        setFileList(updated);
+        form.setData('files', updated);
+    };
+
+    const deleteExistingDoc = (docId: number) => {
+        if (!confirm('Supprimer ce document ?')) return;
+        router.delete(`/transport_tracking/${t.id}/document/${docId}`, { preserveScroll: true });
+    };
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        router.post(`/transport_tracking/${t.id}`, { ...form.data, _method: 'PUT' }, { forceFormData: true });
+        router.post(`/transport_tracking/${t.id}/update`, { ...form.data, _method: 'PUT' }, { forceFormData: true });
     };
 
     const truckOpts = trucks.map((tr) => ({ value: tr.id, label: tr.matricule }));
     const toOpts = (items: DropdownItem[]) => items.map((i) => ({ value: i.id, label: i.name }));
+    const isPdf = (mime: string) => mime === 'application/pdf';
 
     return (
         <AuthenticatedLayout title={`Modifier ${t.reference}`}>
@@ -153,12 +174,18 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
                                 <div className="space-y-2">
                                     {t.documents.map((doc) => (
                                         <div key={doc.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
-                                            <span className="text-[var(--color-text)] truncate">{doc.original_name}</span>
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {isPdf(doc.mime_type) ? <FileText size={16} className="text-red-500 shrink-0" /> : <Image size={16} className="text-blue-500 shrink-0" />}
+                                                <span className="text-[var(--color-text)] truncate">{doc.original_name}</span>
                                                 <Badge variant="muted">{doc.type}</Badge>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
                                                 <a href={doc.file_url} target="_blank" rel="noreferrer" className="p-1 text-[var(--color-info)] hover:bg-[var(--color-info)]/10 rounded">
                                                     <Download size={14} />
                                                 </a>
+                                                <button type="button" onClick={() => deleteExistingDoc(doc.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded">
+                                                    <Trash2 size={14} />
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
@@ -172,10 +199,27 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
                                 type="file"
                                 multiple
                                 accept=".pdf,.jpg,.jpeg,.png"
-                                onChange={(e) => form.setData('files', Array.from(e.target.files ?? []))}
+                                onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
                                 className="block w-full text-sm text-[var(--color-text-secondary)] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[var(--color-primary)]/10 file:text-[var(--color-primary)] hover:file:bg-[var(--color-primary)]/20"
                             />
                         </div>
+
+                        {fileList.length > 0 && (
+                            <div className="space-y-2">
+                                {fileList.map((file, i) => (
+                                    <div key={i} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {file.type === 'application/pdf' ? <FileText size={16} className="text-red-500 shrink-0" /> : <Image size={16} className="text-blue-500 shrink-0" />}
+                                            <span className="text-[var(--color-text)] truncate">{file.name}</span>
+                                            <span className="text-[var(--color-text-muted)] shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                                        </div>
+                                        <button type="button" onClick={() => removeNewFile(i)} className="p-1 rounded hover:bg-red-500/10 text-red-500 shrink-0">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </Card>
                 </div>
 

@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { ArrowLeft, Pencil, Download } from 'lucide-react';
+import { ArrowLeft, Pencil, FileText, Image, ExternalLink } from 'lucide-react';
 
 interface Document {
     id: number;
@@ -40,6 +40,7 @@ interface Props {
 
 export default function TrackingsShow({ tracking: t }: Props) {
     const fmt = (v: number | null) => v != null ? v.toLocaleString('fr-FR') : '-';
+    const isPdf = (mime: string) => mime === 'application/pdf';
 
     return (
         <AuthenticatedLayout title={t.reference}>
@@ -47,7 +48,7 @@ export default function TrackingsShow({ tracking: t }: Props) {
 
             <div className="flex items-center justify-between mb-4">
                 <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>Retour</Button>
-                <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/transport_tracking/${t.id}/edit`}>Modifier</Button>
+                <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/transport_tracking/${t.id}/edit-page`}>Modifier</Button>
             </div>
 
             <div className="grid lg:grid-cols-2 gap-6">
@@ -129,14 +130,20 @@ export default function TrackingsShow({ tracking: t }: Props) {
 
                 {t.documents.length > 0 && (
                     <Card className="lg:col-span-2">
-                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Documents</h4>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Documents ({t.documents.length})</h4>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {t.documents.map((doc) => (
                                 <a key={doc.id} href={doc.file_url} target="_blank" rel="noreferrer"
-                                   className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] px-4 py-3 hover:bg-[var(--color-surface-hover)] transition-colors">
-                                    <Download size={16} className="text-[var(--color-info)] shrink-0" />
-                                    <span className="text-sm text-[var(--color-text)] truncate">{doc.original_name}</span>
-                                    <Badge variant="muted">{doc.type}</Badge>
+                                   className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] px-4 py-3 hover:bg-[var(--color-surface-hover)] transition-colors group">
+                                    {isPdf(doc.mime_type)
+                                        ? <FileText size={20} className="text-red-500 shrink-0" />
+                                        : <Image size={20} className="text-blue-500 shrink-0" />
+                                    }
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-[var(--color-text)] truncate">{doc.original_name}</p>
+                                        <p className="text-xs text-[var(--color-text-muted)]">{doc.type}</p>
+                                    </div>
+                                    <ExternalLink size={14} className="text-[var(--color-text-muted)] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </a>
                             ))}
                         </div>
