@@ -10,6 +10,7 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\SharePointDailyChecklistService;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 
 class DriverController extends Controller
@@ -86,52 +87,21 @@ class DriverController extends Controller
      */
     public function index(Request $request)
     {
-        $drivers = Driver::query();
+        $drivers = Driver::query()
+            ->orderBy('name')
+            ->paginate(15)
+            ->through(fn (Driver $driver) => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+                'phone' => $driver->phone,
+                'address' => $driver->address,
+                'created_at' => $driver->created_at?->format('Y-m-d'),
+            ]);
 
-        if ($request->ajax()) {
-            return datatables()
-                ->of($drivers)
-                ->addColumn('actions', function ($driver) {
-                    $actions = [
-                        [
-                            'label' => 'Voir Détails',
-                            'href' => route('drivers.show-page', $driver->id),
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Modifier',
-                            'onclick' => 'showModal({
-                                title: "Modifier Conducteur - ' . addslashes($driver->name) . '",
-                                route: "' . route('drivers.edit', $driver->id) . '",
-                                size: "lg"
-                            })',
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Supprimer',
-                            'onclick' => 'confirmDelete("' . route('drivers.destroy', $driver->id) . '")',
-                            'permission' => true
-                        ]
-                    ];
-                    return view('components.buttons.action', compact('actions'));
-                })
-                ->rawColumns(['actions'])
-                ->make(true);
-        }
-
-        $actions = [
-            [
-                'label' => 'Nouveau Conducteur',
-                'onclick' => 'showModal({
-                    title: "Nouveau Conducteur",
-                    route: "' . route('drivers.create') . '",
-                    size: "lg"
-                })',
-                'permission' => true
-            ]
-        ];
-
-        return view('pages.drivers.index', compact('actions'));
+        return Inertia::render('drivers/Index', [
+            'drivers' => $drivers,
+        ]);
     }
 
     /**
@@ -151,7 +121,6 @@ class DriverController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:drivers,email',
             'phone' => 'nullable|string|max:15',
-            // Add other validation rules as needed
             'address' => 'nullable|string|max:255',
         ]);
 
@@ -159,14 +128,10 @@ class DriverController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
-            // Add other fields as needed
             'address' => $request->address,
         ]);
 
-        return response([
-            'success' => true,
-            'message' => 'Conducteur créé avec succès.',
-        ]);
+        return redirect()->back()->with('success', 'Conducteur créé avec succès.');
     }
 
     /**
@@ -179,7 +144,17 @@ class DriverController extends Controller
 
     public function showPage(Driver $driver)
     {
-        return view('pages.drivers.show-page', compact('driver'));
+        return Inertia::render('drivers/Show', [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+                'phone' => $driver->phone,
+                'address' => $driver->address,
+                'created_at' => $driver->created_at?->format('Y-m-d'),
+                'updated_at' => $driver->updated_at?->format('Y-m-d'),
+            ],
+        ]);
     }
 
     /**
@@ -200,7 +175,27 @@ class DriverController extends Controller
 
         $truck = $this->resolveAssignedTruck($driver);
 
-        return view('pages.drivers.my-trips', compact('driver', 'trips', 'truck'));
+        return Inertia::render('drivers/MyTrips', [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+            ],
+            'trips' => $trips->through(fn ($trip) => [
+                'id' => $trip->id,
+                'reference' => $trip->reference,
+                'provider_date' => $trip->provider_date,
+                'client_date' => $trip->client_date,
+                'provider_net_weight' => $trip->provider_net_weight,
+                'client_net_weight' => $trip->client_net_weight,
+                'product' => $trip->product,
+                'truck' => $trip->truck ? ['id' => $trip->truck->id, 'matricule' => $trip->truck->matricule] : null,
+                'provider' => $trip->provider ? ['id' => $trip->provider->id, 'name' => $trip->provider->name] : null,
+            ]),
+            'truck' => $truck ? [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+            ] : null,
+        ]);
     }
 
     /**
@@ -226,7 +221,30 @@ class DriverController extends Controller
             ->where('truck_id', $truck->id)
             ->count();
 
-        return view('pages.drivers.my-truck', compact('driver', 'truck', 'myTripsCount'));
+        return Inertia::render('drivers/MyTruck', [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+            ],
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'total_kilometers' => $truck->total_kilometers,
+                'is_active' => $truck->is_active,
+                'transporter' => $truck->transporter ? [
+                    'id' => $truck->transporter->id,
+                    'name' => $truck->transporter->name,
+                ] : null,
+                'maintenances' => $truck->maintenances->map(fn ($m) => [
+                    'id' => $m->id,
+                    'maintenance_date' => $m->maintenance_date,
+                    'type' => $m->type,
+                    'description' => $m->description,
+                    'cost' => $m->cost,
+                ])->values()->toArray(),
+            ],
+            'myTripsCount' => $myTripsCount,
+        ]);
     }
 
     public function checklistPage()
@@ -266,7 +284,50 @@ class DriverController extends Controller
             ->with('issues')
             ->get();
 
-        return view('pages.drivers.checklist-page', compact('driver', 'truck', 'todayChecklist', 'history'));
+        return Inertia::render('drivers/Checklist', [
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+            ],
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+            ],
+            'todayChecklist' => $todayChecklist ? [
+                'id' => $todayChecklist->id,
+                'checklist_date' => $todayChecklist->checklist_date,
+                'tire_condition' => $todayChecklist->tire_condition,
+                'fuel_level' => $todayChecklist->fuel_level,
+                'oil_level' => $todayChecklist->oil_level,
+                'brakes' => $todayChecklist->brakes,
+                'lights' => $todayChecklist->lights,
+                'general_condition_notes' => $todayChecklist->general_condition_notes,
+                'notes' => $todayChecklist->notes,
+                'issues' => $todayChecklist->issues->map(fn ($i) => [
+                    'id' => $i->id,
+                    'category' => $i->category,
+                    'flagged' => $i->flagged,
+                    'issue_notes' => $i->issue_notes,
+                ])->toArray(),
+            ] : null,
+            'history' => $history->map(fn ($c) => [
+                'id' => $c->id,
+                'checklist_date' => $c->checklist_date,
+                'tire_condition' => $c->tire_condition,
+                'fuel_level' => $c->fuel_level,
+                'oil_level' => $c->oil_level,
+                'brakes' => $c->brakes,
+                'lights' => $c->lights,
+                'general_condition_notes' => $c->general_condition_notes,
+                'notes' => $c->notes,
+                'issues' => $c->issues->map(fn ($i) => [
+                    'id' => $i->id,
+                    'category' => $i->category,
+                    'flagged' => $i->flagged,
+                    'issue_notes' => $i->issue_notes,
+                ])->toArray(),
+            ])->toArray(),
+        ]);
     }
 
     public function submitChecklist(Request $request)
@@ -410,7 +471,6 @@ class DriverController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:drivers,email,' . $driver->id,
             'phone' => 'nullable|string|max:15',
-            // Add other validation rules as needed
             'address' => 'nullable|string|max:255',
         ]);
 
@@ -418,14 +478,10 @@ class DriverController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
-            // Add other fields as needed
             'address' => $request->address,
         ]);
 
-        return response([
-            'success' => true,
-            'message' => 'Conducteur mis à jour avec succès.',
-        ]);
+        return redirect()->back()->with('success', 'Conducteur mis à jour avec succès.');
     }
 
     /**
@@ -435,9 +491,6 @@ class DriverController extends Controller
     {
         $driver->delete();
 
-        return response([
-            'success' => true,
-            'message' => 'Conducteur supprimé avec succès.',
-        ]);
+        return redirect()->back()->with('success', 'Conducteur supprimé avec succès.');
     }
 }

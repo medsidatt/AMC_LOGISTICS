@@ -24,12 +24,12 @@ class LoginController extends Controller
 
     use AuthenticatesUsers;
 
-    /**
-     * Where to redirect users after login.
-     *
-     * @var string
-     */
     protected $redirectTo = '/dashboard';
+
+    public function showLoginForm()
+    {
+        return \Inertia\Inertia::render('auth/Login');
+    }
 
     /**
      * Create a new controller instance.

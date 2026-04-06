@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Provider;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class ProviderController extends Controller
 {
@@ -15,71 +16,29 @@ class ProviderController extends Controller
         $this->middleware('permission:provider-delete', ['only' => ['destroy']]);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $providers = Provider::all();
-        if (request()->ajax()) {
-            return datatables()->of($providers)
-                ->addColumn('actions', function ($provider) {
+        $query = Provider::query()->orderBy('name');
 
-                    $actions = [
-                        [
-                            'label' => 'Voir Détails',
-                            'onclick' => 'showModal({
-                                title: \'Détails Fournisseur - '. addslashes($provider->name) .'\',
-                                route: \''. route('providers.show', $provider->id) .'\',
-                                size: \'md\'
-                            })',
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Modifier',
-                            'onclick' => 'showModal({
-                                route: \''. route('providers.edit', $provider->id) .'\',
-                                title: \'Modifier Fournisseur - '. addslashes($provider->name) .'\',
-                                size: \'lg\'
-                            })',
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Supprimer',
-                            'onclick' => 'confirmDelete(\''. route('providers.destroy', $provider->id) .'\')',
-                            'permission' => true
-                        ]
-                    ];
-
-                    return view('components.buttons.action', compact('actions'));
-                })
-                ->rawColumns(['actions'])
-                ->make(true);
+        if ($search = $request->input('search')) {
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhere('phone', 'like', "%{$search}%");
         }
 
-        $actions = [
-            [
-                'label' => 'Add New',
-                'onclick' => 'showModal({
-                    route: \''. route('providers.create') .'\',
-                    title: \'Nouveau Fournisseur\',
-                    size: \'lg\'
-                })',
-                'permission' => true
-            ]
-        ];
-
-        return view('pages.providers.index', compact('actions'));
+        return Inertia::render('providers/Index', [
+            'providers' => $query->paginate(15)->through(fn (Provider $p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'phone' => $p->phone,
+                'email' => $p->email,
+                'address' => $p->address,
+                'website' => $p->website,
+            ]),
+            'filters' => $request->only('search'),
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        return view('pages.providers.create');
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -90,39 +49,11 @@ class ProviderController extends Controller
             'website' => 'nullable|max:255',
         ]);
 
-        Provider::firstOrCreate([
-            'name' => $request->name,
-            'address' => $request->address,
-            'phone' => $request->phone,
-            'email' => $request->email,
-            'website' => $request->website,
-        ]);
+        Provider::create($request->only('name', 'address', 'phone', 'email', 'website'));
 
-        return response([
-            'success' => 'true',
-            'message' => 'Provider created successfully.',
-        ]);
+        return redirect()->back()->with('success', 'Fournisseur créé avec succès.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Provider $provider)
-    {
-        return view('pages.providers.show', compact('provider'));
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Provider $provider)
-    {
-        return view('pages.providers.edit', compact('provider'));
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Provider $provider)
     {
         $request->validate([
@@ -130,33 +61,18 @@ class ProviderController extends Controller
             'address' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
-            'website' => 'nullable|url|max:255',
+            'website' => 'nullable|max:255',
         ]);
 
-        $provider->update([
-            'name' => $request->name,
-            'address' => $request->address,
-            'phone' => $request->phone,
-            'email' => $request->email,
-            'website' => $request->website,
-        ]);
+        $provider->update($request->only('name', 'address', 'phone', 'email', 'website'));
 
-        return response([
-            'success' => 'true',
-            'message' => 'Provider updated successfully.',
-        ]);
+        return redirect()->back()->with('success', 'Fournisseur mis à jour.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Provider $provider)
     {
         $provider->delete();
 
-        return response([
-            'success' => 'true',
-            'message' => 'Provider deleted successfully.',
-        ]);
+        return redirect()->back()->with('success', 'Fournisseur supprimé.');
     }
 }

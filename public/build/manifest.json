@@ -1,0 +1,284 @@
+{
+  "_AlertBanner-CA7uq5Jx.js": {
+    "file": "assets/AlertBanner-CA7uq5Jx.js",
+    "name": "AlertBanner",
+    "imports": [
+      "resources/js/app.tsx",
+      "_triangle-alert-D48yKzCr.js",
+      "_Card-DwzYsjkM.js"
+    ]
+  },
+  "_Badge-9vqWIa2_.js": {
+    "file": "assets/Badge-9vqWIa2_.js",
+    "name": "Badge",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "_Button-9aKhEAZM.js": {
+    "file": "assets/Button-9aKhEAZM.js",
+    "name": "Button",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "_Card-DwzYsjkM.js": {
+    "file": "assets/Card-DwzYsjkM.js",
+    "name": "Card",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "_DataTable-SknbvPRM.js": {
+    "file": "assets/DataTable-SknbvPRM.js",
+    "name": "DataTable",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js",
+      "_Card-DwzYsjkM.js"
+    ]
+  },
+  "_FormInput-B8ASh4-J.js": {
+    "file": "assets/FormInput-B8ASh4-J.js",
+    "name": "FormInput",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "_GuestLayout-DUSG3vUu.js": {
+    "file": "assets/GuestLayout-DUSG3vUu.js",
+    "name": "GuestLayout",
+    "imports": [
+      "resources/js/app.tsx"
+    ]
+  },
+  "_clsx-B-dksMZM.js": {
+    "file": "assets/clsx-B-dksMZM.js",
+    "name": "clsx"
+  },
+  "_triangle-alert-D48yKzCr.js": {
+    "file": "assets/triangle-alert-D48yKzCr.js",
+    "name": "triangle-alert",
+    "imports": [
+      "_Card-DwzYsjkM.js"
+    ]
+  },
+  "_useExport-BC96skfG.js": {
+    "file": "assets/useExport-BC96skfG.js",
+    "name": "useExport",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js",
+      "_Card-DwzYsjkM.js",
+      "_usePolling-Dp25qipt.js",
+      "_triangle-alert-D48yKzCr.js"
+    ],
+    "dynamicImports": [
+      "node_modules/react-apexcharts/dist/react-apexcharts.esm.js"
+    ]
+  },
+  "_usePolling-Dp25qipt.js": {
+    "file": "assets/usePolling-Dp25qipt.js",
+    "name": "usePolling",
+    "imports": [
+      "resources/js/app.tsx",
+      "_clsx-B-dksMZM.js",
+      "_Card-DwzYsjkM.js"
+    ]
+  },
+  "_weight-2hLdXmfm.js": {
+    "file": "assets/weight-2hLdXmfm.js",
+    "name": "weight",
+    "imports": [
+      "_Card-DwzYsjkM.js"
+    ]
+  },
+  "node_modules/react-apexcharts/dist/react-apexcharts.esm.js": {
+    "file": "assets/react-apexcharts.esm-BA88oLfN.js",
+    "name": "react-apexcharts.esm",
+    "src": "node_modules/react-apexcharts/dist/react-apexcharts.esm.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx"
+    ]
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-DtEfUNqq.css",
+    "src": "resources/css/app.css",
+    "isEntry": true
+  },
+  "resources/js/app.tsx": {
+    "file": "assets/app-BALU5VCI.js",
+    "name": "app",
+    "src": "resources/js/app.tsx",
+    "isEntry": true,
+    "dynamicImports": [
+      "resources/js/pages/Dashboard.tsx",
+      "resources/js/pages/DriverDashboard.tsx",
+      "resources/js/pages/LogisticsDashboard.tsx",
+      "resources/js/pages/TransportDashboard.tsx",
+      "resources/js/pages/auth/AcceptInvitation.tsx",
+      "resources/js/pages/auth/ForgotPassword.tsx",
+      "resources/js/pages/auth/Login.tsx",
+      "resources/js/pages/auth/Register.tsx",
+      "resources/js/pages/auth/ResetPassword.tsx",
+      "resources/js/pages/providers/Index.tsx"
+    ]
+  },
+  "resources/js/pages/Dashboard.tsx": {
+    "file": "assets/Dashboard-DUBgsX_q.js",
+    "name": "Dashboard",
+    "src": "resources/js/pages/Dashboard.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_Card-DwzYsjkM.js",
+      "_usePolling-Dp25qipt.js",
+      "_AlertBanner-CA7uq5Jx.js",
+      "_useExport-BC96skfG.js",
+      "_Badge-9vqWIa2_.js",
+      "_DataTable-SknbvPRM.js",
+      "_weight-2hLdXmfm.js",
+      "_clsx-B-dksMZM.js",
+      "_triangle-alert-D48yKzCr.js"
+    ],
+    "dynamicImports": [
+      "node_modules/react-apexcharts/dist/react-apexcharts.esm.js"
+    ]
+  },
+  "resources/js/pages/DriverDashboard.tsx": {
+    "file": "assets/DriverDashboard-D0emC6cU.js",
+    "name": "DriverDashboard",
+    "src": "resources/js/pages/DriverDashboard.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_Card-DwzYsjkM.js",
+      "_usePolling-Dp25qipt.js",
+      "_Badge-9vqWIa2_.js",
+      "_DataTable-SknbvPRM.js",
+      "_weight-2hLdXmfm.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/LogisticsDashboard.tsx": {
+    "file": "assets/LogisticsDashboard-Cz148tPf.js",
+    "name": "LogisticsDashboard",
+    "src": "resources/js/pages/LogisticsDashboard.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_Card-DwzYsjkM.js",
+      "_Badge-9vqWIa2_.js",
+      "_DataTable-SknbvPRM.js",
+      "_AlertBanner-CA7uq5Jx.js",
+      "_usePolling-Dp25qipt.js",
+      "_triangle-alert-D48yKzCr.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/TransportDashboard.tsx": {
+    "file": "assets/TransportDashboard-CgEehErN.js",
+    "name": "TransportDashboard",
+    "src": "resources/js/pages/TransportDashboard.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_Card-DwzYsjkM.js",
+      "_usePolling-Dp25qipt.js",
+      "_useExport-BC96skfG.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js",
+      "_weight-2hLdXmfm.js",
+      "_triangle-alert-D48yKzCr.js"
+    ],
+    "dynamicImports": [
+      "node_modules/react-apexcharts/dist/react-apexcharts.esm.js",
+      "node_modules/react-apexcharts/dist/react-apexcharts.esm.js"
+    ]
+  },
+  "resources/js/pages/auth/AcceptInvitation.tsx": {
+    "file": "assets/AcceptInvitation-CFL2tFvy.js",
+    "name": "AcceptInvitation",
+    "src": "resources/js/pages/auth/AcceptInvitation.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_GuestLayout-DUSG3vUu.js",
+      "_FormInput-B8ASh4-J.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/auth/ForgotPassword.tsx": {
+    "file": "assets/ForgotPassword-l952Q1qY.js",
+    "name": "ForgotPassword",
+    "src": "resources/js/pages/auth/ForgotPassword.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_GuestLayout-DUSG3vUu.js",
+      "_FormInput-B8ASh4-J.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/auth/Login.tsx": {
+    "file": "assets/Login-Bpg3taKm.js",
+    "name": "Login",
+    "src": "resources/js/pages/auth/Login.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_GuestLayout-DUSG3vUu.js",
+      "_FormInput-B8ASh4-J.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/auth/Register.tsx": {
+    "file": "assets/Register-xqCEbASG.js",
+    "name": "Register",
+    "src": "resources/js/pages/auth/Register.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_GuestLayout-DUSG3vUu.js",
+      "_FormInput-B8ASh4-J.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/auth/ResetPassword.tsx": {
+    "file": "assets/ResetPassword-BA5qNQfM.js",
+    "name": "ResetPassword",
+    "src": "resources/js/pages/auth/ResetPassword.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_GuestLayout-DUSG3vUu.js",
+      "_FormInput-B8ASh4-J.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js"
+    ]
+  },
+  "resources/js/pages/providers/Index.tsx": {
+    "file": "assets/Index-C_PHNZTV.js",
+    "name": "Index",
+    "src": "resources/js/pages/providers/Index.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.tsx",
+      "_Card-DwzYsjkM.js",
+      "_DataTable-SknbvPRM.js",
+      "_Button-9aKhEAZM.js",
+      "_clsx-B-dksMZM.js",
+      "_FormInput-B8ASh4-J.js",
+      "_triangle-alert-D48yKzCr.js"
+    ]
+  }
+}

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Yajra\DataTables\DataTables;
@@ -21,56 +22,22 @@ class RoleController extends Controller
 
     public function index(Request $request)
     {
+        $roles = Role::query()
+            ->with('permissions')
+            ->orderBy('name')
+            ->paginate(15)
+            ->through(fn ($role) => [
+                'id' => $role->id,
+                'name' => $role->name,
+                'guard_name' => $role->guard_name,
+                'permissions' => $role->permissions->map(fn ($p) => [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                ])->toArray(),
+            ]);
 
-        if ($request->ajax()) {
-            return Datatables::of(Role::query())
-                ->addColumn('action', function ($role) {
-                    $actions = [
-                        [
-                            'label' => __('View'),
-                            'href' => route('roles.show', $role->id),
-                            'permission' => 'role-show',
-                        ],
-                        [
-                            'label' => __('Edit'),
-                            'href' => route('roles.edit', $role->id),
-                            'permission' => 'role-edit',
-                        ],
-                        [
-                            'label' => __('Delete'),
-                            'onclick' => 'confirmDelete(\'' . route('roles.destroy', $role->id) . '\')',
-                            'permission' => 'role-delete',
-                        ],
-                    ];
-                    return view('components.buttons.action', compact('actions'));
-                })
-                ->addColumn('permissions', function ($role) {
-                    $permissions = Permission::get();
-                    $rolePermissions = DB::table("role_has_permissions")->where("role_has_permissions.role_id", $role->id)
-                        ->pluck('role_has_permissions.permission_id', 'role_has_permissions.permission_id')
-                        ->all();
-                    return view('pages.roles.permissions', compact('permissions', 'rolePermissions', 'role'));
-                })
-                // DT_RowIndex
-                ->addIndexColumn()
-                ->rawColumns(['action', 'permissions'])
-                ->make(true);
-        }
-
-        $breadcrumbs = [
-            ['label' => __('Roles'), 'url' => ''],
-        ];
-        $actions = [
-            [
-                'label' => __('Create'),
-                'url' => route('roles.create'),
-                'permission' => 'role-create',
-            ]
-        ];
-
-        return view('pages.roles.index', [
-            'breadcrumbs' => $breadcrumbs,
-            'actions' => $actions,
+        return Inertia::render('roles/Index', [
+            'roles' => $roles,
         ]);
     }
 
@@ -84,12 +51,14 @@ class RoleController extends Controller
 
     public function create()
     {
-        $permission = Permission::get();
-        $breadcrumbs = [
-            ['label' => __('user.role_management'), 'url' => route('roles.index')],
-            ['label' => __('user.create_role'), 'url' => '#'],
-        ];
-        return view('pages.roles.create', compact('permission', 'breadcrumbs'));
+        $permissions = Permission::orderBy('name')->get()->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+        ])->toArray();
+
+        return Inertia::render('roles/Create', [
+            'permissions' => $permissions,
+        ]);
     }
 
 
@@ -115,46 +84,41 @@ class RoleController extends Controller
 
     public function show($id)
     {
-        $role = Role::find($id);
-        $permission = Permission::get();
-        $rolePermissions = DB::table("role_has_permissions")->where("role_has_permissions.role_id", $id)
-            ->pluck('role_has_permissions.permission_id', 'role_has_permissions.permission_id')
-            ->all();
+        $role = Role::with('permissions')->findOrFail($id);
 
-        return view('pages.roles.show',
-            [
-                'breadcrumbs' => [
-                    ['url' => route('roles.index'), 'label' => __('Roles')],
-                    ['url' => '#', 'label' => $role->name]
-                ],
-                'actions' => [],
-                'role' => $role,
-                'permission' => $permission,
-                'rolePermissions' => $rolePermissions
-            ]
-        );
+        return Inertia::render('roles/Show', [
+            'role' => [
+                'id' => $role->id,
+                'name' => $role->name,
+                'guard_name' => $role->guard_name,
+                'permissions' => $role->permissions->map(fn ($p) => [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                ])->toArray(),
+            ],
+        ]);
     }
 
     public function edit($id)
     {
-        $role = Role::find($id);
-        $permission = Permission::get();
-        $rolePermissions = DB::table("role_has_permissions")->where("role_has_permissions.role_id", $id)
-            ->pluck('role_has_permissions.permission_id', 'role_has_permissions.permission_id')
-            ->all();
-        $breadcrumbs = [
-            ['label' => 'Roles', 'url' => route('roles.index')],
-            ['label' => 'Edit', 'url' => '#'],
-        ];
+        $role = Role::with('permissions')->findOrFail($id);
+        $allPermissions = Permission::orderBy('name')->get()->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+        ])->toArray();
 
-        return view('pages.roles.edit',
-            [
-                'role' => $role,
-                'permission' => $permission,
-                'rolePermissions' => $rolePermissions,
-                'breadcrumbs' => $breadcrumbs,
-            ]
-        );
+        return Inertia::render('roles/Edit', [
+            'role' => [
+                'id' => $role->id,
+                'name' => $role->name,
+                'guard_name' => $role->guard_name,
+                'permissions' => $role->permissions->map(fn ($p) => [
+                    'id' => $p->id,
+                    'name' => $p->name,
+                ])->toArray(),
+            ],
+            'allPermissions' => $allPermissions,
+        ]);
     }
 
     public function update(Request $request, $id)
@@ -186,9 +150,6 @@ class RoleController extends Controller
     public function destroy($id)
     {
         Role::findById($id)->delete();
-        return response()->json([
-            'success' => true,
-            'message' => 'Role deleted successfully'
-        ]);
+        return redirect()->back()->with('success', 'Role deleted successfully.');
     }
 }

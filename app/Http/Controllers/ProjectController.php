@@ -7,6 +7,7 @@ use App\Models\Entity;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class ProjectController extends Controller
 {
@@ -22,119 +23,64 @@ class ProjectController extends Controller
 
     public function index()
     {
-        if (\request()->ajax()) {
-            $projects = Project::with('entity')->forCurrentUser()->get();
+        $projects = Project::with('entity')
+            ->forCurrentUser()
+            ->orderBy('name')
+            ->paginate(15)
+            ->through(fn (Project $project) => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'code' => $project->code,
+                'description' => $project->description,
+                'logo' => $project->logo,
+                'start_date' => $project->start_date,
+                'end_date' => $project->end_date,
+                'entity' => $project->entity ? [
+                    'id' => $project->entity->id,
+                    'name' => $project->entity->name,
+                    'logo' => $project->entity->logo,
+                ] : null,
+            ]);
 
-            if (request()->filters['entity']) {
-                $projects = $projects->where('entity_id', request()->filters['entity']);
-            }
+        $entities = Entity::all()->map(fn ($e) => [
+            'id' => $e->id,
+            'name' => $e->name,
+        ])->toArray();
 
-            return datatables()->of($projects)
-                ->addColumn('actions', function ($project) {
-                    $actions = [
-                        [
-                            'label' => __('global.show'),
-                            'href' => route('projects.show', $project->id),
-                            'permission' => 'project-show'
-                        ],
-                        [
-                            'label' => __('global.edit'),
-                            'onclick' => 'showModal({
-                                    route: \'' . route('projects.edit', $project->id) . '\',
-                                    title: \'' . __('global.project_edit') . '\',
-                                    size: \'lg\',
-                                })',
-                            'permission' => 'project-edit'
-                        ],
-                        [
-                            'label' => __('Affecter un utilisateur'),
-                            'onclick' => 'showModal({
-                                    route: \'' . route('projects.assign.user', $project->id) . '\',
-                                    title: \'' . __('Affecter un utilisateur pour '. $project->name) . '\',
-                                })',
-                            'permission' => true
-                        ],
-                        [
-                            'label' => __('global.delete'),
-                            'href' => route('projects.destroy', $project->id),
-                            'permission' => 'project-delete'
-                        ],
-                    ];
-                    return view('components.buttons.action', [
-                        'actions' => $actions
-                    ]);
-                })
-                ->editColumn('logo', function ($project) {
-                    if ($project->logo) {
-                        return '<img src="' . asset('storage/' . $project->logo) . '" alt="' . $project->name . '" class="img-thumbnail" style="width: 100px;">';
-                    } else {
-                        return '<img src="' .  asset('storage/' . $project->entity?->logo) . '" alt="' . $project->name . '" class="img-thumbnail" style="width: 100px;">';
-                    }
-                })
-                ->editColumn('name', function ($project){
-                    return '<a href="' . route('projects.show', $project->id) . '">' . $project->name . ' ('. $project->code . ')</a>';
-                })
-                ->editColumn('entity_id', function ($project) {
-                    return $project->entity ? $project->entity->name : 'N/A';
-                })
-                ->rawColumns(['actions', 'logo', 'name'])
-                ->make(true);
-        }
-
-        $actions = [
-            [
-                'label' => __('global.create'),
-                'permission' => true,
-                'onclick' => 'showModal({
-                                 route: \'' . route('projects.create') . '\',
-                                 title: \'' . __('global.project_create') . '\',
-                                 size: \'lg\',
-                           })'
-            ]
-        ];
-
-        return view('pages.projects.index', [
-            'actions' => $actions,
-            'breadcrumbs' => [
-                ['label' => __('global.projects'), 'url' => ''],
-            ],
-            'entities' => Entity::all(),
+        return Inertia::render('projects/Index', [
+            'projects' => $projects,
+            'entities' => $entities,
         ]);
     }
 
     public function show($id)
     {
-        $project = Project::findOrFail($id);
+        $project = Project::with(['entity', 'users'])->findOrFail($id);
 
-        $actions = [
-            [
-                'label' => __('global.edit'),
-                'onclick' => 'showModal({
-                                    route: \'' . route('projects.edit', $id) . '\',
-                                    title: \'' . __('global.project_edit') . '\',
-                                    size: \'lg\',
-                                })',
-                'permission' => 'project-edit'
+        return Inertia::render('projects/Show', [
+            'project' => [
+                'id' => $project->id,
+                'name' => $project->name,
+                'code' => $project->code,
+                'description' => $project->description,
+                'logo' => $project->logo,
+                'start_date' => $project->start_date,
+                'end_date' => $project->end_date,
+                'address' => $project->address,
+                'phone' => $project->phone,
+                'email' => $project->email,
+                'entity' => $project->entity ? [
+                    'id' => $project->entity->id,
+                    'name' => $project->entity->name,
+                ] : null,
+                'users' => $project->users->map(fn ($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'role' => $u->pivot->role ?? null,
+                ])->toArray(),
             ],
-            [
-                'label' => __('global.delete'),
-                'onclick' => 'confirmDelete(\'' . route('projects.destroy', $id) . '\')',
-                'permission' => 'project-delete'
-            ],
-        ];
-
-        $breadcrumbs = [
-            [
-                'url' => route('projects.index'),
-                'label' => __('global.projects')
-            ],
-            [
-                'url' => '#',
-                'label' => $project->name . ' ('. $project->entity->name .')'
-            ]
-        ];
-
-        return view('pages.projects.show', compact('project', 'actions', 'breadcrumbs'));
+        ]);
     }
 
     public function create()
@@ -170,10 +116,7 @@ class ProjectController extends Controller
             'logo' => $request->file('logo') ? $request->file('logo')->store('logos', 'public') : null,
         ]);
 
-        return response()->json([
-            'message' => __('global.created_success'),
-            'success' => true
-        ]);
+        return redirect()->back()->with('success', __('global.created_success'));
     }
 
     public function edit($id)
@@ -230,11 +173,7 @@ class ProjectController extends Controller
             'logo' => $file,
         ]);
 
-        return response()->json([
-            'message' => __('global.updated_success'),
-            'success' => true,
-            'file' => $file,
-        ]);
+        return redirect()->back()->with('success', __('global.updated_success'));
     }
 
     public function destroy($id)
@@ -242,10 +181,7 @@ class ProjectController extends Controller
         $project = Project::findOrFail($id);
         $project->delete();
 
-        return response()->json([
-            'message' => __('global.deleted_success'),
-            'success' => true
-        ]);
+        return redirect()->back()->with('success', __('global.deleted_success'));
     }
 
     public function assignUser($id)

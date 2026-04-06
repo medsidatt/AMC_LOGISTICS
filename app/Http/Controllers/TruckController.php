@@ -194,7 +194,20 @@ class TruckController extends Controller
             ],
         ];
 
-        return view('pages.trucks.index', compact('actions', 'maintenanceDueTrucks'));
+        return \Inertia\Inertia::render('trucks/Index', [
+            'trucks' => $trucks->map(fn ($t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'transporter' => $t->transporter?->name,
+                'maintenance_type' => $t->maintenance_type,
+                'is_active' => $t->is_active,
+                'total_kilometers' => $t->total_kilometers,
+                'level' => $t->maintenanceLevelByType(),
+                'remaining' => $t->maintenanceRemainingByType(),
+                'unit' => $t->maintenanceUnitByType(),
+            ])->values(),
+            'maintenanceDueCount' => $maintenanceDueTrucks->count(),
+        ]);
     }
 
     /**
@@ -207,8 +220,8 @@ class TruckController extends Controller
 
     public function createPage()
     {
-        $transporters = Transporter::all();
-        return view('pages.trucks.create-page', compact('transporters'));
+        $transporters = Transporter::all()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]);
+        return \Inertia\Inertia::render('trucks/Create', ['transporters' => $transporters]);
     }
 
     /**
@@ -235,16 +248,9 @@ class TruckController extends Controller
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
         );
 
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Camion créé avec succès.',
-            ]);
-        }
-
         return redirect()
             ->route('trucks.index')
-            ->with('success', 'Camion cree avec succes.');
+            ->with('success', 'Camion créé avec succès.');
     }
 
     /**
@@ -269,7 +275,34 @@ class TruckController extends Controller
         $recentTrackings = $truck->transportTrackings;
         $maintenances = $truck->maintenances;
 
-        return view('pages.trucks.show-page', compact('truck', 'maintenanceInfo', 'recentTrackings', 'maintenances'));
+        return \Inertia\Inertia::render('trucks/Show', [
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'transporter' => $truck->transporter?->name,
+                'maintenance_type' => $truck->maintenance_type,
+                'is_active' => $truck->is_active,
+                'total_kilometers' => $truck->total_kilometers,
+                'fleeti_id' => $truck->fleeti_id,
+            ],
+            'maintenanceInfo' => $maintenanceInfo,
+            'recentTrackings' => $recentTrackings->map(fn ($t) => [
+                'id' => $t->id,
+                'reference' => $t->reference,
+                'driver' => $t->driver?->name,
+                'provider' => $t->provider?->name,
+                'provider_net_weight' => $t->provider_net_weight,
+                'client_net_weight' => $t->client_net_weight,
+                'client_date' => $t->client_date?->format('Y-m-d'),
+            ]),
+            'maintenances' => $maintenances->map(fn ($m) => [
+                'id' => $m->id,
+                'maintenance_date' => $m->maintenance_date,
+                'maintenance_type' => $m->maintenance_type,
+                'kilometers_at_maintenance' => $m->kilometers_at_maintenance,
+                'notes' => $m->notes,
+            ]),
+        ]);
     }
 
     /**
@@ -282,8 +315,18 @@ class TruckController extends Controller
 
     public function editPage(Truck $truck)
     {
-        $transporters = Transporter::all();
-        return view('pages.trucks.edit-page', compact('truck', 'transporters'));
+        $transporters = Transporter::all()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]);
+        return \Inertia\Inertia::render('trucks/Edit', [
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'transporter_id' => $truck->transporter_id,
+                'maintenance_type' => $truck->maintenance_type,
+                'km_maintenance_interval' => $truck->km_maintenance_interval,
+                'is_active' => $truck->is_active,
+            ],
+            'transporters' => $transporters,
+        ]);
     }
 
     /**
@@ -309,16 +352,9 @@ class TruckController extends Controller
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
         );
 
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Camion mis à jour avec succès.',
-            ]);
-        }
-
         return redirect()
             ->route('trucks.index')
-            ->with('success', 'Camion mis a jour avec succes.');
+            ->with('success', 'Camion mis à jour avec succès.');
     }
 
     /**

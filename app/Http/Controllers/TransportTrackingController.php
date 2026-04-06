@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use OpenAI\Laravel\Facades\OpenAI;
 use setasign\Fpdi\Fpdi;
@@ -43,7 +44,6 @@ class TransportTrackingController extends Controller
     {
         $transportTrackings = TransportTracking::query();
 
-
         $filters = $request->filters;
 
         foreach ([
@@ -61,10 +61,8 @@ class TransportTrackingController extends Controller
                 }
                 $column = str_replace('_filter', '', $filter);
                 $transportTrackings->where($column, $filters[$filter]);
-
             }
         }
-
 
         if (isset($filters['start_date']) && $filters['start_date'] !== '') {
             $transportTrackings->whereDate('client_date', '>=', $filters['start_date']);
@@ -74,152 +72,51 @@ class TransportTrackingController extends Controller
             $transportTrackings->whereDate('client_date', '<=', $filters['end_date']);
         }
 
-//        dd($filters);
-
-//        dd($request->input('start_date'), $request->input('end_date'));
-
+        // Keep AJAX branch for mobile API
         if ($request->ajax()) {
             return datatables()
                 ->of($transportTrackings)
-                ->editColumn('reference', function ($t) {
-
-                    $hasFile = $t->documents()->whereIn('mime_type', ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'])->exists();
-
-                    // Reference link
-                    $referenceLink = '
-        <a href="' . route('transport_tracking.show-page', $t->id) . '"
-           class="text-primary font-weight-bold">
-            ' . e($t->reference) . '
-        </a>';
-
-                    // File icon — opens combined PDF inline
-                    $fileIcon = '';
-                    if ($hasFile) {
-                        $fileIcon = '
-            <a href="' . route('transport_tracking.file-page', $t->id) . '"
-               target="_blank"
-               class="text-success ml-1" title="Voir fichiers">
-                <i class="fas fa-file-alt"></i>
-            </a>';
-                    }
-
-                    // Truck badge
-                    $truckBadge = $t->truck
-                        ? '<a href="' . route('trucks.show-page', $t->truck->id) . '" class="badge bg-info text-dark mr-1" style="cursor:pointer; font-size:0.75rem;"><i class="fas fa-truck fa-xs"></i> ' . e($t->truck->matricule) . '</a>'
-                        : '';
-
-                    // Driver badge
-                    $driverBadge = $t->driver
-                        ? '<a href="' . route('drivers.show-page', $t->driver->id) . '" class="badge bg-warning text-dark mr-1" style="cursor:pointer; font-size:0.75rem;"><i class="fas fa-user fa-xs"></i> ' . e($t->driver->name) . '</a>'
-                        : '';
-
-                    return '<div style="white-space:nowrap;">' . $referenceLink . '</div>'
-                         . '<div class="mt-1" style="white-space:nowrap;">' . $truckBadge . $driverBadge . $fileIcon . '</div>';
-                })
-                ->editColumn('client_date', function ($t) {
-                    if (!$t->client_date) return '<span class="text-muted">—</span>';
-                    return \Carbon\Carbon::parse($t->client_date)->format('d/m/Y');
-                })
-                ->editColumn('provider_net_weight', function ($t) {
-                    return $t->provider_net_weight !== null
-                        ? number_format($t->provider_net_weight, 2, '.', ' ')
-                        : '<span class="text-muted">—</span>';
-                })
-                ->editColumn('client_net_weight', function ($t) {
-                    return $t->client_net_weight !== null
-                        ? number_format($t->client_net_weight, 2, '.', ' ')
-                        : '<span class="text-muted">—</span>';
-                })
-                ->editColumn('gap', function ($t) {
-                    $gap = $t->gap;
-                    if ($gap < 0) {
-                        $bgClass = 'danger';
-                        $icon = '<i class="fas fa-arrow-down fa-xs"></i>';
-                    } elseif ($gap == 0) {
-                        $bgClass = 'success';
-                        $icon = '<i class="fas fa-equals fa-xs"></i>';
-                    } else {
-                        $bgClass = 'warning';
-                        $icon = '<i class="fas fa-arrow-up fa-xs"></i>';
-                    }
-                    return '<span class="badge badge-' . $bgClass . '" style="font-size:0.8rem;">'
-                        . $icon . ' ' . number_format($gap, 2, '.', ' ') . '</span>';
-                })
-                ->addColumn('actions', function ($transportTracking) {
-                    $actions = [
-                        [
-                            'label' => 'Voir Détails',
-                            'href' => route('transport_tracking.show-page', $transportTracking->id),
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Modifier',
-                            'href' => route('transport_tracking.edit-page', $transportTracking->id),
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Supprimer',
-                            'onclick' => 'confirmDelete("' . route('transport_tracking.destroy', $transportTracking->id) . '")',
-                            'permission' => true
-                        ]
-                    ];
-                    return view('components.buttons.action', compact('actions'));
-                })
-                ->rawColumns(['actions', 'reference', 'gap', 'client_date', 'provider_net_weight', 'client_net_weight'])
+                ->editColumn('reference', fn ($t) => $t->reference)
+                ->editColumn('client_date', fn ($t) => $t->client_date)
+                ->editColumn('provider_net_weight', fn ($t) => $t->provider_net_weight)
+                ->editColumn('client_net_weight', fn ($t) => $t->client_net_weight)
+                ->editColumn('gap', fn ($t) => $t->gap)
+                ->addColumn('actions', fn ($t) => '')
                 ->make(true);
         }
 
-        $actions = [
-            [
-                'label' => 'Ajouter stock',
-                'url' => route('transport_tracking.create-page'),
-                'permission' => true
-            ],
-            // import button
-            [
-                'label' => 'Importer',
-                'onclick' => 'showModal({
-                    title: "Importer Transport Tracking",
-                    route: "' . route('transport_tracking.import') . '",
-                    size: "md"
-                })',
-                'permission' => true
-            ],
-            // export data's button
-            [
-                'label' => 'Exporter',
-                'url' => route('transport_tracking.export'),
-                'permission' => true,
-                'onclick' => 'exportFiltered(event)'
-            ],
-            // export missing data's button
-            [
-                'label' => 'Exporter incomplets',
-                'url' => route('transport_tracking.export-missing'),
-                'permission' => true
-            ],
-        ];
+        $trackings = $transportTrackings
+            ->with(['truck', 'driver', 'provider', 'documents'])
+            ->orderByDesc('client_date')
+            ->paginate(15)
+            ->through(fn (TransportTracking $t) => [
+                'id' => $t->id,
+                'reference' => $t->reference,
+                'product' => $t->product,
+                'base' => $t->base,
+                'provider_date' => $t->provider_date,
+                'client_date' => $t->client_date,
+                'provider_net_weight' => $t->provider_net_weight,
+                'client_net_weight' => $t->client_net_weight,
+                'gap' => $t->gap,
+                'has_files' => $t->documents->whereIn('mime_type', ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'])->isNotEmpty(),
+                'truck' => $t->truck ? ['id' => $t->truck->id, 'matricule' => $t->truck->matricule] : null,
+                'driver' => $t->driver ? ['id' => $t->driver->id, 'name' => $t->driver->name] : null,
+                'provider' => $t->provider ? ['id' => $t->provider->id, 'name' => $t->provider->name] : null,
+            ]);
 
-        return view('pages.transport_trackings.index', [
-            'title' => 'Transport Tracking',
-            'actions' => $actions,
-            'breadcrumbs' => [
-                [
-                    'label' => __('Transport Tracking'),
-                    'url' => route('transport_tracking.index')
-                ],
+        return Inertia::render('transport-trackings/Index', [
+            'trackings' => $trackings,
+            'filters' => $filters ?? [],
+            'transporters' => Transporter::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
+            'trucks' => Truck::all()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
+            'drivers' => Driver::all()->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'providers' => Provider::all()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+            'products' => [
+                ['id' => '0/3', 'name' => '0/3'],
+                ['id' => '3/8', 'name' => '3/8'],
+                ['id' => '8/16', 'name' => '8/16'],
             ],
-            'transportTrackings' => $transportTrackings->get(),
-            'transporters' => Transporter::all(),
-            'trucks' => Truck::all(),
-            'drivers' => Driver::all(),
-            'providers' => Provider::all(),
-            'products' => collect(['0/3', '3/8', '8/16'])->map(function ($product) {
-                return [
-                    'id' => $product,
-                    'name' => $product
-                ];
-            })->toArray(),
         ]);
     }
 
@@ -257,13 +154,13 @@ class TransportTrackingController extends Controller
             ['id' => 'none', 'name' => 'Non definie'],
         ]);
 
-        return view('pages.transport_trackings.create-page', [
-            'transporters' => $transporters,
-            'trucks' => $trucks,
-            'drivers' => $drivers,
-            'providers' => $providers,
-            'products' => $products,
-            'bases' => $bases,
+        return Inertia::render('transport-trackings/Create', [
+            'transporters' => $transporters->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
+            'trucks' => $trucks->toArray(),
+            'drivers' => $drivers->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'providers' => $providers->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+            'products' => $products->toArray(),
+            'bases' => $bases->toArray(),
         ]);
     }
 
@@ -619,14 +516,39 @@ class TransportTrackingController extends Controller
             ['id' => 'none', 'name' => 'Non definie'],
         ]);
 
-        return view('pages.transport_trackings.edit-page', [
-            'transportTracking' => $transportTracking,
-            'transporters' => $transporters,
-            'trucks' => $trucks,
-            'drivers' => $drivers,
-            'providers' => $providers,
-            'products' => $products,
-            'bases' => $bases,
+        return Inertia::render('transport-trackings/Edit', [
+            'transportTracking' => [
+                'id' => $transportTracking->id,
+                'reference' => $transportTracking->reference,
+                'truck_id' => $transportTracking->truck_id,
+                'driver_id' => $transportTracking->driver_id,
+                'provider_id' => $transportTracking->provider_id,
+                'product' => $transportTracking->product,
+                'base' => $transportTracking->base,
+                'provider_date' => $transportTracking->provider_date,
+                'client_date' => $transportTracking->client_date,
+                'commune_date' => $transportTracking->commune_date,
+                'commune_weight' => $transportTracking->commune_weight,
+                'provider_gross_weight' => $transportTracking->provider_gross_weight,
+                'provider_tare_weight' => $transportTracking->provider_tare_weight,
+                'provider_net_weight' => $transportTracking->provider_net_weight,
+                'client_gross_weight' => $transportTracking->client_gross_weight,
+                'client_tare_weight' => $transportTracking->client_tare_weight,
+                'client_net_weight' => $transportTracking->client_net_weight,
+                'documents' => $transportTracking->documents->map(fn ($d) => [
+                    'id' => $d->id,
+                    'original_name' => $d->original_name,
+                    'mime_type' => $d->mime_type,
+                    'type' => $d->type,
+                    'file_url' => Storage::url($d->file_path),
+                ])->toArray(),
+            ],
+            'transporters' => $transporters->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
+            'trucks' => $trucks->toArray(),
+            'drivers' => $drivers->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'providers' => $providers->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+            'products' => $products->toArray(),
+            'bases' => $bases->toArray(),
         ]);
     }
 
@@ -918,21 +840,6 @@ EOT;
 
     public function dashboard()
     {
-        $title = 'Dashboard';
-
-        // Actions (example)
-        $actions = [[
-            'label' => 'Ajouter stock',
-            'url' => route('transport_tracking.create-page'),
-            'permission' => true
-        ]];
-
-        $breadcrumbs = [
-            ['label' => __('Stock'), 'url' => route('transport_tracking.index')],
-            ['label' => __('Dashboard'), 'url' => route('transport_tracking.dashboard')],
-        ];
-
-        // Filters
         $filters = [
             'transporter_id' => request('transporter_id'),
             'truck_id' => request('truck_id'),
@@ -940,184 +847,88 @@ EOT;
             'provider_id' => request('provider_id'),
             'start_date' => request('start_date'),
             'end_date' => request('end_date'),
-            'year' => request('year'),
         ];
 
-        $drivers = Driver::whereHas('transportTrackings')->get();
+        $q = TransportTracking::query();
 
-        $transportTrackings = TransportTracking::query();
-
-        // Apply filters
-        foreach (['transporter_id', 'truck_id', 'driver_id', 'provider_id'] as $filter) {
-            if (!empty($filters[$filter])) {
-                if ($filter === 'transporter_id') {
-
-                    $transportTrackings->whereHas('truck', function ($query) use ($filters, $filter) {
-                        $query->where('transporter_id', $filters[$filter]);
-                    });
-                } else {
-                    $transportTrackings->where($filter, $filters[$filter]);
-                }
-            }
+        foreach (['truck_id', 'driver_id', 'provider_id'] as $f) {
+            if (!empty($filters[$f])) $q->where($f, $filters[$f]);
         }
-
-        if (!empty($filters['start_date'])) {
-            $transportTrackings->whereDate('provider_date', '>=', $filters['start_date']);
+        if (!empty($filters['transporter_id'])) {
+            $q->whereHas('truck', fn ($qr) => $qr->where('transporter_id', $filters['transporter_id']));
         }
-        if (!empty($filters['end_date'])) {
-            $transportTrackings->whereDate('client_date', '<=', $filters['end_date']);
-        }
+        if (!empty($filters['start_date'])) $q->whereDate('provider_date', '>=', $filters['start_date']);
+        if (!empty($filters['end_date'])) $q->whereDate('client_date', '<=', $filters['end_date']);
 
-        // Year selection for monthly chart
-        $year = $filters['year'] ?? date('Y');
+        $threshold = config('logistics.weight_anomaly_threshold', 0.2);
+        $totalTransported = (clone $q)->sum('provider_net_weight');
+        $totalReceived = (clone $q)->sum('client_net_weight');
+        $totalCount = (clone $q)->count();
 
-        // Months in French
-        $months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
-
-        // Calculate monthly weights for the selected year
-        $monthlyWeights = collect(range(1, 12))->map(function ($month) use ($transportTrackings, $year) {
-            return (clone $transportTrackings)
-                ->whereYear('provider_date', $year)
-                ->whereMonth('provider_date', $month)
-                ->sum('provider_net_weight');
-        })->toArray();
-
-        // Calendar events
-        $events = TransportTracking::all()->map(function ($tracking) {
-            return [
-                'title' => "{$tracking->reference}",
-                'start' => $tracking->provider_date,
-                'end' => $tracking->client_date,
-            ];
-        });
-
-        // Stats
-        $query = clone $transportTrackings;
-        $thresholdMin = 0;
-        $thresholdMax = 0.2;
-
-        $totalTransported = $query->sum('provider_net_weight');
-        $totalReceived = $query->sum('client_net_weight');
-        $totalCount = $query->count();
-
-        $totalDifference = (clone $query)
-            ->whereRaw('provider_net_weight > client_net_weight AND provider_net_weight - client_net_weight > ?', [$thresholdMax])
+        $totalDifference = (clone $q)
+            ->whereRaw('provider_net_weight > client_net_weight AND provider_net_weight - client_net_weight > ?', [$threshold])
             ->sum(DB::raw('provider_net_weight - client_net_weight'));
 
-        $totalRotationsPerdues = (clone $query)
-            ->whereRaw('(provider_net_weight - client_net_weight) > ?', [$thresholdMax])
-            ->count();
+        $totalRotationsPerdues = (clone $q)->whereRaw('(provider_net_weight - client_net_weight) > ?', [$threshold])->count();
+        $totalRotationsNormal = (clone $q)->whereRaw('ABS(client_net_weight - provider_net_weight) BETWEEN 0 AND ?', [$threshold])->count();
+        $totalPoidsAnomalies = (clone $q)->whereRaw('client_net_weight > provider_net_weight')->sum(DB::raw('client_net_weight - provider_net_weight'));
 
-        $totalRotationsAnomalies = (clone $query)
-            ->whereRaw('(client_net_weight - provider_net_weight) < ?', [$thresholdMax])
-            ->count();
+        // Monthly data
+        $year = date('Y');
+        $monthLabels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+        $monthlyWeights = collect(range(1, 12))->map(fn ($m) => (clone $q)->whereYear('provider_date', $year)->whereMonth('provider_date', $m)->sum('provider_net_weight'))->toArray();
 
-        $totalRotationsNormal = (clone $query)
-            ->whereRaw('(ABS(client_net_weight - provider_net_weight)) BETWEEN ? AND ?', [$thresholdMin, $thresholdMax])
-            ->count();
-        $totalPoidsAnomalies = (clone $query)
-            ->whereRaw('client_net_weight > provider_net_weight')
-            ->sum(DB::raw('client_net_weight - provider_net_weight'));
+        // Timeline events for Gantt
+        $timelineEvents = (clone $q)->with(['truck', 'driver'])->latest('provider_date')->take(100)->get()->map(fn ($t) => [
+            'truck' => $t->truck?->matricule ?? 'N/A',
+            'driver' => $t->driver?->name ?? 'N/A',
+            'start' => $t->provider_date?->format('Y-m-d'),
+            'end' => $t->client_date?->format('Y-m-d') ?? $t->provider_date?->format('Y-m-d'),
+            'reference' => $t->reference,
+            'hasConflict' => false,
+        ]);
 
-        if (\request()->ajax()) {
-            // Prepare KPI HTML
-            $kpiHtml = view('pages.transport_trackings.partials.kpis', [
-                'totalTransported' => [
-                    'amount' => $totalTransported,
-                    'unit' => 't',
-                ],
-                'totalReceived' => [
-                    'amount' => $totalReceived,
-                    'percentage' => $totalTransported > 0 ? ($totalReceived / $totalTransported) * 100 : 0,
-                    'unit' => 't',
-                ],
-                'totalDifference' => [
-                    'amount' => $totalDifference,
-                    'percentage' => $totalTransported > 0 ? ($totalDifference / $totalTransported) * 100 : 0,
-                    'unit' => 't',
-                ],
-                'totalPoidsAnomalies' => [
-                    'amount' => $totalPoidsAnomalies,
-                    'percentage' => $totalTransported > 0 ? ($totalPoidsAnomalies / $totalTransported) * 100 : 0,
-                    'unit' => 't',
-                ],
-                'totalRotationsPerdues' => [
-                    'amount' => $totalRotationsPerdues,
-                    'percentage' => $totalCount > 0 ? ($totalRotationsPerdues / $totalCount) * 100 : 0,
-                ],
-                'totalRotationsAnomalies' => [
-                    'amount' => $totalRotationsAnomalies,
-                    'percentage' => $totalCount > 0 ? ($totalRotationsAnomalies / $totalCount) * 100 : 0,
-                ],
-                'totalRotationsNormal' => [
-                    'amount' => $totalRotationsNormal,
-                    'percentage' => $totalCount > 0 ? ($totalRotationsNormal / $totalCount) * 100 : 0,
-                ],
-            ])->render();
+        // Detect conflicts (same truck, overlapping dates)
+        $byTruck = $timelineEvents->groupBy('truck');
+        $timelineWithConflicts = $timelineEvents->map(function ($event) use ($byTruck) {
+            $siblings = $byTruck[$event['truck']] ?? collect();
+            foreach ($siblings as $other) {
+                if ($other['reference'] === $event['reference']) continue;
+                if ($event['start'] <= $other['end'] && $event['end'] >= $other['start']) {
+                    $event['hasConflict'] = true;
+                    break;
+                }
+            }
+            return $event;
+        });
 
-            // Prepare monthly chart
-            $monthlyWeights = collect(range(1, 12))->map(function ($month) use ($transportTrackings, $year) {
-                return (clone $transportTrackings)
-                    ->whereYear('provider_date', $year)
-                    ->whereMonth('provider_date', $month)
-                    ->sum('provider_net_weight');
-            })->toArray();
+        $safe = fn ($v, $total) => $total > 0 ? round(($v / $total) * 100, 1) : 0;
 
-            return response()->json([
-                'kpis' => $kpiHtml,
-                'monthlyWeights' => $monthlyWeights,
-            ]);
-        }
-
-
-        return view('pages.transport_trackings.dashboard', [
-            'title' => $title,
-            'actions' => $actions,
-            'breadcrumbs' => $breadcrumbs,
-            'transporters' => Transporter::whereHas('trucks', function ($truckQuery) {
-                $truckQuery->whereHas('transportTrackings');
-            })->get(),
-            'trucks' => Truck::whereHas('transportTrackings')->get(),
-            'drivers' => $drivers,
-            'providers' => Provider::whereHas('transportTrackings')->get(),
-            'products' => collect(['0/3', '3/8', '8/16'])->map(fn($p) => ['id' => $p, 'name' => $p])->toArray(),
-            'transportTrackings' => $transportTrackings->get(),
-            'year' => $year,
-            'months' => $months,
+        return \Inertia\Inertia::render('TransportDashboard', [
+            'filters' => $filters,
+            'filterOptions' => [
+                'transporters' => Transporter::whereHas('trucks.transportTrackings')->get()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]),
+                'trucks' => Truck::whereHas('transportTrackings')->get()->map(fn ($t) => ['value' => $t->id, 'label' => $t->matricule]),
+                'drivers' => Driver::whereHas('transportTrackings')->get()->map(fn ($d) => ['value' => $d->id, 'label' => $d->name]),
+                'providers' => Provider::whereHas('transportTrackings')->get()->map(fn ($p) => ['value' => $p->id, 'label' => $p->name]),
+            ],
+            'kpis' => [
+                'totalTransported' => round($totalTransported, 2),
+                'totalReceived' => round($totalReceived, 2),
+                'totalDifference' => round($totalDifference, 2),
+                'totalPoidsAnomalies' => round($totalPoidsAnomalies, 2),
+                'totalCount' => $totalCount,
+                'rotationsPerdues' => $totalRotationsPerdues,
+                'rotationsNormal' => $totalRotationsNormal,
+                'pctReceived' => $safe($totalReceived, $totalTransported),
+                'pctDifference' => $safe($totalDifference, $totalTransported),
+                'pctAnomalies' => $safe($totalPoidsAnomalies, $totalTransported),
+                'pctPerdues' => $safe($totalRotationsPerdues, $totalCount),
+                'pctNormal' => $safe($totalRotationsNormal, $totalCount),
+            ],
+            'months' => $monthLabels,
             'monthlyWeights' => $monthlyWeights,
-            'events' => $events,
-
-            'totalTransported' => [
-                'amount' => $totalTransported,
-                'unit' => 't',
-            ],
-            'totalReceived' => [
-                'amount' => $totalReceived,
-                'percentage' => $totalTransported > 0 ? ($totalReceived / $totalTransported) * 100 : 0,
-                'unit' => 't',
-            ],
-            'totalDifference' => [
-                'amount' => $totalDifference,
-                'percentage' => $totalTransported > 0 ? ($totalDifference / $totalTransported) * 100 : 0,
-                'unit' => 't',
-            ],
-            'totalPoidsAnomalies' => [
-                'amount' => $totalPoidsAnomalies,
-                'percentage' => $totalTransported > 0 ? ($totalPoidsAnomalies / $totalTransported) * 100 : 0,
-                'unit' => 't',
-            ],
-            'totalRotationsPerdues' => [
-                'amount' => $totalRotationsPerdues,
-                'percentage' => $totalCount > 0 ? ($totalRotationsPerdues / $totalCount) * 100 : 0,
-            ],
-            'totalRotationsAnomalies' => [
-                'amount' => $totalRotationsAnomalies,
-                'percentage' => $totalCount > 0 ? ($totalRotationsAnomalies / $totalCount) * 100 : 0,
-            ],
-            'totalRotationsNormal' => [
-                'amount' => $totalRotationsNormal,
-                'percentage' => $totalCount > 0 ? ($totalRotationsNormal / $totalCount) * 100 : 0,
-            ],
+            'timelineEvents' => $timelineWithConflicts->values(),
         ]);
     }
 
