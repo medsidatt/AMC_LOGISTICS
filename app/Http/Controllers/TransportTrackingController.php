@@ -72,8 +72,8 @@ class TransportTrackingController extends Controller
             $transportTrackings->whereDate('client_date', '<=', $filters['end_date']);
         }
 
-        // Keep AJAX branch for mobile API
-        if ($request->ajax()) {
+        // Keep AJAX branch for mobile API (not Inertia)
+        if ($request->ajax() && !$request->header('X-Inertia')) {
             return datatables()
                 ->of($transportTrackings)
                 ->editColumn('reference', fn ($t) => $t->reference)
@@ -94,8 +94,8 @@ class TransportTrackingController extends Controller
                 'reference' => $t->reference,
                 'product' => $t->product,
                 'base' => $t->base,
-                'provider_date' => $t->provider_date,
-                'client_date' => $t->client_date,
+                'provider_date' => $t->provider_date?->format('d/m/Y'),
+                'client_date' => $t->client_date?->format('d/m/Y'),
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
@@ -271,14 +271,6 @@ class TransportTrackingController extends Controller
                     'type' => $type,
                 ]);
             }
-        }
-
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Stock saved successfully',
-                'id' => $record->id,
-            ]);
         }
 
         return redirect()
@@ -460,8 +452,8 @@ class TransportTrackingController extends Controller
                 'transporter' => $transportTracking->truck?->transporter?->name ?? null,
                 'product' => $transportTracking->product,
                 'base' => $transportTracking->base,
-                'provider_date' => $transportTracking->provider_date?->format('Y-m-d'),
-                'client_date' => $transportTracking->client_date?->format('Y-m-d'),
+                'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
+                'client_date' => $transportTracking->client_date?->format('d/m/Y'),
                 'commune_date' => $transportTracking->commune_date,
                 'provider_gross_weight' => $transportTracking->provider_gross_weight,
                 'provider_tare_weight' => $transportTracking->provider_tare_weight,
@@ -664,14 +656,6 @@ class TransportTrackingController extends Controller
                     'type' => $type,
                 ]);
             }
-        }
-
-        if ($request->ajax() || $request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Stock updated successfully',
-                'id' => $transportTracking->id,
-            ]);
         }
 
         return redirect()

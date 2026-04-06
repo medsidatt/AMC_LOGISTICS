@@ -30,7 +30,7 @@ class InvitationController extends Controller
                 'role_name' => $inv->role_name,
                 'is_used' => $inv->is_used,
                 'expires_at' => $inv->expires_at,
-                'created_at' => $inv->created_at?->format('Y-m-d'),
+                'created_at' => $inv->created_at?->format('d/m/Y'),
             ]);
 
         $roles = $this->assignableRoles()->map(fn ($r) => [

@@ -40,7 +40,7 @@ class UserController extends Controller
                     'id' => $r->id,
                     'name' => $r->name,
                 ])->toArray(),
-                'created_at' => $user->created_at?->format('Y-m-d'),
+                'created_at' => $user->created_at?->format('d/m/Y'),
             ]);
 
         $roles = Role::orderBy('name')->get(['id', 'name'])->toArray();
