@@ -44,31 +44,39 @@ class TransportTrackingController extends Controller
     {
         $transportTrackings = TransportTracking::query();
 
-        $filters = $request->filters;
+        // Support both nested filters (legacy) and top-level params (Inertia)
+        $filters = $request->filters ?? $request->only(['truck_id', 'driver_id', 'provider_id', 'transporter_id', 'product', 'start_date', 'end_date']);
 
-        foreach ([
-                     'transporter_id_filter',
-                     'truck_id_filter',
-                     'driver_id_filter',
-                     'provider_id_filter'
-                 ] as $filter) {
-            if (isset($filters[$filter]) && $filters[$filter] !== '') {
-                if ($filter === 'transporter_id_filter') {
-                    $transportTrackings->whereHas('truck', function ($query) use ($filters, $filter) {
-                        $query->where('transporter_id', $filters[$filter]);
-                    });
-                    continue;
-                }
-                $column = str_replace('_filter', '', $filter);
-                $transportTrackings->where($column, $filters[$filter]);
+        if (!empty($filters['truck_id'])) {
+            $transportTrackings->where('truck_id', $filters['truck_id']);
+        }
+        if (!empty($filters['driver_id'])) {
+            $transportTrackings->where('driver_id', $filters['driver_id']);
+        }
+        if (!empty($filters['provider_id'])) {
+            $transportTrackings->where('provider_id', $filters['provider_id']);
+        }
+        if (!empty($filters['transporter_id'])) {
+            $transportTrackings->whereHas('truck', fn ($q) => $q->where('transporter_id', $filters['transporter_id']));
+        }
+        if (!empty($filters['product'])) {
+            $transportTrackings->where('product', $filters['product']);
+        }
+
+        // Legacy nested filter keys (for backward compat)
+        if (!empty($filters['transporter_id_filter'])) {
+            $transportTrackings->whereHas('truck', fn ($q) => $q->where('transporter_id', $filters['transporter_id_filter']));
+        }
+        foreach (['truck_id_filter', 'driver_id_filter', 'provider_id_filter'] as $f) {
+            if (!empty($filters[$f])) {
+                $transportTrackings->where(str_replace('_filter', '', $f), $filters[$f]);
             }
         }
 
-        if (isset($filters['start_date']) && $filters['start_date'] !== '') {
+        if (!empty($filters['start_date'])) {
             $transportTrackings->whereDate('client_date', '>=', $filters['start_date']);
         }
-
-        if (isset($filters['end_date']) && $filters['end_date'] !== '') {
+        if (!empty($filters['end_date'])) {
             $transportTrackings->whereDate('client_date', '<=', $filters['end_date']);
         }
 
@@ -100,6 +108,13 @@ class TransportTrackingController extends Controller
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
                 'has_files' => $t->documents->whereIn('mime_type', ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'])->isNotEmpty(),
+                'documents' => $t->documents->map(fn ($d) => [
+                    'id' => $d->id,
+                    'original_name' => $d->original_name,
+                    'mime_type' => $d->mime_type,
+                    'type' => $d->type,
+                    'file_url' => asset('storage/' . $d->file_path),
+                ]),
                 'truck' => $t->truck ? ['id' => $t->truck->id, 'matricule' => $t->truck->matricule] : null,
                 'driver' => $t->driver ? ['id' => $t->driver->id, 'name' => $t->driver->name] : null,
                 'provider' => $t->provider ? ['id' => $t->provider->id, 'name' => $t->provider->name] : null,
@@ -107,7 +122,7 @@ class TransportTrackingController extends Controller
 
         return Inertia::render('transport-trackings/Index', [
             'trackings' => $trackings,
-            'filters' => $filters ?? [],
+            'filters' => array_filter($filters ?? []),
             'transporters' => Transporter::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
             'trucks' => Truck::all()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
             'drivers' => Driver::all()->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
