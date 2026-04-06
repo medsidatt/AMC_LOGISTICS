@@ -45,7 +45,7 @@ class TruckController extends Controller
         // Get active trucks with maintenance due (dynamically calculated)
         $maintenanceDueTrucks = $trucks->filter(fn($truck) => $truck->is_active && $truck->isMaintenanceDueByType());
 
-        if ($request->ajax()) {
+        if ($request->ajax() && !$request->header('X-Inertia')) {
             // Add a sort_order column to preserve the ordering
             $trucks = $trucks->values()->map(function ($truck, $index) {
                 $truck->sort_order = $index;
@@ -293,7 +293,7 @@ class TruckController extends Controller
                 'provider' => $t->provider?->name,
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
-                'client_date' => $t->client_date?->format('Y-m-d'),
+                'client_date' => $t->client_date?->format('d/m/Y'),
             ]),
             'maintenances' => $maintenances->map(fn ($m) => [
                 'id' => $m->id,

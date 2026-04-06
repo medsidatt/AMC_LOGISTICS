@@ -96,7 +96,7 @@ class DriverController extends Controller
                 'email' => $driver->email,
                 'phone' => $driver->phone,
                 'address' => $driver->address,
-                'created_at' => $driver->created_at?->format('Y-m-d'),
+                'created_at' => $driver->created_at?->format('d/m/Y'),
             ]);
 
         return Inertia::render('drivers/Index', [
@@ -151,8 +151,8 @@ class DriverController extends Controller
                 'email' => $driver->email,
                 'phone' => $driver->phone,
                 'address' => $driver->address,
-                'created_at' => $driver->created_at?->format('Y-m-d'),
-                'updated_at' => $driver->updated_at?->format('Y-m-d'),
+                'created_at' => $driver->created_at?->format('d/m/Y'),
+                'updated_at' => $driver->updated_at?->format('d/m/Y'),
             ],
         ]);
     }

@@ -43,7 +43,7 @@ class DashboardDataService
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
-                'provider_date' => $t->provider_date?->format('Y-m-d'),
+                'provider_date' => $t->provider_date?->format('d/m/Y'),
             ]);
 
         $monthlyTonnage = TransportTracking::select(
@@ -162,7 +162,7 @@ class DashboardDataService
                     'provider' => $t->provider?->name,
                     'provider_net_weight' => $t->provider_net_weight,
                     'client_net_weight' => $t->client_net_weight,
-                    'provider_date' => $t->provider_date?->format('Y-m-d'),
+                    'provider_date' => $t->provider_date?->format('d/m/Y'),
                 ]);
 
             $checklistHistory = DailyChecklist::with('issues')
