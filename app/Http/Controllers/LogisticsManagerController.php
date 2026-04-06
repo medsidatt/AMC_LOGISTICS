@@ -49,11 +49,34 @@ class LogisticsManagerController extends Controller
             ->limit(10)
             ->get();
 
-        return view('pages.logistics.dashboard', [
-            'dueEngineTrucks' => $dueEngineTrucks,
-            'unresolvedIssues' => $unresolvedIssues,
-            'lastDailyChecklists' => $lastDailyChecklists,
-            'alerts' => $alerts,
+        return \Inertia\Inertia::render('LogisticsDashboard', [
+            'dueEngineTrucks' => $dueEngineTrucks->map(fn ($t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'total_kilometers' => $t->total_kilometers,
+                'level' => $t->maintenanceLevelByType(),
+            ])->values(),
+            'unresolvedIssues' => $unresolvedIssues->map(fn ($i) => [
+                'id' => $i->id,
+                'description' => $i->issue_notes ?? $i->category ?? $i->description ?? '',
+                'category' => $i->category,
+                'checklist_date' => $i->dailyChecklist?->checklist_date,
+                'truck' => $i->dailyChecklist?->truck?->matricule,
+                'driver' => $i->dailyChecklist?->driver?->name,
+            ]),
+            'lastChecklists' => $lastDailyChecklists->map(fn ($c) => [
+                'id' => $c->id,
+                'checklist_date' => $c->checklist_date,
+                'truck' => $c->truck?->matricule,
+                'driver' => $c->driver?->name,
+                'issues_count' => $c->issues->count(),
+            ]),
+            'alerts' => $alerts->map(fn ($a) => [
+                'id' => $a->id,
+                'type' => $a->type,
+                'message' => $a->message,
+                'created_at' => $a->created_at->format('Y-m-d H:i'),
+            ]),
         ]);
     }
 
@@ -74,8 +97,12 @@ class LogisticsManagerController extends Controller
             ->where('created_at', '>=', $from)
             ->count();
 
-        return view('pages.logistics.reports', [
-            'issueFrequency' => $issueFrequency,
+        return \Inertia\Inertia::render('logistics/Reports', [
+            'issueFrequency' => $issueFrequency->map(fn ($i) => [
+                'category' => $i->category,
+                'total' => $i->total,
+                'open_count' => $i->open_count,
+            ])->toArray(),
             'totalIssues' => $totalIssues,
             'from' => $from->toDateString(),
         ]);

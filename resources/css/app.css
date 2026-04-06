@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* ── Theme Variables ────────────────────────── */
+:root {
+    --color-primary: #7367f0;
+    --color-primary-light: #9e95f5;
+    --color-primary-dark: #5a50d6;
+    --color-success: #28c76f;
+    --color-danger: #ea5455;
+    --color-warning: #ff9f43;
+    --color-info: #00cfe8;
+
+    --color-bg: #f8f8f8;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f3f2f5;
+    --color-border: #ebe9f1;
+    --color-text: #4b4b4b;
+    --color-text-secondary: #6e6b7b;
+    --color-text-muted: #b4b7bd;
+
+    --color-sidebar-bg: #283046;
+    --color-sidebar-text: #d0d2d6;
+    --color-sidebar-active: #7367f0;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
+    /* Chart colors */
+    --chart-1: #7367f0;
+    --chart-2: #28c76f;
+    --chart-3: #ea5455;
+    --chart-4: #ff9f43;
+    --chart-5: #00cfe8;
+    --chart-6: #a855f7;
+}
+
+.dark {
+    --color-bg: #161d31;
+    --color-surface: #283046;
+    --color-surface-hover: #313a55;
+    --color-border: #3b4253;
+    --color-text: #d0d2d6;
+    --color-text-secondary: #b4b7bd;
+    --color-text-muted: #676d7d;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Base Styles ────────────────────────── */
+@layer base {
+    body {
+        background-color: var(--color-bg);
+        color: var(--color-text);
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-border) transparent;
+    }
+}
+
+/* ── Utilities ────────────────────────── */
+@utility animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+@utility animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+}
+
+@utility animate-count-up {
+    animation: countUp 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}

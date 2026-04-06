@@ -4,16 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Entity;
 use Illuminate\Http\Request;
-use Yajra\DataTables\Exceptions\Exception;
+use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class EntityController extends Controller
 {
-    //index
-    /**
-     * @throws Exception
-     * @throws \Exception
-     */
-
     public function __construct()
     {
         $this->middleware('permission:entity-list|entity-create|entity-edit|entity-delete', ['only' => ['index']]);
@@ -24,174 +19,81 @@ class EntityController extends Controller
 
     public function index(Request $request)
     {
+        $query = Entity::query()->orderBy('name');
 
-        if ($request->ajax()) {
-            return datatables()
-                ->of(Entity::query())
-                ->addColumn('actions', function ($data) {
-                    $actions = [
-                        [
-                            'label' => __('global.show'),
-                            'onclick' => 'openInModal({link: \'' . route('entities.show', $data->slug) . '\'})',
-                            'permission' => 'entity-show',
-                        ],
-                        [
-                            'label' => __('global.edit'),
-                            'onclick' => 'openInModal({link: \'' . route('entities.edit', $data->slug) . '\'})',
-                            'permission' => 'entity-edit',
-                        ],
-                        [
-                            'label' => __('global.delete'),
-                            'onclick' => 'confirmDelete(\'' . route('entities.destroy', $data->slug) . '\')',
-                            'permission' => 'entity-delete',
-                        ]
-                    ];
-
-                    return view('components.buttons.action', ['actions' => $actions]);
-                })->editColumn('logo', function ($data) {
-                    return $data->logo ? '<img src="' . asset('storage/' . $data->logo) . '" alt="' . $data->name . '" class="img-thumbnail" style="width: 100px;">' : '';
-                })
-                ->rawColumns(['actions', 'logo'])
-                ->make(true);
+        if ($search = $request->input('search')) {
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%");
         }
 
-        $actions = [
-            [
-                'label' => __('global.create'),
-                'onclick' => 'openInModal({link: \'' . route('entities.create') . '\'})',
-                'permission' => 'entity-create',
-            ]
-        ];
-
-        return view('pages.entities.index', ['actions' => $actions]);
-    }
-    //create
-    public function create()
-    {
-        return view('pages.entities.create');
+        return Inertia::render('entities/Index', [
+            'entities' => $query->paginate(15)->through(fn (Entity $e) => [
+                'id' => $e->id,
+                'name' => $e->name,
+                'address' => $e->address,
+                'phone' => $e->phone,
+                'email' => $e->email,
+                'website' => $e->website,
+                'logo' => $e->logo ? asset('storage/' . $e->logo) : null,
+            ]),
+            'filters' => $request->only('search'),
+        ]);
     }
 
-    //store
     public function store(Request $request)
     {
         $request->validate([
             'name' => 'required',
-            'description' => 'string|nullable',
-            'matricule_cnss' => 'string|nullable',
-            'matricule_cnam' => 'string|nullable',
-            'nif' => 'string|nullable',
-            'rc' => 'string|nullable',
             'address' => 'string|nullable',
             'phone' => 'string|nullable',
             'email' => 'string|email|nullable',
             'website' => 'string|url|nullable',
-            'is_active' => 'boolean|nullable',
-            'logo' => 'image|nullable|max:2048', // 2MB max
-            'ilot' => 'string|nullable',
-            'lot' => 'string|nullable',
-            'city' => 'string|nullable',
-            'activity_principle' => 'string|nullable',
-            'bp' => 'string|nullable',
+            'logo' => 'image|nullable|max:2048',
         ]);
 
-        Entity::firstOrCreate([
+        Entity::create([
             'name' => $request->name,
-            'description' => $request->description,
-            'matricule_cnss' => $request->matricule_cnss,
-            'matricule_cnam' => $request->matricule_cnam,
-            'nif' => $request->nif,
-            'rc' => $request->rc,
             'address' => $request->address,
             'phone' => $request->phone,
             'email' => $request->email,
             'website' => $request->website,
-            'is_active' => $request->is_active ?? true,
             'logo' => $request->file('logo') ? $request->file('logo')->store('logos', 'public') : null,
-            'ilot' => $request->ilot,
-            'lot' => $request->lot,
-            'city' => $request->city,
-            'activity_principle' => $request->activity_principle,
-            'bp' => $request->bp,
         ]);
 
-        return response()->json([
-            'message' => __('global.created_success'),
-            'success' => true,
-        ]);
-    }
-    //show
-    public function show(Entity $entity)
-    {
-        return view('pages.entities.show', ['entity' => $entity]);
+        return redirect()->back()->with('success', 'Entité créée avec succès.');
     }
 
-    //edit
-    public function edit(Entity $entity)
-    {
-        return view('pages.entities.edit', ['entity' => $entity]);
-    }
-    //update
-    public function update(Request $request, Entity $entity): \Illuminate\Http\JsonResponse
+    public function update(Request $request, Entity $entity)
     {
         $request->validate([
             'name' => 'required',
-            'description' => 'string|nullable',
-            'matricule_cnss' => 'string|nullable',
-            'matricule_cnam' => 'string|nullable',
-            'nif' => 'string|nullable',
-            'rc' => 'string|nullable',
             'address' => 'string|nullable',
             'phone' => 'string|nullable',
             'email' => 'string|email|nullable',
-            'website' => 'string|url|nullable',
-            'is_active' => 'boolean|nullable',
-            'logo' => 'image|nullable|max:2048', // 2MB max
-            'ilot' => 'string|nullable',
-            'lot' => 'string|nullable',
-            'city' => 'string|nullable',
-            'activity_principle' => 'string|nullable',
-            'bp' => 'string|nullable',
+            'website' => 'string|nullable',
+            'logo' => 'image|nullable|max:2048',
         ]);
 
-        // check if the entity has logo or not already if has and the request has file replace it and if not keep the old one
         if ($request->file('logo') && $entity->logo) {
-            // Delete old logo if exists
-            \Storage::disk('public')->delete($entity->logo);
+            Storage::disk('public')->delete($entity->logo);
         }
 
         $entity->update([
             'name' => $request->name,
-            'description' => $request->description,
-            'matricule_cnss' => $request->matricule_cnss,
-            'matricule_cnam' => $request->matricule_cnam,
-            'nif' => $request->nif,
-            'rc' => $request->rc,
             'address' => $request->address,
             'phone' => $request->phone,
             'email' => $request->email,
             'website' => $request->website,
-            'is_active' => $request->is_active ?? true,
             'logo' => $request->file('logo') ? $request->file('logo')->store('logos', 'public') : $entity->logo,
-            'ilot' => $request->ilot,
-            'lot' => $request->lot,
-            'city' => $request->city,
-            'activity_principle' => $request->principal_activity,
-            'bp' => $request->bp,
         ]);
 
-        return response()->json([
-            'message' => __('global.updated_success'),
-            'success' => true,
-        ]);
+        return redirect()->back()->with('success', 'Entité mise à jour.');
     }
-    //destroy
+
     public function destroy(Entity $entity)
     {
         $entity->delete();
 
-        return response()->json([
-            'message' => __('global.deleted_success'),
-            'success' => true,
-        ]);
+        return redirect()->back()->with('success', 'Entité supprimée.');
     }
 }
