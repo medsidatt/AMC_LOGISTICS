@@ -53,8 +53,8 @@ export default function RolesIndex({ roles }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        viewHref={`/roles/${r.id}`}
-                                        editHref={`/roles/${r.id}/edit`}
+                                        viewHref={`/roles/show/${r.id}`}
+                                        editHref={`/roles/edit/${r.id}`}
                                         onDelete={() => setDeleteUrl(`/roles/destroy/${r.id}`)}
                                     />
                                 ),

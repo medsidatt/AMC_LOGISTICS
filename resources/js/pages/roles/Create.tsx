@@ -44,7 +44,7 @@ export default function RolesCreate({ permissions }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.post('/roles');
+        form.post('/roles/store');
     };
 
     return (

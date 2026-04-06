@@ -45,13 +45,13 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
 
     const submitCreate = (e: React.FormEvent) => {
         e.preventDefault();
-        createForm.post('/invitations/send', { onSuccess: () => { setModal(null); createForm.reset(); } });
+        createForm.post('/auth/invitations/send', { onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        editForm.put(`/invitations/${selected.id}`, { onSuccess: () => setModal(null) });
+        editForm.put(`/auth/invitations/update/${selected.id}`, { onSuccess: () => setModal(null) });
     };
 
     const isExpired = (date: string) => new Date(date) < new Date();
@@ -85,7 +85,7 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/invitations/destroy/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/auth/invitations/destroy/${r.id}`)}
                                     />
                                 ),
                             },

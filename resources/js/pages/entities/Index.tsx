@@ -44,13 +44,13 @@ export default function EntitiesIndex({ entities, filters }: Props) {
 
     const submitCreate = (ev: React.FormEvent) => {
         ev.preventDefault();
-        router.post('/entities', createForm.data as any, { forceFormData: true, onSuccess: () => { setModal(null); createForm.reset(); } });
+        router.post('/entities/store', createForm.data as any, { forceFormData: true, onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (ev: React.FormEvent) => {
         ev.preventDefault();
         if (!selected) return;
-        router.post(`/entities/${selected.id}`, { ...editForm.data, _method: 'PUT' } as any, { forceFormData: true, onSuccess: () => setModal(null) });
+        router.post(`/entities/update/${selected.id}`, { ...editForm.data, _method: 'PUT' } as any, { forceFormData: true, onSuccess: () => setModal(null) });
     };
 
     return (

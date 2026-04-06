@@ -49,13 +49,13 @@ export default function UsersIndex({ users, roles }: Props) {
 
     const submitCreate = (e: React.FormEvent) => {
         e.preventDefault();
-        createForm.post('/users', { onSuccess: () => { setModal(null); createForm.reset(); } });
+        createForm.post('/users/store', { onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        editForm.put(`/users/${selected.id}`, { onSuccess: () => setModal(null) });
+        editForm.put(`/users/update/${selected.id}`, { onSuccess: () => setModal(null) });
     };
 
     const toggleRole = (form: typeof createForm, roleId: number) => {

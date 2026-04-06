@@ -59,7 +59,7 @@ function SectionHeader({ label, collapsed }: { label: string; collapsed: boolean
     );
 }
 
-const adminSections: NavSection[] = [
+const dataSections: NavSection[] = [
     {
         header: 'Transport',
         items: [
@@ -83,16 +83,22 @@ const adminSections: NavSection[] = [
         ],
     },
     {
-        header: 'Administration',
+        header: 'Organisation',
         items: [
-            { label: 'Utilisateurs', href: '/users', icon: <Users size={18} /> },
-            { label: 'Invitations', href: '/invitations', icon: <Mail size={18} /> },
-            { label: 'Roles', href: '/roles', icon: <ShieldCheck size={18} /> },
             { label: 'Projets', href: '/projects', icon: <FolderOpen size={18} /> },
-            { label: 'Entites', href: '/entities', icon: <Building2 size={18} /> },
+            { label: 'Entités', href: '/entities', icon: <Building2 size={18} /> },
         ],
     },
 ];
+
+const adminSection: NavSection = {
+    header: 'Administration',
+    items: [
+        { label: 'Utilisateurs', href: '/users', icon: <Users size={18} /> },
+        { label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18} />, match: '/auth/invitations' },
+        { label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18} /> },
+    ],
+};
 
 const driverSections: NavSection[] = [
     {
@@ -114,7 +120,17 @@ interface SidebarProps {
 export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps) {
     const { auth } = usePage().props;
     const isDriver = auth.roles.includes('Driver');
-    const sections = isDriver ? driverSections : adminSections;
+    const isAdmin = auth.roles.includes('Admin') || auth.roles.includes('Super Admin');
+
+    let sections: NavSection[];
+    if (isDriver) {
+        sections = driverSections;
+    } else if (isAdmin) {
+        sections = [...dataSections, adminSection];
+    } else {
+        // Manager and other roles: data only, no admin section
+        sections = dataSections;
+    }
 
     return (
         <>

@@ -31,7 +31,7 @@ export default function RolesShow({ role }: Props) {
 
             <div className="flex items-center justify-between mb-4">
                 <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>Retour</Button>
-                <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/roles/${role.id}/edit`}>Modifier</Button>
+                <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/roles/edit/${role.id}`}>Modifier</Button>
             </div>
 
             <Card className="mb-6">

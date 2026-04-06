@@ -40,13 +40,13 @@ export default function DriversIndex({ drivers }: Props) {
 
     const submitCreate = (e: React.FormEvent) => {
         e.preventDefault();
-        createForm.post('/drivers', { onSuccess: () => { setModal(null); createForm.reset(); } });
+        createForm.post('/drivers/store', { onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        editForm.put(`/drivers/${selected.id}`, { onSuccess: () => setModal(null) });
+        editForm.put(`/drivers/${selected.id}/update`, { onSuccess: () => setModal(null) });
     };
 
     return (

@@ -15,7 +15,7 @@ export default function TrucksCreate({ transporters }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.post('/trucks');
+        form.post('/trucks/store');
     };
 
     return (
