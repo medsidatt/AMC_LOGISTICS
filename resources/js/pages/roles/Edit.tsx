@@ -48,7 +48,7 @@ export default function RolesEdit({ role, allPermissions }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.put(`/roles/${role.id}`);
+        form.put(`/roles/update/${role.id}`);
     };
 
     return (

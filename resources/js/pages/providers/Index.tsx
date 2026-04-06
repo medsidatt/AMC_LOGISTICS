@@ -43,13 +43,13 @@ export default function ProvidersIndex({ providers, filters }: Props) {
 
     const submitCreate = (e: React.FormEvent) => {
         e.preventDefault();
-        createForm.post('/providers', { onSuccess: () => { setModal(null); createForm.reset(); } });
+        createForm.post('/providers/store', { onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        editForm.put(`/providers/${selected.id}`, { onSuccess: () => setModal(null) });
+        editForm.put(`/providers/${selected.id}/update`, { onSuccess: () => setModal(null) });
     };
 
     return (

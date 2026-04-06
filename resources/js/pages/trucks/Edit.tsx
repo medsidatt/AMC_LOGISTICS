@@ -29,7 +29,7 @@ export default function TrucksEdit({ truck, transporters }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.put(`/trucks/${truck.id}`);
+        form.put(`/trucks/${truck.id}/update`);
     };
 
     return (

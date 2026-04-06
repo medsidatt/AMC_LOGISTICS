@@ -43,13 +43,13 @@ export default function TransportersIndex({ transporters, filters }: Props) {
 
     const submitCreate = (e: React.FormEvent) => {
         e.preventDefault();
-        createForm.post('/transporters', { onSuccess: () => { setModal(null); createForm.reset(); } });
+        createForm.post('/transporters/store', { onSuccess: () => { setModal(null); createForm.reset(); } });
     };
 
     const submitEdit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selected) return;
-        editForm.put(`/transporters/${selected.id}`, { onSuccess: () => setModal(null) });
+        editForm.put(`/transporters/${selected.id}/update`, { onSuccess: () => setModal(null) });
     };
 
     return (
