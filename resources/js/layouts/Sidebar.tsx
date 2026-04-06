@@ -1,10 +1,10 @@
 import { usePage } from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
-    Wrench, Users, Mail, ShieldCheck, FolderOpen, Building2,
-    ClipboardCheck, Route, X, ChevronDown, ChevronRight,
+    Wrench, Users, Mail, ShieldCheck,
+    ClipboardCheck, Route, X,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { clsx } from 'clsx';
 
 interface NavItem {
@@ -31,10 +31,9 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
                 href={item.href}
                 className={clsx(
                     'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200',
-                    'hover:bg-white/10',
                     isActive
                         ? 'bg-[var(--color-primary)] text-white shadow-md shadow-[var(--color-primary)]/30'
-                        : 'text-[var(--color-sidebar-text)]',
+                        : 'text-[var(--color-sidebar-text)] hover:bg-[var(--color-sidebar-hover)]',
                     collapsed && 'justify-center px-2',
                 )}
                 title={collapsed ? item.label : undefined}
@@ -48,11 +47,11 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 
 function SectionHeader({ label, collapsed }: { label: string; collapsed: boolean }) {
     if (collapsed) {
-        return <li className="my-2 border-t border-white/10" />;
+        return <li className="my-2 border-t border-[var(--color-sidebar-border)]" />;
     }
     return (
         <li className="px-4 pt-4 pb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-sidebar-muted)]">
                 {label}
             </span>
         </li>
@@ -80,13 +79,6 @@ const dataSections: NavSection[] = [
         header: 'Maintenance',
         items: [
             { label: 'Tableau de bord', href: '/logistics/dashboard', icon: <Wrench size={18} />, match: '/logistics' },
-        ],
-    },
-    {
-        header: 'Organisation',
-        items: [
-            { label: 'Projets', href: '/projects', icon: <FolderOpen size={18} /> },
-            { label: 'Entités', href: '/entities', icon: <Building2 size={18} /> },
         ],
     },
 ];
@@ -128,13 +120,11 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
     } else if (isAdmin) {
         sections = [...dataSections, adminSection];
     } else {
-        // Manager and other roles: data only, no admin section
         sections = dataSections;
     }
 
     return (
         <>
-            {/* Mobile overlay */}
             {mobileOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -150,18 +140,18 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
                 )}
             >
                 {/* Logo */}
-                <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
+                <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-sidebar-border)]">
                     {!collapsed && (
-                        <span className="text-lg font-bold text-white tracking-tight">
-                            AMC <span className="text-[var(--color-primary-light)]">Logistics</span>
+                        <span className="text-lg font-bold text-[var(--color-sidebar-title)] tracking-tight">
+                            AMC <span className="text-[var(--color-primary)]">Logistics</span>
                         </span>
                     )}
                     {collapsed && (
-                        <span className="text-lg font-bold text-[var(--color-primary-light)] mx-auto">A</span>
+                        <span className="text-lg font-bold text-[var(--color-primary)] mx-auto">A</span>
                     )}
                     <button
                         onClick={onClose}
-                        className="lg:hidden text-white/60 hover:text-white p-1"
+                        className="lg:hidden text-[var(--color-sidebar-muted)] hover:text-[var(--color-sidebar-text)] p-1"
                     >
                         <X size={20} />
                     </button>
@@ -170,7 +160,6 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto py-3 px-2">
                     <ul className="space-y-0.5">
-                        {/* Dashboard link */}
                         <SidebarLink
                             item={{
                                 label: 'Dashboard',
@@ -194,8 +183,8 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
 
                 {/* Footer */}
                 {!collapsed && (
-                    <div className="px-4 py-3 border-t border-white/10">
-                        <p className="text-xs text-white/30 text-center">AMC Travaux SN</p>
+                    <div className="px-4 py-3 border-t border-[var(--color-sidebar-border)]">
+                        <p className="text-xs text-[var(--color-sidebar-muted)] text-center">AMC Travaux SN</p>
                     </div>
                 )}
             </aside>
