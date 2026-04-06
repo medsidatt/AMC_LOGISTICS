@@ -1,0 +1,151 @@
+import { Head, useForm } from '@inertiajs/react';
+import { useEffect } from 'react';
+import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
+import Card from '@/components/ui/Card';
+import Button from '@/components/ui/Button';
+import FormInput from '@/components/ui/FormInput';
+import FormSelect from '@/components/ui/FormSelect';
+import { ArrowLeft } from 'lucide-react';
+
+interface TruckOption {
+    id: number;
+    matricule: string;
+    driver_id: number | null;
+    transporter_id: number | null;
+}
+
+interface DropdownItem {
+    id: number | string;
+    name: string;
+}
+
+interface Props {
+    transporters: DropdownItem[];
+    trucks: TruckOption[];
+    drivers: DropdownItem[];
+    providers: DropdownItem[];
+    products: DropdownItem[];
+    bases: DropdownItem[];
+}
+
+export default function TrackingsCreate({ transporters, trucks, drivers, providers, products, bases }: Props) {
+    const form = useForm({
+        truck_id: '' as string | number,
+        driver_id: '' as string | number,
+        transporter_id: '' as string | number,
+        provider_id: '' as string | number,
+        product: '',
+        base: '',
+        provider_date: '',
+        client_date: '',
+        commune_date: '',
+        provider_gross_weight: '',
+        provider_tare_weight: '',
+        provider_net_weight: '',
+        client_gross_weight: '',
+        client_tare_weight: '',
+        client_net_weight: '',
+        commune_weight: '',
+        files: [] as File[],
+    });
+
+    // Auto-select driver & transporter when truck changes
+    useEffect(() => {
+        const selected = trucks.find((t) => t.id === Number(form.data.truck_id));
+        if (selected) {
+            if (selected.driver_id) form.setData('driver_id', selected.driver_id);
+            if (selected.transporter_id) form.setData('transporter_id', selected.transporter_id);
+        }
+    }, [form.data.truck_id]);
+
+    // Auto-calculate net weights
+    useEffect(() => {
+        const gross = parseFloat(String(form.data.provider_gross_weight));
+        const tare = parseFloat(String(form.data.provider_tare_weight));
+        if (!isNaN(gross) && !isNaN(tare)) form.setData('provider_net_weight', String(gross - tare));
+    }, [form.data.provider_gross_weight, form.data.provider_tare_weight]);
+
+    useEffect(() => {
+        const gross = parseFloat(String(form.data.client_gross_weight));
+        const tare = parseFloat(String(form.data.client_tare_weight));
+        if (!isNaN(gross) && !isNaN(tare)) form.setData('client_net_weight', String(gross - tare));
+    }, [form.data.client_gross_weight, form.data.client_tare_weight]);
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        form.post('/transport_tracking', { forceFormData: true });
+    };
+
+    const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
+    const toOpts = (items: DropdownItem[]) => items.map((i) => ({ value: i.id, label: i.name }));
+
+    return (
+        <AuthenticatedLayout title="Nouveau transport">
+            <Head title="Nouveau transport" />
+
+            <div className="mb-4">
+                <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>Retour</Button>
+            </div>
+
+            <form onSubmit={submit}>
+                <div className="grid lg:grid-cols-2 gap-6">
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Véhicule & Conducteur</h4>
+                        <FormSelect label="Camion" options={truckOpts} value={form.data.truck_id} onChange={(v) => form.setData('truck_id', v ?? '')} error={form.errors.truck_id} required />
+                        <FormSelect label="Conducteur" options={toOpts(drivers)} value={form.data.driver_id} onChange={(v) => form.setData('driver_id', v ?? '')} error={form.errors.driver_id} required />
+                        <FormSelect label="Transporteur" options={toOpts(transporters)} value={form.data.transporter_id} onChange={(v) => form.setData('transporter_id', v ?? '')} error={form.errors.transporter_id} />
+                    </Card>
+
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Produit & Localisation</h4>
+                        <FormSelect label="Produit" options={toOpts(products)} value={form.data.product} onChange={(v) => form.setData('product', String(v ?? ''))} error={form.errors.product} required />
+                        <FormSelect label="Base" options={toOpts(bases)} value={form.data.base} onChange={(v) => form.setData('base', String(v ?? ''))} error={form.errors.base} required />
+                        <FormSelect label="Fournisseur" options={toOpts(providers)} value={form.data.provider_id} onChange={(v) => form.setData('provider_id', v ?? '')} error={form.errors.provider_id} />
+                    </Card>
+
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Dates</h4>
+                        <FormInput label="Date fournisseur" type="date" name="provider_date" value={form.data.provider_date} onChange={(e) => form.setData('provider_date', e.target.value)} error={form.errors.provider_date} />
+                        <FormInput label="Date client" type="date" name="client_date" value={form.data.client_date} onChange={(e) => form.setData('client_date', e.target.value)} error={form.errors.client_date} />
+                        <FormInput label="Date commune" type="date" name="commune_date" value={form.data.commune_date} onChange={(e) => form.setData('commune_date', e.target.value)} error={form.errors.commune_date} />
+                    </Card>
+
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Poids Fournisseur</h4>
+                        <FormInput label="Poids brut" type="number" step="0.01" name="provider_gross_weight" value={form.data.provider_gross_weight} onChange={(e) => form.setData('provider_gross_weight', e.target.value)} error={form.errors.provider_gross_weight} />
+                        <FormInput label="Tare" type="number" step="0.01" name="provider_tare_weight" value={form.data.provider_tare_weight} onChange={(e) => form.setData('provider_tare_weight', e.target.value)} error={form.errors.provider_tare_weight} />
+                        <FormInput label="Poids net" type="number" step="0.01" name="provider_net_weight" value={form.data.provider_net_weight} onChange={(e) => form.setData('provider_net_weight', e.target.value)} error={form.errors.provider_net_weight} />
+                    </Card>
+
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Poids Client</h4>
+                        <FormInput label="Poids brut" type="number" step="0.01" name="client_gross_weight" value={form.data.client_gross_weight} onChange={(e) => form.setData('client_gross_weight', e.target.value)} error={form.errors.client_gross_weight} />
+                        <FormInput label="Tare" type="number" step="0.01" name="client_tare_weight" value={form.data.client_tare_weight} onChange={(e) => form.setData('client_tare_weight', e.target.value)} error={form.errors.client_tare_weight} />
+                        <FormInput label="Poids net" type="number" step="0.01" name="client_net_weight" value={form.data.client_net_weight} onChange={(e) => form.setData('client_net_weight', e.target.value)} error={form.errors.client_net_weight} />
+                    </Card>
+
+                    <Card>
+                        <h4 className="font-semibold text-[var(--color-text)] mb-4">Commune & Fichiers</h4>
+                        <FormInput label="Poids commune" type="number" step="0.01" name="commune_weight" value={form.data.commune_weight} onChange={(e) => form.setData('commune_weight', e.target.value)} error={form.errors.commune_weight} />
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Fichiers</label>
+                            <input
+                                type="file"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(e) => form.setData('files', Array.from(e.target.files ?? []))}
+                                className="block w-full text-sm text-[var(--color-text-secondary)] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[var(--color-primary)]/10 file:text-[var(--color-primary)] hover:file:bg-[var(--color-primary)]/20"
+                            />
+                            {form.errors.files && <p className="mt-1 text-xs text-[var(--color-danger)]">{form.errors.files}</p>}
+                        </div>
+                    </Card>
+                </div>
+
+                <div className="flex gap-2 mt-6">
+                    <Button variant="secondary" onClick={() => window.history.back()}>Annuler</Button>
+                    <Button type="submit" loading={form.processing}>Créer</Button>
+                </div>
+            </form>
+        </AuthenticatedLayout>
+    );
+}

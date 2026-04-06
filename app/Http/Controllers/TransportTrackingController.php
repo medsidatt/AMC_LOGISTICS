@@ -448,26 +448,37 @@ class TransportTrackingController extends Controller
 
     public function showPage(TransportTracking $transportTracking)
     {
-        $transportTracking->load('documents');
+        $transportTracking->load(['documents', 'truck', 'driver', 'provider']);
 
-        $title = 'Detail deposit ' . $transportTracking->reference;
-        $actions = [
-            [
-                'label' => 'Modifier',
-                'url' => route('transport_tracking.edit-page', $transportTracking->id),
-                'permission' => true
+        return Inertia::render('transport-trackings/Show', [
+            'tracking' => [
+                'id' => $transportTracking->id,
+                'reference' => $transportTracking->reference,
+                'truck' => $transportTracking->truck?->matricule,
+                'driver' => $transportTracking->driver?->name,
+                'provider' => $transportTracking->provider?->name,
+                'transporter' => $transportTracking->truck?->transporter?->name ?? null,
+                'product' => $transportTracking->product,
+                'base' => $transportTracking->base,
+                'provider_date' => $transportTracking->provider_date?->format('Y-m-d'),
+                'client_date' => $transportTracking->client_date?->format('Y-m-d'),
+                'commune_date' => $transportTracking->commune_date,
+                'provider_gross_weight' => $transportTracking->provider_gross_weight,
+                'provider_tare_weight' => $transportTracking->provider_tare_weight,
+                'provider_net_weight' => $transportTracking->provider_net_weight,
+                'client_gross_weight' => $transportTracking->client_gross_weight,
+                'client_tare_weight' => $transportTracking->client_tare_weight,
+                'client_net_weight' => $transportTracking->client_net_weight,
+                'commune_weight' => $transportTracking->commune_weight,
+                'gap' => $transportTracking->gap,
+                'documents' => $transportTracking->documents->map(fn ($d) => [
+                    'id' => $d->id,
+                    'original_name' => $d->original_name,
+                    'mime_type' => $d->mime_type,
+                    'type' => $d->type,
+                    'file_url' => asset('storage/' . $d->file_path),
+                ]),
             ],
-            [
-                'label' => 'Supprimer',
-                'onclick' => 'confirmDelete("' . route('transport_tracking.destroy', $transportTracking->id) . '")',
-                'permission' => true
-            ]
-        ];
-
-        return view('pages.transport_trackings.show-page', [
-            'title' => $title,
-            'actions' => $actions,
-            'tracking' => $transportTracking,
         ]);
     }
 
