@@ -364,10 +364,7 @@ class TruckController extends Controller
     {
         $truck->delete();
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Camion supprimé avec succès.',
-        ]);
+        return redirect()->back()->with('success', 'Camion supprimé avec succès.');
     }
 
     // Maintenance methods delegate to MaintenanceController for backward compatibility

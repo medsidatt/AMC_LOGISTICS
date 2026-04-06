@@ -76,7 +76,7 @@ export default function EntitiesIndex({ entities, filters }: Props) {
                                     <ActionButtons
                                         onView={() => openShow(r)}
                                         onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/entities/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/entities/destroy/${r.id}`)}
                                     />
                                 ),
                             },

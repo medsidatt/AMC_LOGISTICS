@@ -75,7 +75,7 @@ export default function TransportersIndex({ transporters, filters }: Props) {
                                     <ActionButtons
                                         onView={() => openShow(r)}
                                         onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/transporters/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/transporters/${r.id}/destroy`)}
                                     />
                                 ),
                             },

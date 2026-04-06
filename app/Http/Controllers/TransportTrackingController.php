@@ -681,7 +681,7 @@ class TransportTrackingController extends Controller
     /**
      * Delete a document
      */
-    public function deleteDocument($id, $documentId): JsonResponse
+    public function deleteDocument($id, $documentId)
     {
         $tracking = TransportTracking::findOrFail($id);
         $document = Document::where('id', $documentId)
@@ -696,10 +696,7 @@ class TransportTrackingController extends Controller
         // Delete document record
         $document->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Document deleted successfully',
-        ]);
+        return redirect()->back()->with('success', 'Document supprimé avec succès.');
     }
 
     /**
@@ -711,10 +708,8 @@ class TransportTrackingController extends Controller
         $transportTracking->documents()->delete();
 
         $transportTracking->delete();
-        return response()->json([
-            'success' => true,
-            'message' => 'Stock deleted successfully',
-        ]);
+
+        return redirect()->route('transport_tracking.index')->with('success', 'Transport supprimé avec succès.');
     }
 
     // askAI

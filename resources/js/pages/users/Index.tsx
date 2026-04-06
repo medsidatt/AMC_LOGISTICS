@@ -108,7 +108,7 @@ export default function UsersIndex({ users, roles }: Props) {
                                         <ActionButtons
                                             onView={() => openShow(r)}
                                             onEdit={() => openEdit(r)}
-                                            onDelete={() => setDeleteUrl(`/users/${r.id}`)}
+                                            onDelete={() => setDeleteUrl(`/users/destroy/${r.id}`)}
                                         />
                                         <button
                                             onClick={() => router.get(`/users/suspend/${r.id}`)}

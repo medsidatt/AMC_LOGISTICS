@@ -70,7 +70,7 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
                                     <ActionButtons
                                         viewHref={`/trucks/${r.id}/show`}
                                         editHref={`/trucks/${r.id}/edit`}
-                                        onDelete={() => setDeleteUrl(`/trucks/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/trucks/${r.id}/destroy`)}
                                     />
                                 ),
                             },

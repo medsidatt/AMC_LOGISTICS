@@ -77,7 +77,7 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                                     <ActionButtons
                                         onView={() => openShow(r)}
                                         onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/providers/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/providers/${r.id}/destroy`)}
                                     />
                                 ),
                             },
