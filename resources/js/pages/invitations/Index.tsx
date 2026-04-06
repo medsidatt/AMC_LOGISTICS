@@ -85,7 +85,7 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/invitations/${r.id}`)}
+                                        onDelete={() => setDeleteUrl(`/invitations/destroy/${r.id}`)}
                                     />
                                 ),
                             },
