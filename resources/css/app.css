@@ -18,8 +18,12 @@
     --color-text-secondary: #6e6b7b;
     --color-text-muted: #b4b7bd;
 
-    --color-sidebar-bg: #283046;
-    --color-sidebar-text: #d0d2d6;
+    --color-sidebar-bg: #ffffff;
+    --color-sidebar-text: #4b4b4b;
+    --color-sidebar-muted: #b4b7bd;
+    --color-sidebar-title: #4b4b4b;
+    --color-sidebar-hover: #f3f2f5;
+    --color-sidebar-border: #ebe9f1;
     --color-sidebar-active: #7367f0;
 
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -47,6 +51,13 @@
     --color-text: #d0d2d6;
     --color-text-secondary: #b4b7bd;
     --color-text-muted: #676d7d;
+
+    --color-sidebar-bg: #283046;
+    --color-sidebar-text: #d0d2d6;
+    --color-sidebar-muted: #676d7d;
+    --color-sidebar-title: #d0d2d6;
+    --color-sidebar-hover: #313a55;
+    --color-sidebar-border: #3b4253;
 
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
