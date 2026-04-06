@@ -161,17 +161,13 @@ class UserController extends Controller
 
         $user = auth()->user();
         if (!\Hash::check($request->old_password, $user->password)) {
-            return response()->json([
-                'message' => 'Old password is not correct'
-            ], 422);
+            return redirect()->back()->withErrors(['old_password' => 'L\'ancien mot de passe est incorrect.']);
         }
 
         $user->password = bcrypt($request->password);
         $user->save();
 
-        return response()->json([
-            'success' => 'Password updated successfully'
-        ], 201);
+        return redirect()->back()->with('success', 'Mot de passe mis à jour avec succès.');
     }
 
     // changeUserPassword
@@ -194,14 +190,24 @@ class UserController extends Controller
     // account
     public function account()
     {
-        return view('pages.auth.account');
+        return Inertia::render('account/Profile', [
+            'user' => [
+                'id' => auth()->id(),
+                'name' => auth()->user()->name,
+                'email' => auth()->user()->email,
+            ],
+        ]);
     }
 
     // profile
     public function profile()
     {
-        return view('pages.auth.profile', [
-            'employee' => null
+        return Inertia::render('account/Profile', [
+            'user' => [
+                'id' => auth()->id(),
+                'name' => auth()->user()->name,
+                'email' => auth()->user()->email,
+            ],
         ]);
     }
 
@@ -220,9 +226,6 @@ class UserController extends Controller
             'email' => $request->email,
         ]);
 
-        return response()->json([
-            'message' => 'Account updated successfully.',
-            'success' => true
-        ]);
+        return redirect()->back()->with('success', 'Compte mis à jour avec succès.');
     }
 }
