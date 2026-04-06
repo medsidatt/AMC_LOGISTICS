@@ -50,12 +50,12 @@
                     <span class="menu-title">{{ __('Suivi Transport') }}</span>
                 </a>
             </li>
-            <li class="nav-item {{ request()->routeIs('transport_tracking.dashboard') ? 'active' : '' }}">
-                <a href="{{ route('transport_tracking.dashboard') }}">
-                    <i class="la la-chart-bar"></i>
-                    <span class="menu-title">{{ __('Dashboard Analytics') }}</span>
-                </a>
-            </li>
+{{--            <li class="nav-item {{ request()->routeIs('transport_tracking.dashboard') ? 'active' : '' }}">--}}
+{{--                <a href="{{ route('transport_tracking.dashboard') }}">--}}
+{{--                    <i class="la la-chart-bar"></i>--}}
+{{--                    <span class="menu-title">{{ __('Dashboard Analytics') }}</span>--}}
+{{--                </a>--}}
+{{--            </li>--}}
             <li class="nav-item {{ is_active(route('providers.index')) }}">
                 <a href="{{ route('providers.index') }}">
                     <i class="la la-industry"></i>
