@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 use Yajra\DataTables\DataTables;
 
@@ -26,67 +27,27 @@ class UserController extends Controller
     // index
     public function index()
     {
-        if (\request()->ajax()) {
+        $users = User::query()
+            ->with('roles')
+            ->orderBy('name')
+            ->paginate(15)
+            ->through(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'is_suspended' => $user->is_suspended,
+                'roles' => $user->roles->map(fn ($r) => [
+                    'id' => $r->id,
+                    'name' => $r->name,
+                ])->toArray(),
+                'created_at' => $user->created_at?->format('Y-m-d'),
+            ]);
 
-            $users = User::all();
+        $roles = Role::orderBy('name')->get(['id', 'name'])->toArray();
 
-            return DataTables::of($users)
-                ->addIndexColumn()
-                ->addColumn('action', function ($user) {
-                    $actions = [
-                        [
-                            'label' => __('system.edit'),
-                            'onclick' => 'openInModal({ link: \'' . route('users.edit', $user->id) . '\', size: \'md\' })',
-                            'permission' => 'user-edit'
-                        ],
-                        [
-                            'label' => __('system.show'),
-                            'onclick' => 'openInModal({ link: \'' . route('users.show', $user->id) . '\', size: \'md\' })',
-                            'permission' => 'user-show'
-                        ],
-                        [
-                            'label' => $user->is_suspended ? 'Activer' : 'Suspendre',
-                            'onclick' => 'confirmSuspend(\'' . route('users.suspend', $user->id) . '\')',
-                            'permission' => 'user-suspend'
-                        ],
-                        [
-                            'label' => 'Modifier mot de passe',
-                            'onclick' => 'openInModal({ link: \'' . route('users.change-password', $user->id) . '\', size: \'md\' })',
-                            'permission' => 'user-change-password'
-                        ],
-                        [
-                            'label' => 'Supprimer',
-                            'onclick' => 'confirmDelete(\'' . route('users.destroy', $user->id) . '\')',
-                            'permission' => 'user-delete'
-                        ],
-                    ];
-                    return view('components.buttons.action', ['actions' => $actions]);
-                })
-                ->addColumn('status', function ($user) {
-                    return view('pages.users._status', compact('user'));
-                })
-                ->editColumn('id', function ($user) {
-                    return $user->employee ? $user->employee->badge_number : $user->id;
-                })
-                ->rawColumns(['action', 'status'])
-                ->make(true);
-        }
-
-        $actions = [
-            [
-                'label' => __('system.create'),
-                'onclick' => 'openInModal({ link: \'' . route('users.create') . '\', size: \'md\' })',
-                'permission' => 'user-create'
-            ],
-            [
-                'label' => __('user.invite_user'),
-                'onclick' => 'openInModal({ link: \'' . route('invitation.create') . '\', size: \'md\' })',
-                'permission' => 'user-invitation'
-            ]
-        ];
-
-        return view('pages.users.index', [
-            'actions' => $actions
+        return Inertia::render('users/Index', [
+            'users' => $users,
+            'roles' => $roles,
         ]);
     }
 
@@ -115,26 +76,12 @@ class UserController extends Controller
             'password' => bcrypt('password'),
         ]);
 
-        $user->employee()->firstOrCreate(
-            [
-                'email' => $request->email,
-            ],
-            [
-                'name' => $request->name,
-                'email' => $request->email,
-                'phone' => '0000000000',
-                'address' => 'address',
-            ]);
-
         if (! empty($request->roles)) {
             $roles = Role::query()->whereIn('id', $request->roles)->pluck('name');
             $user->syncRoles($roles);
         }
 
-        return response()->json([
-            'message' => 'User created successfully.',
-            'success' => true
-        ]);
+        return redirect()->back()->with('success', 'User created successfully.');
     }
 
     //edit
@@ -155,8 +102,6 @@ class UserController extends Controller
             'roles' => ['required', 'array']
         ]);
 
-//        dd($request->all());
-
         $user = User::find($id);
 
         $user->update([
@@ -168,10 +113,7 @@ class UserController extends Controller
 
         $user->syncRoles($roles);
 
-        return response()->json([
-            'message' => 'User updated successfully.',
-            'success' => true
-        ], 200);
+        return redirect()->back()->with('success', 'User updated successfully.');
     }
 
     //destroy
@@ -179,10 +121,7 @@ class UserController extends Controller
     public function destroy($id)
     {
         User::find($id)->delete();
-        return response()->json([
-            'success' => true,
-            'message' => 'User deleted successfully.'
-        ]);
+        return redirect()->back()->with('success', 'User deleted successfully.');
     }
 
     //show
@@ -261,9 +200,8 @@ class UserController extends Controller
     // profile
     public function profile()
     {
-        $employee = auth()->user()->employee;
         return view('pages.auth.profile', [
-            'employee' => $employee
+            'employee' => null
         ]);
     }
 

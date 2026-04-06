@@ -35,6 +35,11 @@ class TransportTracking extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'provider_date' => 'date',
+        'client_date' => 'date',
+    ];
+
     // append column to table
 //    protected $appends = ['gap'];
 

@@ -6,13 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
-use App\Models\Employee\Employee;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
 class InvitationController extends Controller
@@ -21,47 +21,25 @@ class InvitationController extends Controller
     // index
     public function index()
     {
+        $invitations = Invitation::query()
+            ->orderByDesc('created_at')
+            ->paginate(15)
+            ->through(fn (Invitation $inv) => [
+                'id' => $inv->id,
+                'email' => $inv->email,
+                'role_name' => $inv->role_name,
+                'is_used' => $inv->is_used,
+                'expires_at' => $inv->expires_at,
+                'created_at' => $inv->created_at?->format('Y-m-d'),
+            ]);
 
-        if (\request()->ajax()) {
-            $invitations = Invitation::all();
-            return datatables()->of($invitations)
-                ->addColumn('action', function ($invitation) {
-                    $actions = [
-                        [
-                            'label' => 'Edit',
-                            'onclick' => 'openInModal({ link: \'' . route('invitation.edit', $invitation->id) . '\', size: \'md\' })',
-                            'permission' => 'invitation-edit'
-                        ],
-                        [
-                            'label' => 'Delete',
-                            'onclick' => 'confirmDelete(\'' . route('invitation.destroy', $invitation->id) . '\')',
-                            'permission' => 'invitation-delete'
-                        ]
-                    ];
+        $roles = $this->assignableRoles()->map(fn ($r) => [
+            'name' => $r->name,
+        ])->toArray();
 
-                    return view('components.buttons.action', ['actions' => $actions]);
-                })
-                ->editColumn('created_at', function ($invitation) {
-                    return $invitation->created_at->format('d/m/Y');
-                })
-                ->editColumn('expires_at', function ($invitation) {
-                    return view('components.badges.badge', [
-                        'label' => 'Expire ' . Carbon::parse($invitation->expires_at)->diffForHumans(),
-                        'color' => 'danger'
-                    ]);
-                })
-                ->rawColumns(['action'])
-                ->make(true);
-        }
-
-        return view('auth.invitations.index', [
-            'actions' => [
-                [
-                    'label' => 'Create',
-                    'onclick' => 'openInModal({ link: \'' . route('invitation.create', 1) . '\', size: \'md\' })',
-                    'permission' => 'invitation-create'
-                ]
-            ]
+        return Inertia::render('invitations/Index', [
+            'invitations' => $invitations,
+            'roles' => $roles,
         ]);
     }
 
@@ -115,16 +93,10 @@ class InvitationController extends Controller
 
             Mail::to($request->email)->send(new InvitationMail($invitation));
             DB::commit();
-            return response()->json([
-                'message' => 'Invitation sent successfully.',
-                'success' => true
-            ], 200);
+            return redirect()->back()->with('success', 'Invitation sent successfully.');
         } catch (\Exception $e) {
             DB::rollback();
-            return response()->json([
-                'message' => 'Failed to send invitation.',
-                'success' => false
-            ], 500);
+            return redirect()->back()->with('error', 'Failed to send invitation.');
         }
 
     }
@@ -166,22 +138,6 @@ class InvitationController extends Controller
             'password' => bcrypt($request->password),
         ]);
 
-        /*$user->employee()->create([
-            'name' => $request->first_name . ' ' . $request->last_name,
-            'email' => $invitation->email,
-            'phone' => $request->phone,
-        ]);*/
-
-        $user->employee()->firstOrCreate(
-            [
-                'email' => $invitation->email,
-            ],
-            [
-                'name' => $request->first_name . ' ' . $request->last_name,
-                'phone' => $request->phone,
-                'address' => 'Nouakchott, Mauritania',
-            ]);
-
         if (! empty($invitation->role_name)) {
             $role = Role::query()->where('name', $invitation->role_name)->first();
             if ($role) {
@@ -215,10 +171,7 @@ class InvitationController extends Controller
 
         Mail::to($request->email)->send(new InvitationMail($invitation));
 
-        return response()->json([
-            'message' => 'Invitation sent successfully.',
-            'success' => true
-        ], 200);
+        return redirect()->back()->with('success', 'Invitation updated successfully.');
 
     }
 
@@ -227,10 +180,7 @@ class InvitationController extends Controller
     {
         $invitation = Invitation::findOrFail($id);
         $invitation->delete();
-        return response()->json([
-            'message' => 'Invitation deleted successfully.',
-            'success' => true
-        ], 200);
+        return redirect()->back()->with('success', 'Invitation deleted successfully.');
     }
 
 
