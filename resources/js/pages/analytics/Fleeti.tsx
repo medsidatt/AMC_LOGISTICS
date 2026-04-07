@@ -3,8 +3,9 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import AnalyticsTabs from '@/components/analytics/AnalyticsTabs';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import { Satellite, Truck, Wifi, WifiOff, Activity, Fuel, AlertTriangle, Droplets } from 'lucide-react';
+import { Satellite, Truck, Wifi, WifiOff, Activity, Fuel, AlertTriangle, Droplets, Filter } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useState } from 'react';
 
 const fmt = (v: number) => (Number(v) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 });
 
@@ -15,7 +16,7 @@ interface Props {
         trucks_with_fuel: number; avg_fuel: number;
     };
     fuelDistribution: { critical: number; low: number; medium: number; good: number };
-    fuelData: Array<{ id: number; matricule: string; fuel_level: number; total_km: number; last_synced: string | null }>;
+    fuelData: Array<{ id: number; matricule: string; fuel_level: number; total_km: number; source: string; last_synced: string | null }>;
     dailyKm: Array<{ day: string; km: number; trucks: number }>;
     fleetTable: Array<{ id: number; matricule: string; total_km: number; fleeti_connected: boolean; fleeti_km: number | null; fuel_level: number | null; last_synced: string | null }>;
 }
@@ -33,6 +34,16 @@ function FuelGauge({ level }: { level: number }) {
 }
 
 export default function FleetiDashboard({ stats, fuelDistribution, fuelData, dailyKm, fleetTable }: Props) {
+    const [tableFilter, setTableFilter] = useState<'all' | 'connected' | 'disconnected'>('all');
+    const [search, setSearch] = useState('');
+
+    const filteredFleet = fleetTable.filter((t) => {
+        if (tableFilter === 'connected' && !t.fleeti_connected) return false;
+        if (tableFilter === 'disconnected' && t.fleeti_connected) return false;
+        if (search && !t.matricule.toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+    });
+
     return (
         <AuthenticatedLayout title="Fleeti & Carburant">
             <Head title="Fleeti & Carburant" />
@@ -95,14 +106,18 @@ export default function FleetiDashboard({ stats, fuelDistribution, fuelData, dai
                         <h3 className="text-lg font-semibold text-[var(--color-text)]">Niveau carburant par camion</h3>
                     </div>
                     {fuelData.length === 0 ? (
-                        <p className="text-center py-8 text-[var(--color-text-muted)]">Aucune donnée carburant disponible</p>
+                        <div className="text-center py-8 text-[var(--color-text-muted)]">
+                            <Fuel size={32} className="mx-auto mb-2 opacity-30" />
+                            <p>Aucune donnée carburant disponible</p>
+                            <p className="text-xs mt-1">Les données proviennent de Fleeti (GPS) ou des checklists conducteurs</p>
+                        </div>
                     ) : (
                         <div className="space-y-2 max-h-80 overflow-y-auto">
-                            {fuelData.sort((a, b) => a.fuel_level - b.fuel_level).map((t) => (
+                            {[...fuelData].sort((a, b) => a.fuel_level - b.fuel_level).map((t) => (
                                 <div key={t.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--color-surface-hover)]">
                                     <a href={`/trucks/${t.id}/show-page`} className="text-sm font-medium text-[var(--color-primary)] hover:underline w-24">{t.matricule}</a>
                                     <FuelGauge level={t.fuel_level} />
-                                    <span className="text-xs text-[var(--color-text-muted)] w-20 text-right">{fmt(t.total_km)} km</span>
+                                    <Badge variant={t.source === 'fleeti' ? 'info' : 'muted'} size="sm">{t.source === 'fleeti' ? 'GPS' : 'Checklist'}</Badge>
                                 </div>
                             ))}
                         </div>
@@ -132,9 +147,22 @@ export default function FleetiDashboard({ stats, fuelDistribution, fuelData, dai
             {/* Full fleet table */}
             <Card className="mt-6" padding={false}>
                 <div className="p-5">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Satellite size={18} className="text-[var(--color-primary)]" />
-                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Flotte complète</h3>
+                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                        <div className="flex items-center gap-2">
+                            <Satellite size={18} className="text-[var(--color-primary)]" />
+                            <h3 className="text-lg font-semibold text-[var(--color-text)]">Flotte</h3>
+                        </div>
+                        <div className="flex gap-1 ml-auto">
+                            {(['all', 'connected', 'disconnected'] as const).map((f) => (
+                                <button key={f} onClick={() => setTableFilter(f)}
+                                    className={clsx('px-3 py-1.5 rounded-lg text-xs font-medium transition',
+                                        tableFilter === f ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]')}>
+                                    {f === 'all' ? `Tous (${fleetTable.length})` : f === 'connected' ? `GPS (${fleetTable.filter(t => t.fleeti_connected).length})` : `Sans GPS (${fleetTable.filter(t => !t.fleeti_connected).length})`}
+                                </button>
+                            ))}
+                        </div>
+                        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher..."
+                            className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm w-40" />
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
                         <table className="w-full text-sm">
@@ -149,7 +177,7 @@ export default function FleetiDashboard({ stats, fuelDistribution, fuelData, dai
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
-                                {fleetTable.map((t) => (
+                                {filteredFleet.map((t) => (
                                     <tr key={t.id} className="hover:bg-[var(--color-surface-hover)]">
                                         <td className="px-3 py-2"><a href={`/trucks/${t.id}/show-page`} className="text-[var(--color-primary)] hover:underline font-medium">{t.matricule}</a></td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(t.total_km)} km</td>
