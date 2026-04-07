@@ -8,6 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('maintenances') || !Schema::hasTable('truck_maintenance_profiles')) {
+            return;
+        }
+
+        if (Schema::hasColumn('maintenances', 'truck_maintenance_profile_id')) {
+            return;
+        }
+
         Schema::table('maintenances', function (Blueprint $table) {
             $table->foreignId('truck_maintenance_profile_id')
                 ->nullable()
@@ -20,6 +28,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasTable('maintenances') || !Schema::hasColumn('maintenances', 'truck_maintenance_profile_id')) {
+            return;
+        }
+
         Schema::table('maintenances', function (Blueprint $table) {
             $table->dropConstrainedForeignId('truck_maintenance_profile_id');
             $table->dropColumn('trigger_km');

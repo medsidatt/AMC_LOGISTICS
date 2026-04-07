@@ -23,9 +23,11 @@ return new class extends Migration
             $table->string('status', 20)->default('green');
             $table->timestamp('last_calculated_at')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('deactivated_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['truck_id', 'maintenance_type'], 'truck_maintenance_profile_unique');
+            $table->index(['truck_id', 'maintenance_type', 'is_active'], 'tmp_active_profile_idx');
             $table->index(['truck_id', 'status', 'next_maintenance_km'], 'truck_maintenance_profile_lookup_idx');
         });
     }

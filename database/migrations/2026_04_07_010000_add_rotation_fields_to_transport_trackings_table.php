@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('transport_trackings', 'start_km')) {
+            return;
+        }
+
         Schema::table('transport_trackings', function (Blueprint $table) {
             $table->decimal('start_km', 15, 2)->nullable()->after('gap');
             $table->decimal('end_km', 15, 2)->nullable()->after('start_km');

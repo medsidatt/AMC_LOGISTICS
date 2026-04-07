@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('daily_checklists') || Schema::hasColumn('daily_checklists', 'start_km')) {
+            return;
+        }
+
         Schema::table('daily_checklists', function (Blueprint $table) {
             $table->decimal('start_km', 15, 2)->nullable()->after('checklist_date');
             $table->decimal('end_km', 15, 2)->nullable()->after('start_km');
