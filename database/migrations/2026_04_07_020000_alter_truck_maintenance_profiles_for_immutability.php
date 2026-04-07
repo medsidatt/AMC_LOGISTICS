@@ -34,6 +34,7 @@ return new class extends Migration
             return;
         }
 
+
         Schema::table('truck_maintenance_profiles', function (Blueprint $table) {
             $table->dropIndex('tmp_active_profile_idx');
             $table->dropConstrainedForeignId('created_by');
