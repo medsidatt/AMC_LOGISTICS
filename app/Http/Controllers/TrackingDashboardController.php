@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\KilometerTracking;
 use App\Models\TransportTracking;
 use App\Models\Driver;
 use App\Models\Provider;
 use App\Models\Truck;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TrackingDashboardController extends Controller
 {
@@ -166,6 +168,45 @@ class TrackingDashboardController extends Controller
         $trucks    = Truck::orderBy('matricule')->get();
         $providers = Provider::orderBy('name')->get();
 
+        // ── Fleeti Fleet Data ──
+        $allTrucks = Truck::where('is_active', true)->get();
+        $fleeti = [
+            'total_trucks' => $allTrucks->count(),
+            'connected' => $allTrucks->whereNotNull('fleeti_asset_id')->count(),
+            'synced_recently' => $allTrucks->filter(fn ($t) =>
+                $t->fleeti_last_synced_at && $t->fleeti_last_synced_at->gt(now()->subHours(2))
+            )->count(),
+            'total_fleet_km' => round((float) $allTrucks->sum('total_kilometers'), 0),
+            'avg_km_per_truck' => $allTrucks->count() > 0
+                ? round((float) $allTrucks->avg('total_kilometers'), 0) : 0,
+            'last_sync' => $allTrucks->max('fleeti_last_synced_at')
+                ? Carbon::parse($allTrucks->max('fleeti_last_synced_at'))->format('d/m/Y H:i') : null,
+            'trucks' => $allTrucks->sortByDesc('total_kilometers')->take(15)->values()->map(fn ($t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'total_km' => round((float) $t->total_kilometers, 0),
+                'fleeti_connected' => !empty($t->fleeti_asset_id),
+                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
+            ])->toArray(),
+            // Daily km evolution last 14 days
+            'daily_km' => KilometerTracking::select(
+                    DB::raw("date as raw_date"),
+                    DB::raw("DATE_FORMAT(date, '%d/%m') as day"),
+                    DB::raw('SUM(kilometers) as total_km'),
+                    DB::raw('COUNT(DISTINCT truck_id) as trucks_active')
+                )
+                ->where('date', '>=', now()->subDays(14))
+                ->groupBy('raw_date', 'day')
+                ->orderBy('raw_date')
+                ->get()
+                ->map(fn ($r) => [
+                    'day' => $r->day,
+                    'km' => round((float) $r->total_km, 0),
+                    'trucks' => (int) $r->trucks_active,
+                ])->toArray(),
+        ];
+
         return \Inertia\Inertia::render('transport-trackings/Reports', [
             'totalTrips' => (int) ($totalTrips ?? 0),
             'totalProviderWeight' => round((float) ($totalProviderWeight ?? 0), 2),
@@ -245,6 +286,210 @@ class TrackingDashboardController extends Controller
                 'provider_id' => $providerId,
                 'product' => $product,
                 'base' => $base,
+            ]),
+        ]);
+    }
+
+    /**
+     * Fleeti & Fuel dashboard
+     */
+    public function fleeti()
+    {
+        $allTrucks = Truck::where('is_active', true)->orderBy('matricule')->get();
+
+        $connected = $allTrucks->whereNotNull('fleeti_asset_id');
+        $syncedRecently = $connected->filter(fn ($t) =>
+            $t->fleeti_last_synced_at && $t->fleeti_last_synced_at->gt(now()->subHours(2))
+        );
+
+        // Fuel levels in litres from Fleeti
+        $fuelData = $allTrucks->filter(fn ($t) => $t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0)
+            ->map(fn ($t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'litres' => round((float) $t->fleeti_last_fuel_level, 1),
+                'total_km' => round((float) $t->total_kilometers, 0),
+                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ])->values();
+
+        // Fuel distribution by litres
+        $fuelDistribution = [
+            'critical' => $fuelData->where('litres', '<', 30)->count(),
+            'low' => $fuelData->filter(fn ($f) => $f['litres'] >= 30 && $f['litres'] < 80)->count(),
+            'medium' => $fuelData->filter(fn ($f) => $f['litres'] >= 80 && $f['litres'] < 150)->count(),
+            'good' => $fuelData->where('litres', '>=', 150)->count(),
+        ];
+
+        // Fuel history for analysis (last 30 days)
+        $fuelHistory = \App\Models\FuelTracking::select(
+                DB::raw("DATE_FORMAT(created_at, '%d/%m') as day"),
+                DB::raw("DATE(created_at) as raw_date"),
+                DB::raw('AVG(litres) as avg_litres'),
+                DB::raw('SUM(litres) as total_litres'),
+                DB::raw('COUNT(DISTINCT truck_id) as trucks')
+            )
+            ->where('created_at', '>=', now()->subDays(30))
+            ->groupBy('raw_date', 'day')
+            ->orderBy('raw_date')
+            ->get()
+            ->map(fn ($r) => [
+                'day' => $r->day,
+                'avg_litres' => round((float) $r->avg_litres, 1),
+                'total_litres' => round((float) $r->total_litres, 0),
+                'trucks' => (int) $r->trucks,
+            ])->toArray();
+
+        // Total fuel across fleet
+        $totalFuelLitres = $fuelData->sum('litres');
+        $avgFuelLitres = $fuelData->count() > 0 ? round($fuelData->avg('litres'), 1) : 0;
+
+        // Daily km from kilometer_trackings (last 30 days)
+        $dailyKm = KilometerTracking::select(
+                DB::raw("date as raw_date"),
+                DB::raw("DATE_FORMAT(date, '%d/%m') as day"),
+                DB::raw('SUM(kilometers) as total_km'),
+                DB::raw('COUNT(DISTINCT truck_id) as trucks_active')
+            )
+            ->where('date', '>=', now()->subDays(30))
+            ->groupBy('raw_date', 'day')
+            ->orderBy('raw_date')
+            ->get()
+            ->map(fn ($r) => [
+                'day' => $r->day,
+                'km' => round((float) $r->total_km, 0),
+                'trucks' => (int) $r->trucks_active,
+            ])->toArray();
+
+        // All trucks with Fleeti data
+        $fleetTable = $allTrucks->map(fn ($t) => [
+            'id' => $t->id,
+            'matricule' => $t->matricule,
+            'total_km' => round((float) $t->total_kilometers, 0),
+            'fleeti_connected' => !empty($t->fleeti_asset_id),
+            'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
+            'fuel_litres' => ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) ? round((float) $t->fleeti_last_fuel_level, 1) : null,
+            'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+        ])->toArray();
+
+        return \Inertia\Inertia::render('analytics/Fleeti', [
+            'stats' => [
+                'total_trucks' => $allTrucks->count(),
+                'connected' => $connected->count(),
+                'synced_recently' => $syncedRecently->count(),
+                'total_fleet_km' => round((float) $allTrucks->sum('total_kilometers'), 0),
+                'avg_km' => $allTrucks->count() > 0 ? round((float) $allTrucks->avg('total_kilometers'), 0) : 0,
+                'last_sync' => $allTrucks->max('fleeti_last_synced_at')
+                    ? Carbon::parse($allTrucks->max('fleeti_last_synced_at'))->format('d/m/Y H:i') : null,
+                'trucks_with_fuel' => $fuelData->count(),
+                'total_fuel_litres' => round($totalFuelLitres, 0),
+                'avg_fuel_litres' => $avgFuelLitres,
+            ],
+            'fuelDistribution' => $fuelDistribution,
+            'fuelData' => $fuelData->toArray(),
+            'fuelHistory' => $fuelHistory,
+            'dailyKm' => $dailyKm,
+            'fleetTable' => $fleetTable,
+        ]);
+    }
+
+    /**
+     * Rotations & Weight dashboard
+     */
+    public function rotations(Request $req)
+    {
+        $from = $this->periodStart($req->input('from'));
+        $to = $this->periodEnd($req->input('to'));
+
+        $driverId = $req->input('driver_id');
+        $truckId = $req->input('truck_id');
+        $providerId = $req->input('provider_id');
+        $product = $req->input('product');
+
+        $q = TransportTracking::query()->whereBetween('client_date', [$from, $to]);
+        if ($driverId) $q->where('driver_id', $driverId);
+        if ($truckId) $q->where('truck_id', $truckId);
+        if ($providerId) $q->where('provider_id', $providerId);
+        if ($product) $q->where('product', $product);
+
+        $totalTrips = (clone $q)->count();
+        $totalProviderWeight = (float) ((clone $q)->sum('provider_net_weight') ?? 0);
+        $totalClientWeight = (float) ((clone $q)->sum('client_net_weight') ?? 0);
+        $totalGap = $totalClientWeight - $totalProviderWeight;
+
+        // Monthly breakdown (22→21)
+        $monthlyRaw = (clone $q)
+            ->selectRaw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->whereNotNull('client_date')
+            ->groupBy('ym')
+            ->orderBy('ym')
+            ->get();
+
+        // Top trucks by rotations
+        $topTrucks = (clone $q)
+            ->selectRaw('truck_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum')
+            ->groupBy('truck_id')
+            ->orderByDesc('trips')
+            ->limit(15)
+            ->get()
+            ->map(fn ($r) => [
+                'truck' => Truck::withTrashed()->find($r->truck_id)?->matricule ?? 'N/A',
+                'trips' => (int) $r->trips,
+                'prov' => round((float) $r->prov, 0),
+                'client' => round((float) $r->client, 0),
+                'gap' => round((float) $r->gap_sum, 0),
+            ])->toArray();
+
+        // Top drivers by rotations
+        $topDrivers = (clone $q)
+            ->selectRaw('driver_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum')
+            ->groupBy('driver_id')
+            ->orderByDesc('trips')
+            ->limit(15)
+            ->get()
+            ->map(fn ($r) => [
+                'driver' => Driver::withTrashed()->find($r->driver_id)?->name ?? 'N/A',
+                'trips' => (int) $r->trips,
+                'prov' => round((float) $r->prov, 0),
+                'client' => round((float) $r->client, 0),
+                'gap' => round((float) $r->gap_sum, 0),
+            ])->toArray();
+
+        // Weight by product
+        $byProduct = (clone $q)
+            ->selectRaw("product, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client")
+            ->whereNotNull('product')
+            ->groupBy('product')
+            ->get()
+            ->map(fn ($r) => [
+                'product' => $r->product,
+                'trips' => (int) $r->trips,
+                'prov' => round((float) $r->prov, 0),
+                'client' => round((float) $r->client, 0),
+            ])->toArray();
+
+        return \Inertia\Inertia::render('analytics/Rotations', [
+            'totalTrips' => $totalTrips,
+            'totalProviderWeight' => round($totalProviderWeight, 0),
+            'totalClientWeight' => round($totalClientWeight, 0),
+            'totalGap' => round($totalGap, 0),
+            'months' => $monthlyRaw->pluck('ym')->map(fn ($ym) => Carbon::createFromFormat('Y-m', $ym)->translatedFormat('M Y'))->toArray(),
+            'monthlyProvider' => $monthlyRaw->pluck('prov')->map(fn ($v) => round((float) $v, 0))->toArray(),
+            'monthlyClient' => $monthlyRaw->pluck('client')->map(fn ($v) => round((float) $v, 0))->toArray(),
+            'monthlyGap' => $monthlyRaw->pluck('gap_sum')->map(fn ($v) => round((float) $v, 0))->toArray(),
+            'monthlyTrips' => $monthlyRaw->pluck('trips')->map(fn ($v) => (int) $v)->toArray(),
+            'topTrucks' => $topTrucks,
+            'topDrivers' => $topDrivers,
+            'byProduct' => $byProduct,
+            'drivers' => Driver::orderBy('name')->get(['id', 'name'])->toArray(),
+            'trucks' => Truck::orderBy('matricule')->get(['id', 'matricule'])->toArray(),
+            'providers' => Provider::orderBy('name')->get(['id', 'name'])->toArray(),
+            'filters' => array_filter([
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'driver_id' => $driverId,
+                'truck_id' => $truckId,
+                'provider_id' => $providerId,
+                'product' => $product,
             ]),
         ]);
     }

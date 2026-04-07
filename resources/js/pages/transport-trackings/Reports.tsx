@@ -8,6 +8,7 @@ import FormSelect from '@/components/ui/FormSelect';
 import FormInput from '@/components/ui/FormInput';
 import Pagination from '@/components/ui/Pagination';
 import { Weight, Scale, TrendingDown, BarChart3, Users, FileWarning, X } from 'lucide-react';
+import AnalyticsTabs from '@/components/analytics/AnalyticsTabs';
 import { clsx } from 'clsx';
 
 interface DriverRisk { driver_id: number; driver_name: string; sum_gap: number; trip_count: number; large_count: number; avg_gap: number; }
@@ -41,6 +42,16 @@ interface Props {
     providers: { id: number; name: string }[];
     products: { id: string; name: string }[];
     bases: { id: string; name: string }[];
+    fleeti: {
+        total_trucks: number;
+        connected: number;
+        synced_recently: number;
+        total_fleet_km: number;
+        avg_km_per_truck: number;
+        last_sync: string | null;
+        trucks: Array<{ id: number; matricule: string; total_km: number; fleeti_connected: boolean; last_synced: string | null; fleeti_km: number | null }>;
+        daily_km: Array<{ day: string; km: number; trucks: number }>;
+    };
     filters: Record<string, string>;
 }
 
@@ -48,7 +59,7 @@ const fmt = (v: number) => (Number(v) || 0).toLocaleString('fr-FR', { maximumFra
 const fmtT = (v: number) => `${fmt(v)} T`;
 
 export default function Reports(props: Props) {
-    const { totalTrips, totalProviderWeight, totalClientWeight, totalGap, totalDiscrepanciesCount, totalDiscrepancyKg, suspiciousDrivers, thisMonthTonnage, thisYearTonnage, months, monthlyProvider, monthlyClient, monthlyGap, monthlyTrips, gapByProduct, gapByBase, driverRisk, anomalies, trips, drivers, trucks, providers, products, bases, filters } = props;
+    const { totalTrips, totalProviderWeight, totalClientWeight, totalGap, totalDiscrepanciesCount, totalDiscrepancyKg, suspiciousDrivers, thisMonthTonnage, thisYearTonnage, months, monthlyProvider, monthlyClient, monthlyGap, monthlyTrips, gapByProduct, gapByBase, driverRisk, anomalies, trips, drivers, trucks, providers, products, bases, fleeti, filters } = props;
 
     const applyFilter = (key: string, value: string | number | null) => {
         const newFilters = { ...filters, [key]: value ? String(value) : '' };
@@ -71,6 +82,7 @@ export default function Reports(props: Props) {
     return (
         <AuthenticatedLayout title="Dashboard Analytics">
             <Head title="Dashboard Analytics" />
+            <AnalyticsTabs />
 
             {/* Filters — onChange */}
             <Card className="mb-6">
@@ -261,6 +273,8 @@ export default function Reports(props: Props) {
                     </div>
                 </Card>
             )}
+
+
 
             {/* All trips */}
             <Card className="mt-6" padding={false}>
