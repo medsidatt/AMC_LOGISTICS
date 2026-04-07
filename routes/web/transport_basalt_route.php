@@ -7,6 +7,7 @@ use App\Http\Controllers\TransporterController;
 use App\Http\Controllers\TransportTrackingController;
 use App\Http\Controllers\TruckController;
 use App\Http\Controllers\LogisticsManagerController;
+use App\Http\Controllers\MaintenanceController;
 use Illuminate\Support\Facades\Route;
 
 // /----- Providers Routes -----/

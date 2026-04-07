@@ -292,10 +292,22 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
+                'total_kilometers' => $truck->total_kilometers,
+            ],
+            'options' => [
+                'tire' => DailyChecklist::TIRE_OPTIONS,
+                'brake' => DailyChecklist::BRAKE_OPTIONS,
+                'light' => DailyChecklist::LIGHT_OPTIONS,
+                'oil' => DailyChecklist::OIL_LEVEL_OPTIONS,
+                'fuel' => DailyChecklist::FUEL_LEVEL_OPTIONS,
+                'general' => DailyChecklist::GENERAL_CONDITION_OPTIONS,
             ],
             'todayChecklist' => $todayChecklist ? [
                 'id' => $todayChecklist->id,
                 'checklist_date' => $todayChecklist->checklist_date,
+                'start_km' => $todayChecklist->start_km,
+                'end_km' => $todayChecklist->end_km,
+                'fuel_filled' => $todayChecklist->fuel_filled,
                 'tire_condition' => $todayChecklist->tire_condition,
                 'fuel_level' => $todayChecklist->fuel_level,
                 'oil_level' => $todayChecklist->oil_level,
@@ -313,6 +325,8 @@ class DriverController extends Controller
             'history' => $history->map(fn ($c) => [
                 'id' => $c->id,
                 'checklist_date' => $c->checklist_date,
+                'start_km' => $c->start_km,
+                'end_km' => $c->end_km,
                 'tire_condition' => $c->tire_condition,
                 'fuel_level' => $c->fuel_level,
                 'oil_level' => $c->oil_level,
@@ -357,6 +371,9 @@ class DriverController extends Controller
 
         $data = $request->validate([
             'checklist_date' => 'required|date',
+            'start_km' => 'nullable|numeric|min:0',
+            'end_km' => 'nullable|numeric|min:0',
+            'fuel_filled' => 'nullable|numeric|min:0',
             'tire_condition' => "required|string|in:{$tireKeys}",
             'fuel_level' => "required|string|in:{$fuelKeys}",
             'fuel_refill' => 'sometimes|boolean',
@@ -389,6 +406,9 @@ class DriverController extends Controller
                 'truck_id' => $truck->id,
                 'driver_id' => $driver->id,
                 'checklist_date' => $date,
+                'start_km' => $data['start_km'] ?? null,
+                'end_km' => $data['end_km'] ?? null,
+                'fuel_filled' => $data['fuel_filled'] ?? null,
                 'tire_condition' => $data['tire_condition'],
                 'fuel_level' => $data['fuel_level'],
                 'fuel_refill' => ! empty($data['fuel_refill']),
