@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\KilometerTracking;
 use App\Models\TransportTracking;
 use App\Models\Driver;
 use App\Models\Provider;
 use App\Models\Truck;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TrackingDashboardController extends Controller
 {
@@ -166,6 +168,44 @@ class TrackingDashboardController extends Controller
         $trucks    = Truck::orderBy('matricule')->get();
         $providers = Provider::orderBy('name')->get();
 
+        // ── Fleeti Fleet Data ──
+        $allTrucks = Truck::where('is_active', true)->get();
+        $fleeti = [
+            'total_trucks' => $allTrucks->count(),
+            'connected' => $allTrucks->whereNotNull('fleeti_asset_id')->count(),
+            'synced_recently' => $allTrucks->filter(fn ($t) =>
+                $t->fleeti_last_synced_at && $t->fleeti_last_synced_at->gt(now()->subHours(2))
+            )->count(),
+            'total_fleet_km' => round((float) $allTrucks->sum('total_kilometers'), 0),
+            'avg_km_per_truck' => $allTrucks->count() > 0
+                ? round((float) $allTrucks->avg('total_kilometers'), 0) : 0,
+            'last_sync' => $allTrucks->max('fleeti_last_synced_at')
+                ? Carbon::parse($allTrucks->max('fleeti_last_synced_at'))->format('d/m/Y H:i') : null,
+            'trucks' => $allTrucks->sortByDesc('total_kilometers')->take(15)->values()->map(fn ($t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'total_km' => round((float) $t->total_kilometers, 0),
+                'fleeti_connected' => !empty($t->fleeti_asset_id),
+                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
+            ])->toArray(),
+            // Daily km evolution last 14 days
+            'daily_km' => KilometerTracking::select(
+                    DB::raw("DATE_FORMAT(date, '%d/%m') as day"),
+                    DB::raw('SUM(kilometers) as total_km'),
+                    DB::raw('COUNT(DISTINCT truck_id) as trucks_active')
+                )
+                ->where('date', '>=', now()->subDays(14))
+                ->groupBy('day')
+                ->orderBy('date')
+                ->get()
+                ->map(fn ($r) => [
+                    'day' => $r->day,
+                    'km' => round((float) $r->total_km, 0),
+                    'trucks' => (int) $r->trucks_active,
+                ])->toArray(),
+        ];
+
         return \Inertia\Inertia::render('transport-trackings/Reports', [
             'totalTrips' => (int) ($totalTrips ?? 0),
             'totalProviderWeight' => round((float) ($totalProviderWeight ?? 0), 2),
@@ -237,6 +277,7 @@ class TrackingDashboardController extends Controller
                 ['id' => 'mr', 'name' => 'Mauritanie'],
                 ['id' => 'sn', 'name' => 'Sénégal'],
             ],
+            'fleeti' => $fleeti,
             'filters' => array_filter([
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),

@@ -7,7 +7,7 @@ import KpiGrid from '@/components/dashboard/KpiGrid';
 import FormSelect from '@/components/ui/FormSelect';
 import FormInput from '@/components/ui/FormInput';
 import Pagination from '@/components/ui/Pagination';
-import { Weight, Scale, TrendingDown, BarChart3, Users, FileWarning, X } from 'lucide-react';
+import { Weight, Scale, TrendingDown, BarChart3, Users, FileWarning, X, Satellite, Truck, Wifi, WifiOff, Activity } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface DriverRisk { driver_id: number; driver_name: string; sum_gap: number; trip_count: number; large_count: number; avg_gap: number; }
@@ -41,6 +41,16 @@ interface Props {
     providers: { id: number; name: string }[];
     products: { id: string; name: string }[];
     bases: { id: string; name: string }[];
+    fleeti: {
+        total_trucks: number;
+        connected: number;
+        synced_recently: number;
+        total_fleet_km: number;
+        avg_km_per_truck: number;
+        last_sync: string | null;
+        trucks: Array<{ id: number; matricule: string; total_km: number; fleeti_connected: boolean; last_synced: string | null; fleeti_km: number | null }>;
+        daily_km: Array<{ day: string; km: number; trucks: number }>;
+    };
     filters: Record<string, string>;
 }
 
@@ -48,7 +58,7 @@ const fmt = (v: number) => (Number(v) || 0).toLocaleString('fr-FR', { maximumFra
 const fmtT = (v: number) => `${fmt(v)} T`;
 
 export default function Reports(props: Props) {
-    const { totalTrips, totalProviderWeight, totalClientWeight, totalGap, totalDiscrepanciesCount, totalDiscrepancyKg, suspiciousDrivers, thisMonthTonnage, thisYearTonnage, months, monthlyProvider, monthlyClient, monthlyGap, monthlyTrips, gapByProduct, gapByBase, driverRisk, anomalies, trips, drivers, trucks, providers, products, bases, filters } = props;
+    const { totalTrips, totalProviderWeight, totalClientWeight, totalGap, totalDiscrepanciesCount, totalDiscrepancyKg, suspiciousDrivers, thisMonthTonnage, thisYearTonnage, months, monthlyProvider, monthlyClient, monthlyGap, monthlyTrips, gapByProduct, gapByBase, driverRisk, anomalies, trips, drivers, trucks, providers, products, bases, fleeti, filters } = props;
 
     const applyFilter = (key: string, value: string | number | null) => {
         const newFilters = { ...filters, [key]: value ? String(value) : '' };
@@ -254,6 +264,95 @@ export default function Reports(props: Props) {
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(a.provider_net_weight)}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(a.client_net_weight)}</td>
                                         <td className="px-3 py-2 text-right font-mono font-bold text-[var(--color-danger)]">{fmt(Math.abs(a.gap))}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </Card>
+            )}
+
+            {/* ── Fleeti Fleet Telematics ── */}
+            {fleeti && (
+                <Card className="mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Satellite size={18} className="text-[var(--color-primary)]" />
+                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Flotte — Fleeti Telematics</h3>
+                        {fleeti.last_sync && <span className="text-xs text-[var(--color-text-muted)] ml-auto">Dernière sync: {fleeti.last_sync}</span>}
+                    </div>
+
+                    {/* Fleet KPIs */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+                        <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] text-center">
+                            <Truck size={18} className="mx-auto text-[var(--color-primary)] mb-1" />
+                            <p className="text-xl font-bold text-[var(--color-text)]">{fleeti.total_trucks}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">Camions actifs</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] text-center">
+                            <Wifi size={18} className="mx-auto text-emerald-500 mb-1" />
+                            <p className="text-xl font-bold text-emerald-600">{fleeti.connected}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">Connectés GPS</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] text-center">
+                            <Activity size={18} className="mx-auto text-[var(--color-info)] mb-1" />
+                            <p className="text-xl font-bold text-[var(--color-info)]">{fleeti.synced_recently}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">Sync &lt; 2h</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] text-center">
+                            <p className="text-xl font-bold text-[var(--color-text)]">{fmt(fleeti.total_fleet_km)}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">Km flotte totale</p>
+                        </div>
+                        <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] text-center">
+                            <p className="text-xl font-bold text-[var(--color-text)]">{fmt(fleeti.avg_km_per_truck)}</p>
+                            <p className="text-xs text-[var(--color-text-muted)]">Km moy/camion</p>
+                        </div>
+                    </div>
+
+                    {/* Daily km evolution */}
+                    {fleeti.daily_km.length > 0 && (
+                        <div className="mb-6">
+                            <h4 className="text-sm font-semibold text-[var(--color-text)] mb-3">Évolution kilométrique (14 jours)</h4>
+                            <div className="flex items-end gap-1 h-24">
+                                {fleeti.daily_km.map((d, i) => {
+                                    const max = Math.max(...fleeti.daily_km.map(x => x.km), 1);
+                                    const height = Math.max(4, (d.km / max) * 100);
+                                    return (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${d.day}: ${fmt(d.km)} km — ${d.trucks} camions`}>
+                                            <div className="w-full rounded-t bg-[var(--color-primary)] transition-all" style={{ height: `${height}%` }} />
+                                            <span className="text-[8px] text-[var(--color-text-muted)] leading-none">{d.day}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Fleet table */}
+                    <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-[var(--color-surface-hover)]">
+                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Compteur total</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Fleeti km</th>
+                                    <th className="px-3 py-2 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">GPS</th>
+                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Dernière sync</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--color-border)]">
+                                {fleeti.trucks.map((t) => (
+                                    <tr key={t.id} className="hover:bg-[var(--color-surface-hover)]">
+                                        <td className="px-3 py-2">
+                                            <a href={`/trucks/${t.id}/show-page`} className="text-[var(--color-primary)] hover:underline font-medium">{t.matricule}</a>
+                                        </td>
+                                        <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(t.total_km)} km</td>
+                                        <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{t.fleeti_km != null ? `${fmt(t.fleeti_km)} km` : '-'}</td>
+                                        <td className="px-3 py-2 text-center">
+                                            {t.fleeti_connected
+                                                ? <Wifi size={14} className="inline text-emerald-500" />
+                                                : <WifiOff size={14} className="inline text-[var(--color-text-muted)]" />}
+                                        </td>
+                                        <td className="px-3 py-2 text-[var(--color-text-secondary)] text-sm">{t.last_synced ?? '-'}</td>
                                     </tr>
                                 ))}
                             </tbody>
