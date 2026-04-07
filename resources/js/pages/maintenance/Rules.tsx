@@ -10,6 +10,7 @@ import FormSelect from '@/components/ui/FormSelect';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus, Lock, Ban } from 'lucide-react';
+import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 import { clsx } from 'clsx';
 
 interface Rule {
@@ -52,6 +53,8 @@ export default function Rules({ profiles, trucks, maintenanceTypes }: Props) {
     return (
         <AuthenticatedLayout title="Règles de maintenance">
             <Head title="Règles de maintenance" />
+
+            <MaintenanceTabs />
 
             <div className="flex justify-end mb-4">
                 <Button icon={<Plus size={16} />} onClick={() => { form.reset(); setShowCreate(true); }}>Nouvelle règle</Button>

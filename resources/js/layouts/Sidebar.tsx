@@ -84,6 +84,13 @@ const dataSections: NavSection[] = [
     },
 ];
 
+const accountSection: NavSection = {
+    header: 'Compte',
+    items: [
+        { label: 'Mon profil', href: '/auth/profile', icon: <Users size={18} />, match: '/auth/profile' },
+    ],
+};
+
 const adminSection: NavSection = {
     header: 'Administration',
     items: [
@@ -117,11 +124,11 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
 
     let sections: NavSection[];
     if (isDriver) {
-        sections = driverSections;
+        sections = [...driverSections, accountSection];
     } else if (isAdmin) {
-        sections = [...dataSections, adminSection];
+        sections = [...dataSections, adminSection, accountSection];
     } else {
-        sections = dataSections;
+        sections = [...dataSections, accountSection];
     }
 
     return (
