@@ -242,7 +242,7 @@ class TruckController extends Controller
             'km_maintenance_interval' => $request->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE,
         ]);
 
-        $this->truckMaintenanceService->updateMaintenanceProfileInterval(
+        $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
             $truck->fresh(),
             Maintenance::TYPE_GENERAL,
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
@@ -346,7 +346,7 @@ class TruckController extends Controller
             'km_maintenance_interval' => $request->km_maintenance_interval ?? $truck->km_maintenance_interval,
         ]);
 
-        $this->truckMaintenanceService->updateMaintenanceProfileInterval(
+        $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
             $truck->fresh(),
             Maintenance::TYPE_GENERAL,
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
@@ -431,7 +431,7 @@ class TruckController extends Controller
         return app(MaintenanceController::class)->bulkUpdateKmInterval($request);
     }
 
-    public function updateMaintenanceProfileInterval(Request $request, Truck $truck)
+    public function replaceMaintenanceProfileInterval(Request $request, Truck $truck)
     {
         return app(MaintenanceController::class)->updateProfileInterval($request, $truck);
     }

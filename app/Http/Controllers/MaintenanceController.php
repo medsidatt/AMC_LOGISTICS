@@ -7,11 +7,13 @@ use App\Models\LogisticsAlert;
 use App\Models\Maintenance;
 use App\Models\Transporter;
 use App\Models\Truck;
+use App\Models\TruckMaintenanceProfile;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
 class MaintenanceController extends Controller
@@ -247,7 +249,7 @@ class MaintenanceController extends Controller
             'warning_threshold_km' => 'nullable|numeric|min:0',
         ]);
 
-        $this->truckMaintenanceService->updateMaintenanceProfileInterval(
+        $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
             $truck,
             $data['maintenance_type'],
             (float) $data['interval_km'],
@@ -257,6 +259,180 @@ class MaintenanceController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Profil de maintenance mis à jour avec succès.',
+        ]);
+    }
+
+    // ── New Inertia pages ──
+
+    public function index()
+    {
+        $trucks = Truck::with(['maintenanceProfiles' => fn ($q) => $q->active()])
+            ->where('is_active', true)
+            ->orderBy('matricule')
+            ->get()
+            ->map(function (Truck $truck) {
+                $profiles = $truck->maintenanceProfiles->keyBy('maintenance_type');
+                return [
+                    'id' => $truck->id,
+                    'matricule' => $truck->matricule,
+                    'total_kilometers' => $truck->total_kilometers,
+                    'maintenance_type' => $truck->maintenance_type,
+                    'profiles' => $profiles->map(fn ($p) => [
+                        'type' => $p->maintenance_type,
+                        'interval_km' => $p->interval_km,
+                        'next_km' => $p->next_maintenance_km,
+                        'remaining' => max(0, $p->next_maintenance_km - $truck->total_kilometers),
+                        'status' => $p->status,
+                    ])->values(),
+                    'overall_status' => $profiles->contains('status', 'red') ? 'red'
+                        : ($profiles->contains('status', 'yellow') ? 'yellow' : 'green'),
+                ];
+            });
+
+        $counts = [
+            'overdue' => $trucks->where('overall_status', 'red')->count(),
+            'warning' => $trucks->where('overall_status', 'yellow')->count(),
+            'ok' => $trucks->where('overall_status', 'green')->count(),
+        ];
+
+        $maintenanceTypes = collect(config('maintenance.types', []))->map(fn ($cfg, $key) => [
+            'value' => $key,
+            'label' => $cfg['label'] ?? $key,
+        ])->values();
+
+        return Inertia::render('maintenance/Index', [
+            'trucks' => $trucks,
+            'counts' => $counts,
+            'maintenanceTypes' => $maintenanceTypes,
+        ]);
+    }
+
+    public function rules()
+    {
+        $profiles = TruckMaintenanceProfile::with('truck')
+            ->orderByDesc('is_active')
+            ->orderBy('truck_id')
+            ->paginate(20)
+            ->through(fn (TruckMaintenanceProfile $p) => [
+                'id' => $p->id,
+                'truck_id' => $p->truck_id,
+                'truck' => $p->truck?->matricule,
+                'maintenance_type' => $p->maintenance_type,
+                'interval_km' => $p->interval_km,
+                'warning_threshold_km' => $p->warning_threshold_km,
+                'status' => $p->status,
+                'is_active' => $p->is_active,
+                'deactivated_at' => $p->deactivated_at?->format('d/m/Y'),
+                'created_at' => $p->created_at?->format('d/m/Y'),
+            ]);
+
+        $trucks = Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule']);
+        $maintenanceTypes = collect(config('maintenance.types', []))->map(fn ($cfg, $key) => [
+            'value' => $key,
+            'label' => $cfg['label'] ?? $key,
+        ])->values();
+
+        return Inertia::render('maintenance/Rules', [
+            'profiles' => $profiles,
+            'trucks' => $trucks,
+            'maintenanceTypes' => $maintenanceTypes,
+        ]);
+    }
+
+    public function storeRule(Request $request)
+    {
+        $data = $request->validate([
+            'truck_id' => 'required|exists:trucks,id',
+            'maintenance_type' => 'required|string',
+            'interval_km' => 'required|numeric|min:100',
+            'warning_threshold_km' => 'nullable|numeric|min:0',
+        ]);
+
+        $truck = Truck::findOrFail($data['truck_id']);
+
+        $this->maintenanceStatusService->createRule(
+            $truck,
+            $data['maintenance_type'],
+            (float) $data['interval_km'],
+            isset($data['warning_threshold_km']) ? (float) $data['warning_threshold_km'] : null,
+            auth()->id()
+        );
+
+        return redirect()->back()->with('success', 'Règle de maintenance créée avec succès.');
+    }
+
+    public function deactivateRule(TruckMaintenanceProfile $profile)
+    {
+        $this->maintenanceStatusService->deactivateRule($profile);
+        return redirect()->back()->with('success', 'Règle désactivée avec succès.');
+    }
+
+    public function recordMaintenance(Request $request, Truck $truck)
+    {
+        $data = $request->validate([
+            'maintenance_date' => 'required|date',
+            'maintenance_type' => 'required|string',
+            'notes' => 'nullable|string',
+            'kilometers_at_maintenance' => 'nullable|numeric',
+        ]);
+
+        $result = $this->maintenanceStatusService->recordMaintenance(
+            $truck,
+            $data['maintenance_date'],
+            $data['notes'] ?? null,
+            $data['maintenance_type'],
+            isset($data['kilometers_at_maintenance']) ? (float) $data['kilometers_at_maintenance'] : null
+        );
+
+        if ($result === false) {
+            return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
+        }
+
+        // Resolve related alerts
+        if ($data['maintenance_type'] === Maintenance::TYPE_OIL || $data['maintenance_type'] === Maintenance::TYPE_GENERAL) {
+            LogisticsAlert::where('truck_id', $truck->id)
+                ->where('type', 'due_engine')
+                ->whereNull('resolved_at')
+                ->update(['resolved_at' => now()]);
+        }
+
+        return redirect()->back()->with('success', 'Maintenance enregistrée avec succès.');
+    }
+
+    public function history(Request $request)
+    {
+        $query = Maintenance::with(['truck', 'profile'])
+            ->orderByDesc('maintenance_date');
+
+        if ($request->truck_id) {
+            $query->where('truck_id', $request->truck_id);
+        }
+        if ($request->maintenance_type) {
+            $query->where('maintenance_type', $request->maintenance_type);
+        }
+
+        $maintenances = $query->paginate(20)->through(fn (Maintenance $m) => [
+            'id' => $m->id,
+            'truck' => $m->truck?->matricule,
+            'maintenance_type' => $m->maintenance_type,
+            'maintenance_date' => $m->maintenance_date?->format('d/m/Y'),
+            'kilometers_at_maintenance' => $m->kilometers_at_maintenance,
+            'trigger_km' => $m->trigger_km,
+            'interval_km' => $m->profile?->interval_km,
+            'notes' => $m->notes,
+        ]);
+
+        $trucks = Truck::orderBy('matricule')->get(['id', 'matricule']);
+        $maintenanceTypes = collect(config('maintenance.types', []))->map(fn ($cfg, $key) => [
+            'value' => $key,
+            'label' => $cfg['label'] ?? $key,
+        ])->values();
+
+        return Inertia::render('maintenance/History', [
+            'maintenances' => $maintenances,
+            'trucks' => $trucks,
+            'maintenanceTypes' => $maintenanceTypes,
+            'filters' => $request->only(['truck_id', 'maintenance_type']),
         ]);
     }
 }

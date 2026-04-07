@@ -4,8 +4,10 @@ namespace App\Models;
 
 use App\Http\Traits\TracksActions;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -38,6 +40,10 @@ class TransportTracking extends Model
     protected $casts = [
         'provider_date' => 'date',
         'client_date' => 'date',
+        'start_km' => 'float',
+        'end_km' => 'float',
+        'is_validated' => 'boolean',
+        'validated_at' => 'datetime',
     ];
 
     // append column to table
@@ -62,6 +68,24 @@ class TransportTracking extends Model
         return $this->belongsTo(Provider::class)->withTrashed();
     }
 
+    public function validatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function dailyChecklist(): HasOne
+    {
+        return $this->hasOne(DailyChecklist::class);
+    }
+
+    public function getDistanceKmAttribute(): ?float
+    {
+        if ($this->start_km !== null && $this->end_km !== null) {
+            return round($this->end_km - $this->start_km, 2);
+        }
+        return null;
+    }
+
     // gap
     /* public function getGapAttribute()
      {
@@ -82,6 +106,18 @@ class TransportTracking extends Model
 
         static::saving(function ($model) {
             $model->gap = $model->client_net_weight - $model->provider_net_weight;
+        });
+
+        // Lock validated rotations — prevent edits to any field except updated_at
+        static::updating(function ($model) {
+            if ($model->getOriginal('is_validated') && $model->isDirty() && !$model->isDirty('updated_at')) {
+                $changedKeys = array_keys($model->getDirty());
+                $allowedKeys = ['updated_at'];
+                $disallowed = array_diff($changedKeys, $allowedKeys);
+                if (!empty($disallowed)) {
+                    throw new \DomainException('Validated rotation data is locked and cannot be modified.');
+                }
+            }
         });
 
     }

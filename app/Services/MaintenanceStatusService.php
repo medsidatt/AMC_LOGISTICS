@@ -61,14 +61,6 @@ class MaintenanceStatusService
         string $maintenanceType = 'general',
         ?float $kilometersAtMaintenance = null
     ): Maintenance|false {
-        if (! Schema::hasTable('truck_maintenance_profiles')) {
-            return $truck->maintenances()->create([
-                'maintenance_date' => $date,
-                'notes' => $notes,
-                'kilometers_at_maintenance' => $kilometersAtMaintenance ?? $truck->total_kilometers,
-            ]);
-        }
-
         if ($truck->maintenances()
             ->whereDate('maintenance_date', $date)
             ->where('maintenance_type', $maintenanceType)
@@ -76,17 +68,69 @@ class MaintenanceStatusService
             return false;
         }
 
+        $profile = $this->ensureProfile($truck, $maintenanceType);
+        $kmAtMaintenance = $kilometersAtMaintenance ?? $truck->total_kilometers;
+
         $maintenance = $truck->maintenances()->create([
             'maintenance_date' => $date,
             'maintenance_type' => $maintenanceType,
             'notes' => $notes,
-            'kilometers_at_maintenance' => $kilometersAtMaintenance ?? $truck->total_kilometers,
+            'kilometers_at_maintenance' => $kmAtMaintenance,
+            'truck_maintenance_profile_id' => $profile->id,
+            'trigger_km' => $profile->next_maintenance_km,
         ]);
 
-        $profile = $this->ensureProfile($truck, $maintenanceType);
         $this->recalculateProfile($truck, $profile);
 
         return $maintenance;
+    }
+
+    public function createRule(
+        Truck $truck,
+        string $maintenanceType,
+        float $intervalKm,
+        ?float $warningThresholdKm = null,
+        ?int $userId = null
+    ): TruckMaintenanceProfile {
+        // Deactivate any existing active rule for this truck+type
+        TruckMaintenanceProfile::where('truck_id', $truck->id)
+            ->where('maintenance_type', $maintenanceType)
+            ->where('is_active', true)
+            ->update(['is_active' => false, 'deactivated_at' => now()]);
+
+        // Get last maintenance km for this type
+        $lastMaintenance = $truck->maintenances()
+            ->where('maintenance_type', $maintenanceType)
+            ->latest('maintenance_date')
+            ->first();
+        $lastKm = $lastMaintenance?->kilometers_at_maintenance ?? 0;
+
+        $profile = TruckMaintenanceProfile::create([
+            'truck_id' => $truck->id,
+            'maintenance_type' => $maintenanceType,
+            'interval_km' => $intervalKm,
+            'warning_threshold_km' => $warningThresholdKm ?? config('maintenance.warning_threshold_km', 500),
+            'last_maintenance_km' => $lastKm,
+            'next_maintenance_km' => $lastKm + $intervalKm,
+            'status' => 'green',
+            'is_active' => true,
+            'created_by' => $userId,
+        ]);
+
+        // Sync to truck.km_maintenance_interval for general type
+        if ($maintenanceType === 'general') {
+            $truck->update(['km_maintenance_interval' => $intervalKm]);
+        }
+
+        return $this->recalculateProfile($truck, $profile);
+    }
+
+    public function deactivateRule(TruckMaintenanceProfile $profile): void
+    {
+        $profile->update([
+            'is_active' => false,
+            'deactivated_at' => now(),
+        ]);
     }
 
     public function warningThreshold(?TruckMaintenanceProfile $profile = null): float
@@ -113,28 +157,33 @@ class MaintenanceStatusService
 
     public function ensureProfile(Truck $truck, string $maintenanceType): TruckMaintenanceProfile
     {
-        if (! Schema::hasTable('truck_maintenance_profiles')) {
-            throw new \RuntimeException('truck_maintenance_profiles table is missing. Run migrations.');
+        // Find active profile for this truck+type
+        $profile = TruckMaintenanceProfile::where('truck_id', $truck->id)
+            ->where('maintenance_type', $maintenanceType)
+            ->where('is_active', true)
+            ->first();
+
+        if ($profile) {
+            return $profile;
         }
 
+        // Create new active profile
         $types = (array) config('maintenance.types', []);
-        $defaultInterval = data_get($types, $maintenanceType.'.default_interval_km', 10000);
+        $defaultInterval = data_get($types, $maintenanceType . '.default_interval_km', 10000);
+        $intervalKm = $maintenanceType === 'general'
+            ? ($truck->km_maintenance_interval ?? $defaultInterval)
+            : $defaultInterval;
 
-        return TruckMaintenanceProfile::firstOrCreate(
-            [
-                'truck_id' => $truck->id,
-                'maintenance_type' => $maintenanceType,
-            ],
-            [
-                'interval_km' => $maintenanceType === 'general'
-                    ? ($truck->km_maintenance_interval ?? $defaultInterval)
-                    : $defaultInterval,
-                'warning_threshold_km' => config('maintenance.warning_threshold_km', 500),
-                'status' => 'green',
-                'next_maintenance_km' => $defaultInterval,
-                'is_active' => true,
-            ]
-        );
+        return TruckMaintenanceProfile::create([
+            'truck_id' => $truck->id,
+            'maintenance_type' => $maintenanceType,
+            'interval_km' => $intervalKm,
+            'warning_threshold_km' => config('maintenance.warning_threshold_km', 500),
+            'status' => 'green',
+            'next_maintenance_km' => $intervalKm,
+            'is_active' => true,
+            'created_by' => auth()->id(),
+        ]);
     }
 
     private function ensureProfiles(Truck $truck): Collection
