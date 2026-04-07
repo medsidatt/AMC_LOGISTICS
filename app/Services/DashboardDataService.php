@@ -17,16 +17,25 @@ class DashboardDataService
     {
         $trucksCount = Truck::whereNull('deleted_at')->count();
         $driversCount = Driver::whereNull('deleted_at')->count();
-        $tripsToday = TransportTracking::whereDate('provider_date', today())->count();
-        $tripsYesterday = TransportTracking::whereDate('provider_date', today()->subDay())->count();
+        $tripsToday = TransportTracking::whereDate('client_date', today())->count();
+        $tripsYesterday = TransportTracking::whereDate('client_date', today()->subDay())->count();
 
-        $tonnageMonth = TransportTracking::whereMonth('provider_date', now()->month)
-            ->whereYear('provider_date', now()->year)
-            ->sum('provider_net_weight');
+        // Month = 22nd of previous month to 21st of current month
+        $currentMonthStart = now()->day >= 22
+            ? now()->copy()->setDay(22)->startOfDay()
+            : now()->copy()->subMonth()->setDay(22)->startOfDay();
+        $currentMonthEnd = now()->day >= 22
+            ? now()->copy()->addMonth()->setDay(21)->endOfDay()
+            : now()->copy()->setDay(21)->endOfDay();
 
-        $tonnageLastMonth = TransportTracking::whereMonth('provider_date', now()->subMonth()->month)
-            ->whereYear('provider_date', now()->subMonth()->year)
-            ->sum('provider_net_weight');
+        $lastMonthStart = $currentMonthStart->copy()->subMonth();
+        $lastMonthEnd = $currentMonthStart->copy()->subDay()->endOfDay();
+
+        $tonnageMonth = TransportTracking::whereBetween('client_date', [$currentMonthStart, $currentMonthEnd])
+            ->sum('client_net_weight');
+
+        $tonnageLastMonth = TransportTracking::whereBetween('client_date', [$lastMonthStart, $lastMonthEnd])
+            ->sum('client_net_weight');
 
         $unresolvedAlerts = LogisticsAlert::whereNull('deleted_at')->count();
 
@@ -43,22 +52,24 @@ class DashboardDataService
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
-                'provider_date' => $t->provider_date?->format('d/m/Y'),
+                'client_date' => $t->client_date?->format('d/m/Y'),
             ]);
 
+        // Monthly tonnage grouped by custom periods (22nd to 21st), using client_date
         $monthlyTonnage = TransportTracking::select(
-                DB::raw("DATE_FORMAT(provider_date, '%Y-%m') as month"),
+                DB::raw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as month"),
                 DB::raw('SUM(provider_net_weight) as provider_total'),
                 DB::raw('SUM(client_net_weight) as client_total'),
                 DB::raw('COUNT(*) as trip_count')
             )
-            ->where('provider_date', '>=', now()->subMonths(6)->startOfMonth())
+            ->whereNotNull('client_date')
+            ->where('client_date', '>=', now()->subMonths(6)->setDay(22)->startOfDay())
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
         $months = $monthlyTonnage->pluck('month')
-            ->map(fn ($m) => Carbon::createFromFormat('Y-m', $m)->format('M Y'))
+            ->map(fn ($m) => Carbon::createFromFormat('Y-m', $m)->translatedFormat('M Y'))
             ->toArray();
 
         $trucksDueMaintenance = Truck::whereNull('deleted_at')
@@ -76,10 +87,9 @@ class DashboardDataService
 
         // Vehicle utilization
         $activeTrucks = Truck::whereNull('deleted_at')->where('is_active', true)->get();
-        $utilization = $activeTrucks->map(function ($truck) {
+        $utilization = $activeTrucks->map(function ($truck) use ($currentMonthStart, $currentMonthEnd) {
             $rotations = TransportTracking::where('truck_id', $truck->id)
-                ->whereMonth('provider_date', now()->month)
-                ->whereYear('provider_date', now()->year)
+                ->whereBetween('client_date', [$currentMonthStart, $currentMonthEnd])
                 ->count();
             $maxRotations = config('logistics.max_rotations_before_maintenance', 12);
             return [
@@ -162,7 +172,7 @@ class DashboardDataService
                     'provider' => $t->provider?->name,
                     'provider_net_weight' => $t->provider_net_weight,
                     'client_net_weight' => $t->client_net_weight,
-                    'provider_date' => $t->provider_date?->format('d/m/Y'),
+                    'client_date' => $t->client_date?->format('d/m/Y'),
                 ]);
 
             $checklistHistory = DailyChecklist::with('issues')
@@ -198,7 +208,7 @@ class DashboardDataService
                 'id' => $a->id,
                 'type' => $a->type,
                 'message' => $a->message,
-                'created_at' => $a->created_at->format('Y-m-d H:i'),
+                'created_at' => $a->created_at->format('d/m/Y H:i'),
                 'resolved_at' => $a->resolved_at,
             ]);
 

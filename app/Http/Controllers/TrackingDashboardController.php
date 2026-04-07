@@ -13,10 +13,33 @@ class TrackingDashboardController extends Controller
 {
     protected int $gapThresholdKg = 150;
 
+    /**
+     * Get the start date for a custom month period (22nd to 21st).
+     * "Current month" = 22nd of previous calendar month to 21st of this calendar month.
+     */
+    private function periodStart(?string $input = null): Carbon
+    {
+        if ($input) return Carbon::parse($input)->startOfDay();
+        // Default: 3 months back from current period start
+        $start = now()->day >= 22
+            ? now()->copy()->setDay(22)->startOfDay()
+            : now()->copy()->subMonth()->setDay(22)->startOfDay();
+        return $start->subMonths(3);
+    }
+
+    private function periodEnd(?string $input = null): Carbon
+    {
+        if ($input) return Carbon::parse($input)->endOfDay();
+        // Default: end of current period
+        return now()->day >= 22
+            ? now()->copy()->addMonth()->setDay(21)->endOfDay()
+            : now()->copy()->setDay(21)->endOfDay();
+    }
+
     public function index(Request $req)
     {
-        $from = $req->input('from') ? Carbon::parse($req->input('from'))->startOfDay() : now()->subMonths(3)->startOfDay();
-        $to   = $req->input('to')   ? Carbon::parse($req->input('to'))->endOfDay()     : now()->endOfDay();
+        $from = $this->periodStart($req->input('from'));
+        $to   = $this->periodEnd($req->input('to'));
 
         $driverId   = $req->input('driver_id');
         $truckId    = $req->input('truck_id');
@@ -25,7 +48,7 @@ class TrackingDashboardController extends Controller
         $base       = $req->input('base');
 
         $q = TransportTracking::query()
-            ->whereBetween('provider_date', [$from, $to]);
+            ->whereBetween('client_date', [$from, $to]);
 
         if ($driverId)   $q->where('driver_id', $driverId);
         if ($truckId)    $q->where('truck_id', $truckId);
@@ -55,23 +78,42 @@ class TrackingDashboardController extends Controller
             ->distinct('driver_id')
             ->count('driver_id');
 
-        $thisMonthTonnage = TransportTracking::whereMonth('provider_date', now()->month)
-            ->whereYear('provider_date', now()->year)
-            ->sum('provider_net_weight');
+        // Month = 22nd of previous month to 21st of current month
+        $cmStart = now()->day >= 22
+            ? now()->copy()->setDay(22)->startOfDay()
+            : now()->copy()->subMonth()->setDay(22)->startOfDay();
+        $cmEnd = now()->day >= 22
+            ? now()->copy()->addMonth()->setDay(21)->endOfDay()
+            : now()->copy()->setDay(21)->endOfDay();
 
-        $thisYearTonnage = TransportTracking::whereYear('provider_date', now()->year)
-            ->sum('provider_net_weight');
+        // Build a filtered base query (same filters, without date range)
+        $qFiltered = TransportTracking::query();
+        if ($driverId)   $qFiltered->where('driver_id', $driverId);
+        if ($truckId)    $qFiltered->where('truck_id', $truckId);
+        if ($providerId) $qFiltered->where('provider_id', $providerId);
+        if ($product)    $qFiltered->where('product', $product);
+        if ($base)       $qFiltered->where('base', $base);
+
+        $thisMonthTonnage = (clone $qFiltered)
+            ->whereBetween('client_date', [$cmStart, $cmEnd])
+            ->sum('client_net_weight');
+
+        $thisYearTonnage = (clone $qFiltered)
+            ->whereYear('client_date', now()->year)
+            ->sum('client_net_weight');
 
         // --- Charts data ---
 
         // Monthly tonnage (provider vs client)
+        // Monthly grouped by custom periods (22nd to 21st) using client_date
         $monthlyRaw = (clone $q)
-            ->selectRaw("DATE_FORMAT(provider_date, '%Y-%m') as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->selectRaw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->whereNotNull('client_date')
             ->groupBy('ym')
             ->orderBy('ym')
             ->get();
 
-        $months           = $monthlyRaw->pluck('ym')->map(fn($ym) => Carbon::createFromFormat('Y-m', $ym)->format('M Y'))->toArray();
+        $months           = $monthlyRaw->pluck('ym')->map(fn($ym) => Carbon::createFromFormat('Y-m', $ym)->translatedFormat('M Y'))->toArray();
         $monthlyProvider  = $monthlyRaw->pluck('prov')->map(fn($v) => round($v, 2))->toArray();
         $monthlyClient    = $monthlyRaw->pluck('client')->map(fn($v) => round($v, 2))->toArray();
         $monthlyGap       = $monthlyRaw->pluck('gap_sum')->map(fn($v) => round($v, 2))->toArray();
@@ -108,14 +150,14 @@ class TrackingDashboardController extends Controller
         $anomalies = (clone $q)
             ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThresholdKg])
             ->with(['driver', 'truck', 'provider'])
-            ->orderByDesc('provider_date')
+            ->orderByDesc('client_date')
             ->limit(50)
             ->get();
 
         // Trips paginated
         $trips = (clone $q)
             ->with(['driver', 'truck', 'provider'])
-            ->orderByDesc('provider_date')
+            ->orderByDesc('client_date')
             ->paginate(25)
             ->appends($req->query());
 
@@ -125,15 +167,15 @@ class TrackingDashboardController extends Controller
         $providers = Provider::orderBy('name')->get();
 
         return \Inertia\Inertia::render('transport-trackings/Reports', [
-            'totalTrips' => $totalTrips,
-            'totalProviderWeight' => $totalProviderWeight,
-            'totalClientWeight' => $totalClientWeight,
-            'totalGap' => $totalGap,
-            'totalDiscrepanciesCount' => $totalDiscrepanciesCount,
-            'totalDiscrepancyKg' => $totalDiscrepancyKg,
-            'suspiciousDrivers' => $suspiciousDrivers,
-            'thisMonthTonnage' => $thisMonthTonnage,
-            'thisYearTonnage' => $thisYearTonnage,
+            'totalTrips' => (int) ($totalTrips ?? 0),
+            'totalProviderWeight' => round((float) ($totalProviderWeight ?? 0), 2),
+            'totalClientWeight' => round((float) ($totalClientWeight ?? 0), 2),
+            'totalGap' => round((float) ($totalGap ?? 0), 2),
+            'totalDiscrepanciesCount' => (int) ($totalDiscrepanciesCount ?? 0),
+            'totalDiscrepancyKg' => round((float) ($totalDiscrepancyKg ?? 0), 2),
+            'suspiciousDrivers' => (int) ($suspiciousDrivers ?? 0),
+            'thisMonthTonnage' => round((float) ($thisMonthTonnage ?? 0), 2),
+            'thisYearTonnage' => round((float) ($thisYearTonnage ?? 0), 2),
             'months' => $months,
             'monthlyProvider' => $monthlyProvider,
             'monthlyClient' => $monthlyClient,
@@ -162,7 +204,7 @@ class TrackingDashboardController extends Controller
             'anomalies' => $anomalies->map(fn ($a) => [
                 'id' => $a->id,
                 'reference' => $a->reference,
-                'provider_date' => $a->provider_date,
+                'provider_date' => $a->provider_date?->format('d/m/Y'),
                 'provider_net_weight' => $a->provider_net_weight,
                 'client_net_weight' => $a->client_net_weight,
                 'gap' => $a->gap,
@@ -173,8 +215,8 @@ class TrackingDashboardController extends Controller
             'trips' => $trips->through(fn ($t) => [
                 'id' => $t->id,
                 'reference' => $t->reference,
-                'provider_date' => $t->provider_date,
-                'client_date' => $t->client_date,
+                'provider_date' => $t->provider_date?->format('d/m/Y'),
+                'client_date' => $t->client_date?->format('d/m/Y'),
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
@@ -186,8 +228,24 @@ class TrackingDashboardController extends Controller
             'drivers' => $drivers->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
             'trucks' => $trucks->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
             'providers' => $providers->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
-            'from' => $from->toDateString(),
-            'to' => $to->toDateString(),
+            'products' => [
+                ['id' => '0/3', 'name' => '0/3'],
+                ['id' => '3/8', 'name' => '3/8'],
+                ['id' => '8/16', 'name' => '8/16'],
+            ],
+            'bases' => [
+                ['id' => 'mr', 'name' => 'Mauritanie'],
+                ['id' => 'sn', 'name' => 'Sénégal'],
+            ],
+            'filters' => array_filter([
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'driver_id' => $driverId,
+                'truck_id' => $truckId,
+                'provider_id' => $providerId,
+                'product' => $product,
+                'base' => $base,
+            ]),
         ]);
     }
 }
