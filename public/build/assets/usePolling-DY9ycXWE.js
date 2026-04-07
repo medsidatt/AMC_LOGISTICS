@@ -1,0 +1,1 @@
+import{r as s,a as c}from"./app-2LFEAuRb.js";function n({interval:r,only:t,enabled:u=!0}){const e=s.useRef(null);s.useEffect(()=>{if(!(!u||r<=0))return e.current=setInterval(()=>{c.reload({only:t,preserveState:!0,preserveScroll:!0})},r*1e3),()=>{e.current&&clearInterval(e.current)}},[r,u,t])}export{n as u};

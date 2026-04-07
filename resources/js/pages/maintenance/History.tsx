@@ -4,6 +4,7 @@ import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
 import Pagination from '@/components/ui/Pagination';
 import { History as HistoryIcon } from 'lucide-react';
+import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 
 interface MaintenanceRecord {
     id: number;
@@ -35,6 +36,8 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
     return (
         <AuthenticatedLayout title="Historique maintenance">
             <Head title="Historique maintenance" />
+
+            <MaintenanceTabs />
 
             <Card className="mb-4">
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
