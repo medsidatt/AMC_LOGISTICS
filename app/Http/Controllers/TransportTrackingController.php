@@ -501,27 +501,16 @@ class TransportTrackingController extends Controller
     {
         $transportTracking->load('documents');
 
-        // Include soft-deleted records that are currently assigned to this tracking
-        $transporters = Transporter::when($transportTracking->truck?->transporter_id, function ($q, $id) {
-            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
-        })->get();
-        $trucks = Truck::when($transportTracking->truck_id, function ($q, $id) {
-                $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
-            })->get()
-            ->map(function ($truck) {
-                return [
-                    'id' => $truck->id,
-                    'matricule' => $truck->matricule,
-                    'driver_id' => $truck->transportTrackings->first()?->driver_id,
-                    'transporter_id' => $truck?->transporter_id,
-                ];
-            });
-        $drivers = Driver::when($transportTracking->driver_id, function ($q, $id) {
-            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
-        })->get();
-        $providers = Provider::when($transportTracking->provider_id, function ($q, $id) {
-            $q->orWhere(fn ($q2) => $q2->withTrashed()->where('id', $id));
-        })->get();
+        $transporters = Transporter::withTrashed()->orderBy('name')->get();
+        $trucks = Truck::withTrashed()->orderBy('matricule')->get()
+            ->map(fn ($truck) => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'driver_id' => $truck->transportTrackings()->latest()->value('driver_id'),
+                'transporter_id' => $truck->transporter_id,
+            ]);
+        $drivers = Driver::withTrashed()->orderBy('name')->get();
+        $providers = Provider::withTrashed()->orderBy('name')->get();
         $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
             return [
                 'id' => $product,

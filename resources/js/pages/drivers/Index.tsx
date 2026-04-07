@@ -72,7 +72,7 @@ export default function DriversIndex({ drivers }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        viewHref={`/drivers/${r.id}`}
+                                        viewHref={`/drivers/${r.id}/show-page`}
                                         onEdit={() => openEdit(r)}
                                         onDelete={() => setDeleteUrl(`/drivers/${r.id}/destroy`)}
                                     />

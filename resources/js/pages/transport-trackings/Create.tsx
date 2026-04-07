@@ -5,7 +5,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
-import { ArrowLeft, X, FileText, Image } from 'lucide-react';
+import { ArrowLeft, X, FileText, Image, Eye } from 'lucide-react';
 
 interface TruckOption {
     id: number;
@@ -50,6 +50,8 @@ export default function TrackingsCreate({ transporters, trucks, drivers, provide
     });
 
     const [fileList, setFileList] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<Record<number, string>>({});
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     // Auto-select driver & transporter when truck changes
     useEffect(() => {
@@ -75,15 +77,31 @@ export default function TrackingsCreate({ transporters, trucks, drivers, provide
 
     const addFiles = (newFiles: FileList | null) => {
         if (!newFiles) return;
-        const updated = [...fileList, ...Array.from(newFiles)];
+        const newArr = Array.from(newFiles);
+        const updated = [...fileList, ...newArr];
         setFileList(updated);
         form.setData('files', updated);
+        // Generate preview URLs for all files (images + PDFs)
+        const newPreviews = { ...previews };
+        newArr.forEach((file, i) => {
+            newPreviews[fileList.length + i] = URL.createObjectURL(file);
+        });
+        setPreviews(newPreviews);
     };
 
     const removeFile = (index: number) => {
+        if (previews[index]) URL.revokeObjectURL(previews[index]);
         const updated = fileList.filter((_, i) => i !== index);
         setFileList(updated);
         form.setData('files', updated);
+        // Rebuild preview indexes
+        const newPreviews: Record<number, string> = {};
+        Object.entries(previews).forEach(([k, v]) => {
+            const ki = parseInt(k);
+            if (ki < index) newPreviews[ki] = v;
+            else if (ki > index) newPreviews[ki - 1] = v;
+        });
+        setPreviews(newPreviews);
     };
 
     const submit = (e: React.FormEvent) => {
@@ -157,19 +175,50 @@ export default function TrackingsCreate({ transporters, trucks, drivers, provide
                         </div>
 
                         {fileList.length > 0 && (
-                            <div className="space-y-2">
-                                {fileList.map((file, i) => (
-                                    <div key={i} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            {isPdf(file) ? <FileText size={16} className="text-red-500 shrink-0" /> : <Image size={16} className="text-blue-500 shrink-0" />}
-                                            <span className="text-[var(--color-text)] truncate">{file.name}</span>
-                                            <span className="text-[var(--color-text-muted)] shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {fileList.map((file, i) => {
+                                    const isImage = file.type.startsWith('image/');
+                                    const url = previews[i];
+                                    return (
+                                        <div key={i} className="relative group rounded-lg border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface-hover)]">
+                                            {isImage && url ? (
+                                                <img src={url} alt={file.name} className="w-full h-32 object-cover cursor-pointer" onClick={() => setPreviewUrl(url)} />
+                                            ) : (
+                                                <a href={url} target="_blank" rel="noreferrer" className="w-full h-32 flex flex-col items-center justify-center hover:bg-[var(--color-surface)] cursor-pointer">
+                                                    <FileText size={36} className="text-red-400" />
+                                                    <span className="text-xs text-[var(--color-primary)] mt-2">Ouvrir le PDF</span>
+                                                </a>
+                                            )}
+                                            <div className="px-2 py-1.5 flex items-center justify-between">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-[var(--color-text)] truncate">{file.name}</p>
+                                                    <p className="text-xs text-[var(--color-text-muted)]">{(file.size / 1024).toFixed(0)} KB</p>
+                                                </div>
+                                                {isImage && url && (
+                                                    <a href={url} target="_blank" rel="noreferrer" className="p-1 text-[var(--color-info)] hover:bg-[var(--color-info)]/10 rounded shrink-0" title="Ouvrir">
+                                                        <Eye size={14} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <button type="button" onClick={() => removeFile(i)}
+                                                className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <X size={12} />
+                                            </button>
                                         </div>
-                                        <button type="button" onClick={() => removeFile(i)} className="p-1 rounded hover:bg-red-500/10 text-red-500 shrink-0">
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Image preview modal */}
+                        {previewUrl && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setPreviewUrl(null)}>
+                                <div className="relative max-w-3xl max-h-[90vh]">
+                                    <img src={previewUrl} alt="Preview" className="max-w-full max-h-[90vh] rounded-lg" />
+                                    <button onClick={() => setPreviewUrl(null)} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70">
+                                        <X size={20} />
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </Card>

@@ -10,6 +10,7 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\SharePointDailyChecklistService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 

@@ -97,7 +97,7 @@ const driverSections: NavSection[] = [
     {
         header: 'Mon espace',
         items: [
-            { label: 'Checklist quotidien', href: '/drivers/checklist', icon: <ClipboardCheck size={18} /> },
+            { label: 'Checklist quotidien', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18} /> },
             { label: 'Mes voyages', href: '/drivers/my-trips', icon: <Route size={18} /> },
             { label: 'Mon camion', href: '/drivers/my-truck', icon: <Truck size={18} /> },
         ],
