@@ -6,7 +6,7 @@ import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import Badge from '@/components/ui/Badge';
-import { ArrowLeft, Download, Trash2, FileText, Image, X } from 'lucide-react';
+import { ArrowLeft, Download, Trash2, FileText, Image, X, Eye } from 'lucide-react';
 
 interface Document {
     id: number;
@@ -80,6 +80,8 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
     });
 
     const [fileList, setFileList] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<Record<number, string>>({});
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     useEffect(() => {
         const gross = parseFloat(String(form.data.provider_gross_weight));
@@ -95,15 +97,29 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
 
     const addFiles = (newFiles: FileList | null) => {
         if (!newFiles) return;
-        const updated = [...fileList, ...Array.from(newFiles)];
+        const newArr = Array.from(newFiles);
+        const updated = [...fileList, ...newArr];
         setFileList(updated);
         form.setData('files', updated);
+        const newPreviews = { ...previews };
+        newArr.forEach((file, i) => {
+            newPreviews[fileList.length + i] = URL.createObjectURL(file);
+        });
+        setPreviews(newPreviews);
     };
 
     const removeNewFile = (index: number) => {
+        if (previews[index]) URL.revokeObjectURL(previews[index]);
         const updated = fileList.filter((_, i) => i !== index);
         setFileList(updated);
         form.setData('files', updated);
+        const newPreviews: Record<number, string> = {};
+        Object.entries(previews).forEach(([k, v]) => {
+            const ki = parseInt(k);
+            if (ki < index) newPreviews[ki] = v;
+            else if (ki > index) newPreviews[ki - 1] = v;
+        });
+        setPreviews(newPreviews);
     };
 
     const deleteExistingDoc = (docId: number) => {
@@ -171,19 +187,24 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
                         {t.documents.length > 0 && (
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-[var(--color-text)] mb-2">Documents existants</label>
-                                <div className="space-y-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     {t.documents.map((doc) => (
-                                        <div key={doc.id} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                {isPdf(doc.mime_type) ? <FileText size={16} className="text-red-500 shrink-0" /> : <Image size={16} className="text-blue-500 shrink-0" />}
-                                                <span className="text-[var(--color-text)] truncate">{doc.original_name}</span>
-                                                <Badge variant="muted">{doc.type}</Badge>
-                                            </div>
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <a href={doc.file_url} target="_blank" rel="noreferrer" className="p-1 text-[var(--color-info)] hover:bg-[var(--color-info)]/10 rounded">
-                                                    <Download size={14} />
+                                        <div key={doc.id} className="relative group rounded-lg border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface-hover)]">
+                                            {!isPdf(doc.mime_type) ? (
+                                                <img src={doc.file_url} alt={doc.original_name} className="w-full h-28 object-cover cursor-pointer" onClick={() => setPreviewUrl(doc.file_url)} />
+                                            ) : (
+                                                <a href={doc.file_url} target="_blank" rel="noreferrer" className="w-full h-28 flex flex-col items-center justify-center hover:bg-[var(--color-surface)]">
+                                                    <FileText size={32} className="text-red-400" />
+                                                    <span className="text-xs text-[var(--color-text-muted)] mt-1">PDF</span>
                                                 </a>
-                                                <button type="button" onClick={() => deleteExistingDoc(doc.id)} className="p-1 text-red-500 hover:bg-red-500/10 rounded">
+                                            )}
+                                            <div className="px-2 py-1.5 flex items-center justify-between">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-[var(--color-text)] truncate">{doc.original_name}</p>
+                                                    <Badge variant="muted">{doc.type}</Badge>
+                                                </div>
+                                                <button type="button" onClick={() => deleteExistingDoc(doc.id)}
+                                                    className="p-1 text-red-500 hover:bg-red-500/10 rounded shrink-0">
                                                     <Trash2 size={14} />
                                                 </button>
                                             </div>
@@ -205,19 +226,50 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
                         </div>
 
                         {fileList.length > 0 && (
-                            <div className="space-y-2">
-                                {fileList.map((file, i) => (
-                                    <div key={i} className="flex items-center justify-between rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            {file.type === 'application/pdf' ? <FileText size={16} className="text-red-500 shrink-0" /> : <Image size={16} className="text-blue-500 shrink-0" />}
-                                            <span className="text-[var(--color-text)] truncate">{file.name}</span>
-                                            <span className="text-[var(--color-text-muted)] shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {fileList.map((file, i) => {
+                                    const isImage = file.type.startsWith('image/');
+                                    const url = previews[i];
+                                    return (
+                                        <div key={i} className="relative group rounded-lg border border-[var(--color-border)] overflow-hidden bg-[var(--color-surface-hover)]">
+                                            {isImage && url ? (
+                                                <img src={url} alt={file.name} className="w-full h-32 object-cover cursor-pointer" onClick={() => setPreviewUrl(url)} />
+                                            ) : (
+                                                <a href={url} target="_blank" rel="noreferrer" className="w-full h-32 flex flex-col items-center justify-center hover:bg-[var(--color-surface)] cursor-pointer">
+                                                    <FileText size={36} className="text-red-400" />
+                                                    <span className="text-xs text-[var(--color-primary)] mt-2">Ouvrir le PDF</span>
+                                                </a>
+                                            )}
+                                            <div className="px-2 py-1.5 flex items-center justify-between">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs text-[var(--color-text)] truncate">{file.name}</p>
+                                                    <p className="text-xs text-[var(--color-text-muted)]">{(file.size / 1024).toFixed(0)} KB</p>
+                                                </div>
+                                                {isImage && url && (
+                                                    <a href={url} target="_blank" rel="noreferrer" className="p-1 text-[var(--color-info)] hover:bg-[var(--color-info)]/10 rounded shrink-0" title="Ouvrir">
+                                                        <Eye size={14} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <button type="button" onClick={() => removeNewFile(i)}
+                                                className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <X size={12} />
+                                            </button>
                                         </div>
-                                        <button type="button" onClick={() => removeNewFile(i)} className="p-1 rounded hover:bg-red-500/10 text-red-500 shrink-0">
-                                            <X size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Image preview modal */}
+                        {previewUrl && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setPreviewUrl(null)}>
+                                <div className="relative max-w-3xl max-h-[90vh]">
+                                    <img src={previewUrl} alt="Preview" className="max-w-full max-h-[90vh] rounded-lg" />
+                                    <button onClick={() => setPreviewUrl(null)} className="absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white hover:bg-black/70">
+                                        <X size={20} />
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </Card>

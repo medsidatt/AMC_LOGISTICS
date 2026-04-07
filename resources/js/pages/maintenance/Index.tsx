@@ -4,7 +4,6 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import FormSelect from '@/components/ui/FormSelect';
 import FormInput from '@/components/ui/FormInput';
 import Modal from '@/components/ui/Modal';
 import KpiCard from '@/components/dashboard/KpiCard';
@@ -28,6 +27,7 @@ interface TruckRow {
     maintenance_type: string;
     profiles: Profile[];
     overall_status: string;
+    open_issues: number;
 }
 
 interface MaintenanceType {
@@ -109,36 +109,44 @@ export default function MaintenanceIndex({ trucks, counts, maintenanceTypes }: P
                             <tr className="bg-[var(--color-surface-hover)]">
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Compteur</th>
-                                {maintenanceTypes.map((mt) => (
-                                    <th key={mt.value} className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">{mt.label}</th>
-                                ))}
+                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">État maintenance</th>
+                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Km restant</th>
+                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Problèmes signalés</th>
                                 <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
                             {filtered.length === 0 ? (
-                                <tr><td colSpan={3 + maintenanceTypes.length} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Aucun camion</td></tr>
-                            ) : filtered.map((truck) => (
-                                <tr key={truck.id} className="hover:bg-[var(--color-surface-hover)]">
-                                    <td className="px-4 py-3">
-                                        <a href={`/trucks/${truck.id}/show`} className="text-[var(--color-primary)] hover:underline font-medium">{truck.matricule}</a>
-                                    </td>
-                                    <td className="px-4 py-3 text-[var(--color-text)]">{truck.total_kilometers?.toLocaleString('fr-FR')} km</td>
-                                    {maintenanceTypes.map((mt) => {
-                                        const p = truck.profiles.find((pr) => pr.type === mt.value);
-                                        return (
-                                            <td key={mt.value} className="px-4 py-3 text-center">
-                                                {p ? statusBadge(p.status) : <span className="text-[var(--color-text-muted)]">-</span>}
-                                            </td>
-                                        );
-                                    })}
-                                    <td className="px-4 py-3 text-center">
-                                        <Button size="sm" variant="ghost" onClick={() => openRecord(truck)}>
-                                            <Wrench size={14} />
-                                        </Button>
-                                    </td>
-                                </tr>
-                            ))}
+                                <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Aucun camion</td></tr>
+                            ) : filtered.map((truck) => {
+                                const general = truck.profiles.find((p) => p.type === 'general');
+                                return (
+                                    <tr key={truck.id} className="hover:bg-[var(--color-surface-hover)]">
+                                        <td className="px-4 py-3">
+                                            <a href={`/trucks/${truck.id}/show`} className="text-[var(--color-primary)] hover:underline font-medium">{truck.matricule}</a>
+                                        </td>
+                                        <td className="px-4 py-3 text-[var(--color-text)]">{truck.total_kilometers?.toLocaleString('fr-FR')} km</td>
+                                        <td className="px-4 py-3 text-center">
+                                            {general ? statusBadge(general.status) : <span className="text-[var(--color-text-muted)]">-</span>}
+                                        </td>
+                                        <td className="px-4 py-3 text-center text-[var(--color-text)]">
+                                            {general ? `${general.remaining?.toLocaleString('fr-FR')} km` : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            {truck.open_issues > 0 ? (
+                                                <Badge variant="danger">{truck.open_issues}</Badge>
+                                            ) : (
+                                                <Badge variant="success">0</Badge>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <Button size="sm" variant="ghost" onClick={() => openRecord(truck)} title="Enregistrer maintenance">
+                                                <Wrench size={14} />
+                                            </Button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -153,13 +161,13 @@ export default function MaintenanceIndex({ trucks, counts, maintenanceTypes }: P
                 </a>
             </div>
 
-            {/* Record maintenance modal */}
-            <Modal open={!!recordTruck} onClose={() => setRecordTruck(null)} title={`Maintenance — ${recordTruck?.matricule}`}>
+            {/* Record general maintenance modal */}
+            <Modal open={!!recordTruck} onClose={() => setRecordTruck(null)} title={`Maintenance générale — ${recordTruck?.matricule}`}>
                 <form onSubmit={submitRecord}>
                     <FormInput label="Date" type="date" name="maintenance_date" value={recordForm.data.maintenance_date} onChange={(e) => recordForm.setData('maintenance_date', e.target.value)} required />
-                    <FormSelect label="Type" options={maintenanceTypes} value={recordForm.data.maintenance_type} onChange={(v) => recordForm.setData('maintenance_type', String(v ?? 'general'))} required />
-                    <FormInput label="Kilométrage" type="number" name="kilometers_at_maintenance" value={recordForm.data.kilometers_at_maintenance} onChange={(e) => recordForm.setData('kilometers_at_maintenance', e.target.value)} />
-                    <FormInput label="Notes" name="notes" value={recordForm.data.notes} onChange={(e) => recordForm.setData('notes', e.target.value)} />
+                    <FormInput label="Kilométrage au moment de la maintenance" type="number" name="kilometers_at_maintenance" value={recordForm.data.kilometers_at_maintenance} onChange={(e) => recordForm.setData('kilometers_at_maintenance', e.target.value)} />
+                    <FormInput label="Notes (vidange, filtres, pneus, etc.)" name="notes" value={recordForm.data.notes} onChange={(e) => recordForm.setData('notes', e.target.value)} />
+                    <p className="text-xs text-[var(--color-text-muted)] mt-2">La maintenance générale couvre : vidange huile, filtres, pneumatiques, inspection complète.</p>
                     <div className="flex justify-end gap-2 mt-6">
                         <Button variant="secondary" onClick={() => setRecordTruck(null)}>Annuler</Button>
                         <Button type="submit" loading={recordForm.processing}>Enregistrer</Button>

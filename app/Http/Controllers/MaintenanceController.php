@@ -266,12 +266,22 @@ class MaintenanceController extends Controller
 
     public function index()
     {
+        // Count open issues per truck (from driver checklists)
+        $openIssuesByTruck = \App\Models\DailyChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->join('daily_checklists', 'daily_checklist_issues.daily_checklist_id', '=', 'daily_checklists.id')
+            ->selectRaw('daily_checklists.truck_id, count(*) as cnt')
+            ->groupBy('daily_checklists.truck_id')
+            ->pluck('cnt', 'truck_id');
+
         $trucks = Truck::with(['maintenanceProfiles' => fn ($q) => $q->active()])
             ->where('is_active', true)
             ->orderBy('matricule')
             ->get()
-            ->map(function (Truck $truck) {
+            ->map(function (Truck $truck) use ($openIssuesByTruck) {
                 $profiles = $truck->maintenanceProfiles->keyBy('maintenance_type');
+                $general = $profiles->get('general');
                 return [
                     'id' => $truck->id,
                     'matricule' => $truck->matricule,
@@ -284,8 +294,8 @@ class MaintenanceController extends Controller
                         'remaining' => max(0, $p->next_maintenance_km - $truck->total_kilometers),
                         'status' => $p->status,
                     ])->values(),
-                    'overall_status' => $profiles->contains('status', 'red') ? 'red'
-                        : ($profiles->contains('status', 'yellow') ? 'yellow' : 'green'),
+                    'overall_status' => $general?->status ?? 'green',
+                    'open_issues' => $openIssuesByTruck->get($truck->id, 0),
                 ];
             });
 
@@ -371,16 +381,16 @@ class MaintenanceController extends Controller
     {
         $data = $request->validate([
             'maintenance_date' => 'required|date',
-            'maintenance_type' => 'required|string',
             'notes' => 'nullable|string',
             'kilometers_at_maintenance' => 'nullable|numeric',
         ]);
 
+        // Manager only records General maintenance (covers oil, tires, filters)
         $result = $this->maintenanceStatusService->recordMaintenance(
             $truck,
             $data['maintenance_date'],
             $data['notes'] ?? null,
-            $data['maintenance_type'],
+            Maintenance::TYPE_GENERAL,
             isset($data['kilometers_at_maintenance']) ? (float) $data['kilometers_at_maintenance'] : null
         );
 
@@ -388,13 +398,11 @@ class MaintenanceController extends Controller
             return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
         }
 
-        // Resolve related alerts
-        if ($data['maintenance_type'] === Maintenance::TYPE_OIL || $data['maintenance_type'] === Maintenance::TYPE_GENERAL) {
-            LogisticsAlert::where('truck_id', $truck->id)
-                ->where('type', 'due_engine')
-                ->whereNull('resolved_at')
-                ->update(['resolved_at' => now()]);
-        }
+        // General maintenance resolves all engine-related alerts
+        LogisticsAlert::where('truck_id', $truck->id)
+            ->where('type', 'due_engine')
+            ->whereNull('resolved_at')
+            ->update(['resolved_at' => now()]);
 
         return redirect()->back()->with('success', 'Maintenance enregistrée avec succès.');
     }
