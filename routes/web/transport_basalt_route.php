@@ -134,3 +134,5 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
 });
 
 Route::middleware('auth')->get('/dashboard/trackings', [TrackingDashboardController::class, 'index'])->name('dashboard.trackings');
+Route::middleware('auth')->get('/dashboard/fleeti', [TrackingDashboardController::class, 'fleeti'])->name('dashboard.fleeti');
+Route::middleware('auth')->get('/dashboard/rotations', [TrackingDashboardController::class, 'rotations'])->name('dashboard.rotations');

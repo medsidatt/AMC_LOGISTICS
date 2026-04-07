@@ -81,10 +81,13 @@ class FleetiSyncService
             $summary['trucks_matched']++;
 
             try {
-                $truck->update([
+                $fuelLevel = $this->fleetiService->extractFuelLevel($asset);
+
+                $truck->update(array_filter([
                     'fleeti_asset_id' => data_get($asset, 'id') ?: $truck->fleeti_asset_id,
                     'fleeti_gateway_id' => data_get($asset, 'gateways.0.provider.gatewayId') ?? $truck->fleeti_gateway_id,
-                ]);
+                    'fleeti_last_fuel_level' => $fuelLevel,
+                ], fn ($v) => !is_null($v)));
 
                 $result = $this->kilometerService->applyExternalOdometerReading(
                     $truck->fresh(),
