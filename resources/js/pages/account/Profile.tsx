@@ -12,7 +12,7 @@ interface Props {
 
 export default function Profile({ user }: Props) {
     const { auth } = usePage().props;
-    const profileForm = useForm({ name: user.name, email: user.email });
+    const profileForm = useForm({ name: user.name });
     const passwordForm = useForm({ old_password: '', password: '', password_confirmation: '' });
 
     const submitProfile = (e: React.FormEvent) => {
@@ -61,7 +61,10 @@ export default function Profile({ user }: Props) {
                     </div>
                     <form onSubmit={submitProfile} className="space-y-1">
                         <FormInput label="Nom complet" name="name" value={profileForm.data.name} onChange={(e) => profileForm.setData('name', e.target.value)} error={profileForm.errors.name} required />
-                        <FormInput label="Adresse email" type="email" name="email" value={profileForm.data.email} onChange={(e) => profileForm.setData('email', e.target.value)} error={profileForm.errors.email} required />
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Adresse email</label>
+                            <p className="px-3 py-2 rounded-lg bg-[var(--color-surface-hover)] text-sm text-[var(--color-text-secondary)]">{user.email}</p>
+                        </div>
                         <div className="pt-3">
                             <Button type="submit" loading={profileForm.processing}>Enregistrer</Button>
                         </div>
