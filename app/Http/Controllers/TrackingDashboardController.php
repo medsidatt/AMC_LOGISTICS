@@ -302,20 +302,49 @@ class TrackingDashboardController extends Controller
             $t->fleeti_last_synced_at && $t->fleeti_last_synced_at->gt(now()->subHours(2))
         );
 
-        // Fuel levels from Fleeti
-        $fuelData = $allTrucks->filter(fn ($t) => $t->fleeti_last_fuel_level !== null)->map(fn ($t) => [
-            'id' => $t->id,
-            'matricule' => $t->matricule,
-            'fuel_level' => round((float) $t->fleeti_last_fuel_level, 1),
-            'total_km' => round((float) $t->total_kilometers, 0),
-            'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
-        ])->values();
+        // Fuel levels: combine Fleeti data + latest checklist fuel levels
+        $fuelMap = ['plein' => 100, 'trois_quarts' => 75, 'demi' => 50, 'quart' => 25, 'reserve' => 10, 'vide' => 0];
+
+        $latestChecklists = \App\Models\DailyChecklist::query()
+            ->select('truck_id', 'fuel_level', 'checklist_date')
+            ->whereIn('truck_id', $allTrucks->pluck('id'))
+            ->whereNotNull('fuel_level')
+            ->orderByDesc('checklist_date')
+            ->get()
+            ->unique('truck_id')
+            ->keyBy('truck_id');
+
+        $fuelData = $allTrucks->map(function ($t) use ($fuelMap, $latestChecklists) {
+            // Priority: Fleeti sensor > Checklist
+            $fuelLevel = null;
+            $source = null;
+
+            if ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) {
+                $fuelLevel = round((float) $t->fleeti_last_fuel_level, 1);
+                $source = 'fleeti';
+            } elseif ($latestChecklists->has($t->id)) {
+                $cl = $latestChecklists->get($t->id);
+                $fuelLevel = $fuelMap[$cl->fuel_level] ?? null;
+                $source = 'checklist';
+            }
+
+            if ($fuelLevel === null) return null;
+
+            return [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'fuel_level' => $fuelLevel,
+                'total_km' => round((float) $t->total_kilometers, 0),
+                'source' => $source,
+                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ];
+        })->filter()->values();
 
         // Fuel distribution
         $fuelDistribution = [
             'critical' => $fuelData->where('fuel_level', '<', 15)->count(),
-            'low' => $fuelData->whereBetween('fuel_level', [15, 30])->count(),
-            'medium' => $fuelData->whereBetween('fuel_level', [30, 60])->count(),
+            'low' => $fuelData->filter(fn ($f) => $f['fuel_level'] >= 15 && $f['fuel_level'] < 30)->count(),
+            'medium' => $fuelData->filter(fn ($f) => $f['fuel_level'] >= 30 && $f['fuel_level'] < 60)->count(),
             'good' => $fuelData->where('fuel_level', '>=', 60)->count(),
         ];
 
@@ -336,16 +365,25 @@ class TrackingDashboardController extends Controller
                 'trucks' => (int) $r->trucks_active,
             ])->toArray();
 
-        // All trucks with Fleeti data
-        $fleetTable = $allTrucks->map(fn ($t) => [
-            'id' => $t->id,
-            'matricule' => $t->matricule,
-            'total_km' => round((float) $t->total_kilometers, 0),
-            'fleeti_connected' => !empty($t->fleeti_asset_id),
-            'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
-            'fuel_level' => $t->fleeti_last_fuel_level !== null ? round((float) $t->fleeti_last_fuel_level, 1) : null,
-            'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
-        ])->toArray();
+        // All trucks with Fleeti + checklist fuel data
+        $fleetTable = $allTrucks->map(function ($t) use ($fuelMap, $latestChecklists) {
+            $fuelLevel = null;
+            if ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) {
+                $fuelLevel = round((float) $t->fleeti_last_fuel_level, 1);
+            } elseif ($latestChecklists->has($t->id)) {
+                $fuelLevel = $fuelMap[$latestChecklists->get($t->id)->fuel_level] ?? null;
+            }
+
+            return [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'total_km' => round((float) $t->total_kilometers, 0),
+                'fleeti_connected' => !empty($t->fleeti_asset_id),
+                'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
+                'fuel_level' => $fuelLevel,
+                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ];
+        })->toArray();
 
         return \Inertia\Inertia::render('analytics/Fleeti', [
             'stats' => [
