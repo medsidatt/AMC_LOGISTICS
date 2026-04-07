@@ -82,6 +82,50 @@ class FleetiService
         return round((float) $candidates->max(), 2);
     }
 
+    /**
+     * Extract fuel level percentage from Fleeti asset data.
+     * Looks for sensors with fuel-related unit types.
+     */
+    public function extractFuelLevel(array $asset): ?float
+    {
+        $gateways = collect(data_get($asset, 'gateways', []));
+
+        foreach ($gateways as $gateway) {
+            // Check counters
+            foreach (collect(data_get($gateway, 'counters', [])) as $counter) {
+                $unitType = Str::lower((string) data_get($counter, 'unitType', ''));
+                if (Str::contains($unitType, ['fuel', 'litre', 'liter', 'l', '%'])) {
+                    $value = data_get($counter, 'value');
+                    if (is_numeric($value)) return round((float) $value, 2);
+                }
+            }
+
+            // Check provider sensors
+            foreach (collect(data_get($gateway, 'providerSensors', [])) as $sensor) {
+                $units = Str::lower((string) data_get($sensor, 'units', ''));
+                $name = Str::lower((string) data_get($sensor, 'name', ''));
+                if (Str::contains($units, ['fuel', 'litre', 'liter', '%']) || Str::contains($name, ['fuel', 'carburant'])) {
+                    $value = data_get($sensor, 'value');
+                    if (is_numeric($value)) return round((float) $value, 2);
+                }
+            }
+
+            // Check accessories sensors
+            foreach (collect(data_get($gateway, 'accessories', [])) as $accessory) {
+                foreach (collect(data_get($accessory, 'providerSensors', [])) as $sensor) {
+                    $units = Str::lower((string) data_get($sensor, 'units', ''));
+                    $name = Str::lower((string) data_get($sensor, 'name', ''));
+                    if (Str::contains($units, ['fuel', 'litre', 'liter', '%']) || Str::contains($name, ['fuel', 'carburant'])) {
+                        $value = data_get($sensor, 'value');
+                        if (is_numeric($value)) return round((float) $value, 2);
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function normalizeMatricule(string $value): string
     {
         return Str::upper((string) preg_replace('/[^A-Za-z0-9]/', '', $value));
