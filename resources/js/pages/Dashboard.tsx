@@ -32,7 +32,7 @@ interface Props {
         provider_net_weight: number | null;
         client_net_weight: number | null;
         gap: number | null;
-        provider_date: string | null;
+        client_date: string | null;
     }>;
     months: string[];
     monthlyProvider: number[];
@@ -68,16 +68,16 @@ export default function Dashboard(props: Props) {
 
     const trackingColumns = [
         { key: 'reference', label: 'Réf' },
-        { key: 'provider_date', label: 'Date', render: (r: any) => formatDate(r.provider_date) },
+        { key: 'client_date', label: 'Date', render: (r: any) => formatDate(r.client_date) },
         { key: 'truck', label: 'Camion' },
         { key: 'driver', label: 'Conducteur', hideOnMobile: true },
-        { key: 'provider_net_weight', label: 'Poids Fourni.', render: (r: any) => r.provider_net_weight ? formatWeight(r.provider_net_weight) : '-' },
-        { key: 'client_net_weight', label: 'Poids Client', render: (r: any) => r.client_net_weight ? formatWeight(r.client_net_weight) : '-' },
+        { key: 'provider_net_weight', label: 'Poids Fourni.', render: (r: any) => r.provider_net_weight ? `${formatNumber(r.provider_net_weight)} T` : '-' },
+        { key: 'client_net_weight', label: 'Poids Client', render: (r: any) => r.client_net_weight ? `${formatNumber(r.client_net_weight)} T` : '-' },
         {
             key: 'gap', label: 'Écart', render: (r: any) => {
                 const gap = r.gap ?? 0;
                 const variant = gap === 0 ? 'success' : gap < 0 ? 'danger' : 'warning';
-                return <Badge variant={variant}>{formatNumber(gap, 2)} kg</Badge>;
+                return <Badge variant={variant}>{formatNumber(gap, 2)} T</Badge>;
             },
         },
     ];
@@ -113,7 +113,7 @@ export default function Dashboard(props: Props) {
                 <KpiCard
                     label="Tonnage du mois"
                     value={props.tonnageMonth}
-                    unit="kg"
+                    unit="T"
                     change={tonnageChange}
                     changeLabel="vs mois dernier"
                     icon={<Weight size={22} />}
@@ -182,7 +182,7 @@ export default function Dashboard(props: Props) {
                             <button
                                 onClick={() => download(props.recentTrackings, [
                                     { key: 'reference', label: 'Référence' },
-                                    { key: 'provider_date', label: 'Date' },
+                                    { key: 'client_date', label: 'Date' },
                                     { key: 'truck', label: 'Camion' },
                                     { key: 'driver', label: 'Conducteur' },
                                     { key: 'provider_net_weight', label: 'Poids Fournisseur' },
