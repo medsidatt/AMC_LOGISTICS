@@ -83,47 +83,63 @@ class FleetiService
     }
 
     /**
-     * Extract fuel level percentage from Fleeti asset data.
-     * Looks for sensors with fuel-related unit types.
+     * Extract fuel level in litres from Fleeti asset data.
+     * Searches counters, providerSensors, and accessories for fuel-related readings.
      */
-    public function extractFuelLevel(array $asset): ?float
+    public function extractFuelLitres(array $asset): ?float
     {
+        $candidates = collect();
         $gateways = collect(data_get($asset, 'gateways', []));
 
         foreach ($gateways as $gateway) {
-            // Check counters
             foreach (collect(data_get($gateway, 'counters', [])) as $counter) {
                 $unitType = Str::lower((string) data_get($counter, 'unitType', ''));
-                if (Str::contains($unitType, ['fuel', 'litre', 'liter', 'l', '%'])) {
-                    $value = data_get($counter, 'value');
-                    if (is_numeric($value)) return round((float) $value, 2);
+                $value = data_get($counter, 'value');
+                if (is_numeric($value) && $this->isFuelUnit($unitType)) {
+                    $candidates->push((float) $value);
                 }
             }
 
-            // Check provider sensors
             foreach (collect(data_get($gateway, 'providerSensors', [])) as $sensor) {
                 $units = Str::lower((string) data_get($sensor, 'units', ''));
                 $name = Str::lower((string) data_get($sensor, 'name', ''));
-                if (Str::contains($units, ['fuel', 'litre', 'liter', '%']) || Str::contains($name, ['fuel', 'carburant'])) {
-                    $value = data_get($sensor, 'value');
-                    if (is_numeric($value)) return round((float) $value, 2);
+                $value = data_get($sensor, 'value');
+                if (is_numeric($value) && ($this->isFuelUnit($units) || $this->isFuelName($name))) {
+                    $candidates->push((float) $value);
                 }
             }
 
-            // Check accessories sensors
             foreach (collect(data_get($gateway, 'accessories', [])) as $accessory) {
                 foreach (collect(data_get($accessory, 'providerSensors', [])) as $sensor) {
                     $units = Str::lower((string) data_get($sensor, 'units', ''));
                     $name = Str::lower((string) data_get($sensor, 'name', ''));
-                    if (Str::contains($units, ['fuel', 'litre', 'liter', '%']) || Str::contains($name, ['fuel', 'carburant'])) {
-                        $value = data_get($sensor, 'value');
-                        if (is_numeric($value)) return round((float) $value, 2);
+                    $value = data_get($sensor, 'value');
+                    if (is_numeric($value) && ($this->isFuelUnit($units) || $this->isFuelName($name))) {
+                        $candidates->push((float) $value);
                     }
                 }
             }
         }
 
-        return null;
+        return $candidates->isNotEmpty() ? round($candidates->max(), 2) : null;
+    }
+
+    /**
+     * @deprecated Use extractFuelLitres() instead
+     */
+    public function extractFuelLevel(array $asset): ?float
+    {
+        return $this->extractFuelLitres($asset);
+    }
+
+    private function isFuelUnit(string $unit): bool
+    {
+        return Str::contains($unit, ['fuel', 'litre', 'liter', 'l', 'gallon']);
+    }
+
+    private function isFuelName(string $name): bool
+    {
+        return Str::contains($name, ['fuel', 'carburant', 'gasoil', 'diesel', 'essence']);
     }
 
     public function normalizeMatricule(string $value): string

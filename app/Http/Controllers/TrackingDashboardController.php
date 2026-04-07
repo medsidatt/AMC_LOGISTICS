@@ -302,51 +302,46 @@ class TrackingDashboardController extends Controller
             $t->fleeti_last_synced_at && $t->fleeti_last_synced_at->gt(now()->subHours(2))
         );
 
-        // Fuel levels: combine Fleeti data + latest checklist fuel levels
-        $fuelMap = ['plein' => 100, 'trois_quarts' => 75, 'demi' => 50, 'quart' => 25, 'reserve' => 10, 'vide' => 0];
-
-        $latestChecklists = \App\Models\DailyChecklist::query()
-            ->select('truck_id', 'fuel_level', 'checklist_date')
-            ->whereIn('truck_id', $allTrucks->pluck('id'))
-            ->whereNotNull('fuel_level')
-            ->orderByDesc('checklist_date')
-            ->get()
-            ->unique('truck_id')
-            ->keyBy('truck_id');
-
-        $fuelData = $allTrucks->map(function ($t) use ($fuelMap, $latestChecklists) {
-            // Priority: Fleeti sensor > Checklist
-            $fuelLevel = null;
-            $source = null;
-
-            if ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) {
-                $fuelLevel = round((float) $t->fleeti_last_fuel_level, 1);
-                $source = 'fleeti';
-            } elseif ($latestChecklists->has($t->id)) {
-                $cl = $latestChecklists->get($t->id);
-                $fuelLevel = $fuelMap[$cl->fuel_level] ?? null;
-                $source = 'checklist';
-            }
-
-            if ($fuelLevel === null) return null;
-
-            return [
+        // Fuel levels in litres from Fleeti
+        $fuelData = $allTrucks->filter(fn ($t) => $t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0)
+            ->map(fn ($t) => [
                 'id' => $t->id,
                 'matricule' => $t->matricule,
-                'fuel_level' => $fuelLevel,
+                'litres' => round((float) $t->fleeti_last_fuel_level, 1),
                 'total_km' => round((float) $t->total_kilometers, 0),
-                'source' => $source,
                 'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
-            ];
-        })->filter()->values();
+            ])->values();
 
-        // Fuel distribution
+        // Fuel distribution by litres
         $fuelDistribution = [
-            'critical' => $fuelData->where('fuel_level', '<', 15)->count(),
-            'low' => $fuelData->filter(fn ($f) => $f['fuel_level'] >= 15 && $f['fuel_level'] < 30)->count(),
-            'medium' => $fuelData->filter(fn ($f) => $f['fuel_level'] >= 30 && $f['fuel_level'] < 60)->count(),
-            'good' => $fuelData->where('fuel_level', '>=', 60)->count(),
+            'critical' => $fuelData->where('litres', '<', 30)->count(),
+            'low' => $fuelData->filter(fn ($f) => $f['litres'] >= 30 && $f['litres'] < 80)->count(),
+            'medium' => $fuelData->filter(fn ($f) => $f['litres'] >= 80 && $f['litres'] < 150)->count(),
+            'good' => $fuelData->where('litres', '>=', 150)->count(),
         ];
+
+        // Fuel history for analysis (last 30 days)
+        $fuelHistory = \App\Models\FuelTracking::select(
+                DB::raw("DATE_FORMAT(created_at, '%d/%m') as day"),
+                DB::raw("DATE(created_at) as raw_date"),
+                DB::raw('AVG(litres) as avg_litres'),
+                DB::raw('SUM(litres) as total_litres'),
+                DB::raw('COUNT(DISTINCT truck_id) as trucks')
+            )
+            ->where('created_at', '>=', now()->subDays(30))
+            ->groupBy('raw_date', 'day')
+            ->orderBy('raw_date')
+            ->get()
+            ->map(fn ($r) => [
+                'day' => $r->day,
+                'avg_litres' => round((float) $r->avg_litres, 1),
+                'total_litres' => round((float) $r->total_litres, 0),
+                'trucks' => (int) $r->trucks,
+            ])->toArray();
+
+        // Total fuel across fleet
+        $totalFuelLitres = $fuelData->sum('litres');
+        $avgFuelLitres = $fuelData->count() > 0 ? round($fuelData->avg('litres'), 1) : 0;
 
         // Daily km from kilometer_trackings (last 30 days)
         $dailyKm = KilometerTracking::select(
@@ -365,25 +360,16 @@ class TrackingDashboardController extends Controller
                 'trucks' => (int) $r->trucks_active,
             ])->toArray();
 
-        // All trucks with Fleeti + checklist fuel data
-        $fleetTable = $allTrucks->map(function ($t) use ($fuelMap, $latestChecklists) {
-            $fuelLevel = null;
-            if ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) {
-                $fuelLevel = round((float) $t->fleeti_last_fuel_level, 1);
-            } elseif ($latestChecklists->has($t->id)) {
-                $fuelLevel = $fuelMap[$latestChecklists->get($t->id)->fuel_level] ?? null;
-            }
-
-            return [
-                'id' => $t->id,
-                'matricule' => $t->matricule,
-                'total_km' => round((float) $t->total_kilometers, 0),
-                'fleeti_connected' => !empty($t->fleeti_asset_id),
-                'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
-                'fuel_level' => $fuelLevel,
-                'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
-            ];
-        })->toArray();
+        // All trucks with Fleeti data
+        $fleetTable = $allTrucks->map(fn ($t) => [
+            'id' => $t->id,
+            'matricule' => $t->matricule,
+            'total_km' => round((float) $t->total_kilometers, 0),
+            'fleeti_connected' => !empty($t->fleeti_asset_id),
+            'fleeti_km' => $t->fleeti_last_kilometers ? round((float) $t->fleeti_last_kilometers, 0) : null,
+            'fuel_litres' => ($t->fleeti_last_fuel_level !== null && $t->fleeti_last_fuel_level > 0) ? round((float) $t->fleeti_last_fuel_level, 1) : null,
+            'last_synced' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+        ])->toArray();
 
         return \Inertia\Inertia::render('analytics/Fleeti', [
             'stats' => [
@@ -395,10 +381,12 @@ class TrackingDashboardController extends Controller
                 'last_sync' => $allTrucks->max('fleeti_last_synced_at')
                     ? Carbon::parse($allTrucks->max('fleeti_last_synced_at'))->format('d/m/Y H:i') : null,
                 'trucks_with_fuel' => $fuelData->count(),
-                'avg_fuel' => $fuelData->count() > 0 ? round($fuelData->avg('fuel_level'), 1) : 0,
+                'total_fuel_litres' => round($totalFuelLitres, 0),
+                'avg_fuel_litres' => $avgFuelLitres,
             ],
             'fuelDistribution' => $fuelDistribution,
             'fuelData' => $fuelData->toArray(),
+            'fuelHistory' => $fuelHistory,
             'dailyKm' => $dailyKm,
             'fleetTable' => $fleetTable,
         ]);

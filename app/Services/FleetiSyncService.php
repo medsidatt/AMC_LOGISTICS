@@ -81,13 +81,23 @@ class FleetiSyncService
             $summary['trucks_matched']++;
 
             try {
-                $fuelLevel = $this->fleetiService->extractFuelLevel($asset);
+                $fuelLitres = $this->fleetiService->extractFuelLitres($asset);
 
                 $truck->update(array_filter([
                     'fleeti_asset_id' => data_get($asset, 'id') ?: $truck->fleeti_asset_id,
                     'fleeti_gateway_id' => data_get($asset, 'gateways.0.provider.gatewayId') ?? $truck->fleeti_gateway_id,
-                    'fleeti_last_fuel_level' => $fuelLevel,
+                    'fleeti_last_fuel_level' => $fuelLitres,
                 ], fn ($v) => !is_null($v)));
+
+                // Store fuel history if available
+                if ($fuelLitres !== null && $fuelLitres > 0) {
+                    \App\Models\FuelTracking::create([
+                        'truck_id' => $truck->id,
+                        'litres' => $fuelLitres,
+                        'kilometers_at' => $truck->fresh()->total_kilometers,
+                        'source' => 'fleeti',
+                    ]);
+                }
 
                 $result = $this->kilometerService->applyExternalOdometerReading(
                     $truck->fresh(),
