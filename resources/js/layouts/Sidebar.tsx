@@ -63,7 +63,7 @@ const dataSections: NavSection[] = [
         header: 'Transport',
         items: [
             { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
-            { label: 'Dashboard Analytics', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/trackings' },
+            { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/trackings' },
             { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
         ],
     },
