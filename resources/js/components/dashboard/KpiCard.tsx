@@ -15,12 +15,13 @@ interface KpiCardProps {
 }
 
 function AnimatedCounter({ value, decimals = 0 }: { value: number; decimals?: number }) {
+    const safeValue = Number(value) || 0;
     const [display, setDisplay] = useState(0);
     const ref = useRef<number>(0);
 
     useEffect(() => {
         const start = ref.current;
-        const diff = value - start;
+        const diff = safeValue - start;
         const duration = 600;
         const startTime = performance.now();
 
@@ -31,11 +32,11 @@ function AnimatedCounter({ value, decimals = 0 }: { value: number; decimals?: nu
             const current = start + diff * eased;
             setDisplay(current);
             if (progress < 1) requestAnimationFrame(tick);
-            else ref.current = value;
+            else ref.current = safeValue;
         };
 
         requestAnimationFrame(tick);
-    }, [value]);
+    }, [safeValue]);
 
     return <>{formatNumber(display, decimals)}</>;
 }

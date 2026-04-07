@@ -1,8 +1,9 @@
 export function formatNumber(value: number, decimals = 0): string {
+    const safe = Number(value) || 0;
     return new Intl.NumberFormat('fr-FR', {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
-    }).format(value);
+    }).format(safe);
 }
 
 export function formatWeight(kg: number): string {
