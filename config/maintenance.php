@@ -2,6 +2,7 @@
 
 return [
     'warning_threshold_km' => (float) env('MAINTENANCE_WARNING_THRESHOLD_KM', 500),
+    'max_single_trip_distance_km' => (float) env('MAINTENANCE_MAX_TRIP_DISTANCE_KM', 2000),
     'odometer_reset_threshold_km' => (float) env('ODOMETER_RESET_THRESHOLD_KM', 50000),
     'fleeti_sync_interval_minutes' => (int) env('FLEETI_SYNC_INTERVAL_MINUTES', 30),
     'types' => [

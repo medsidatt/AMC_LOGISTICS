@@ -25,4 +25,9 @@ class Maintenance extends Model
     {
         return $this->belongsTo(Truck::class);
     }
+
+    public function profile(): BelongsTo
+    {
+        return $this->belongsTo(TruckMaintenanceProfile::class, 'truck_maintenance_profile_id');
+    }
 }

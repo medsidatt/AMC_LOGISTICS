@@ -78,7 +78,8 @@ const dataSections: NavSection[] = [
     {
         header: 'Maintenance',
         items: [
-            { label: 'Tableau de bord', href: '/logistics/dashboard', icon: <Wrench size={18} />, match: '/logistics' },
+            { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
+            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics' },
         ],
     },
 ];

@@ -15,6 +15,9 @@ class DailyChecklist extends Model
 
     protected $casts = [
         'fuel_refill' => 'boolean',
+        'start_km' => 'float',
+        'end_km' => 'float',
+        'fuel_filled' => 'float',
     ];
 
     // ── Standardized options for analytics ──
@@ -76,6 +79,11 @@ class DailyChecklist extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function transportTracking(): BelongsTo
+    {
+        return $this->belongsTo(TransportTracking::class);
     }
 
     public function issues(): HasMany

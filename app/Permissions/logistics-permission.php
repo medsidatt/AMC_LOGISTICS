@@ -28,6 +28,9 @@ return [
 
     'maintenance-list',
     'maintenance-create',
+    'maintenance-rule-create',
+    'maintenance-rule-deactivate',
+    'rotation-validate',
 
     'logistics-dashboard',
 ];

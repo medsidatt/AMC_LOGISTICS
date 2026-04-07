@@ -119,6 +119,17 @@ Route::group(['prefix' => 'logistics', 'as' => 'logistics.', 'middleware' => ['a
     Route::get('/dashboard', [LogisticsManagerController::class, 'dashboard'])->name('dashboard');
     Route::get('/reports', [LogisticsManagerController::class, 'reports'])->name('reports');
     Route::post('/daily-issues/{issue}/resolve', [LogisticsManagerController::class, 'resolveDailyIssue'])->name('daily-issues.resolve');
+    Route::post('/rotations/{transportTracking}/validate', [LogisticsManagerController::class, 'validateRotation'])->name('rotations.validate');
+});
+
+// ----- Maintenance Routes -----
+Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' => ['auth']], function () {
+    Route::get('/', [MaintenanceController::class, 'index'])->name('index');
+    Route::get('/rules', [MaintenanceController::class, 'rules'])->name('rules');
+    Route::post('/rules', [MaintenanceController::class, 'storeRule'])->name('rules.store');
+    Route::post('/rules/{profile}/deactivate', [MaintenanceController::class, 'deactivateRule'])->name('rules.deactivate');
+    Route::post('/{truck}/record', [MaintenanceController::class, 'recordMaintenance'])->name('record');
+    Route::get('/history', [MaintenanceController::class, 'history'])->name('history');
 });
 
 Route::middleware('auth')->get('/dashboard/trackings', [TrackingDashboardController::class, 'index'])->name('dashboard.trackings');

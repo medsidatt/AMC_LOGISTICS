@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\LogisticsAlert;
+use App\Models\TransportTracking;
 use App\Models\Truck;
+use App\Services\RotationService;
 use App\Services\SharePointDailyChecklistService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +15,8 @@ use Illuminate\Support\Facades\Log;
 class LogisticsManagerController extends Controller
 {
     public function __construct(
-        private readonly SharePointDailyChecklistService $sharePointDailyChecklistService
+        private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
+        private readonly RotationService $rotationService,
     ) {
         $this->middleware('permission:logistics-dashboard');
     }
@@ -75,8 +78,18 @@ class LogisticsManagerController extends Controller
                 'id' => $a->id,
                 'type' => $a->type,
                 'message' => $a->message,
-                'created_at' => $a->created_at->format('Y-m-d H:i'),
+                'created_at' => $a->created_at->format('d/m/Y H:i'),
             ]),
+            'unvalidatedRotations' => $this->rotationService->getUnvalidatedRotations()->map(fn ($r) => [
+                'id' => $r->id,
+                'reference' => $r->reference,
+                'truck' => $r->truck?->matricule,
+                'driver' => $r->driver?->name,
+                'start_km' => $r->start_km,
+                'end_km' => $r->end_km,
+                'distance' => $r->distance_km,
+                'date' => $r->client_date?->format('d/m/Y') ?? $r->provider_date?->format('d/m/Y'),
+            ])->values(),
         ]);
     }
 
@@ -160,5 +173,11 @@ class LogisticsManagerController extends Controller
         }
 
         return redirect()->back()->with('success', 'Issue resolue avec succes.');
+    }
+
+    public function validateRotation(TransportTracking $transportTracking)
+    {
+        $this->rotationService->validateRotation($transportTracking, auth()->user());
+        return redirect()->back()->with('success', 'Rotation validée avec succès. Kilométrage mis à jour.');
     }
 }

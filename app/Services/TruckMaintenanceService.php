@@ -32,7 +32,7 @@ class TruckMaintenanceService
 
         Truck::query()->chunkById(100, function ($trucks) use ($intervalKm, &$updated) {
             foreach ($trucks as $truck) {
-                $this->updateMaintenanceProfileInterval(
+                $this->replaceMaintenanceProfileInterval(
                     $truck,
                     Maintenance::TYPE_GENERAL,
                     $intervalKm
@@ -44,22 +44,21 @@ class TruckMaintenanceService
         return $updated;
     }
 
-    public function updateMaintenanceProfileInterval(
+    /**
+     * Replace a maintenance rule by deactivating the old one and creating a new immutable rule.
+     */
+    public function replaceMaintenanceProfileInterval(
         Truck $truck,
         string $maintenanceType,
         float $intervalKm,
         ?float $warningThresholdKm = null
     ): void {
-        $profile = $this->maintenanceStatusService->ensureProfile($truck, $maintenanceType);
-        $profile->update([
-            'interval_km' => max(1, $intervalKm),
-            'warning_threshold_km' => is_null($warningThresholdKm) ? $profile->warning_threshold_km : max(0, $warningThresholdKm),
-        ]);
-
-        if ($maintenanceType === 'general') {
-            $truck->update(['km_maintenance_interval' => max(1, $intervalKm)]);
-        }
-
-        $this->maintenanceStatusService->recalculateProfile($truck->fresh(), $profile->fresh());
+        $this->maintenanceStatusService->createRule(
+            $truck,
+            $maintenanceType,
+            max(1, $intervalKm),
+            $warningThresholdKm,
+            auth()->id()
+        );
     }
 }
