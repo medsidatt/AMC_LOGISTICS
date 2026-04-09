@@ -136,3 +136,13 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
 Route::middleware('auth')->get('/dashboard/trackings', [TrackingDashboardController::class, 'index'])->name('dashboard.trackings');
 Route::middleware('auth')->get('/dashboard/fleeti', [TrackingDashboardController::class, 'fleeti'])->name('dashboard.fleeti');
 Route::middleware('auth')->get('/dashboard/rotations', [TrackingDashboardController::class, 'rotations'])->name('dashboard.rotations');
+
+// ── Reports ──
+Route::group(['prefix' => 'reports', 'as' => 'reports.', 'middleware' => ['auth']], function () {
+    Route::get('/', [\App\Http\Controllers\ReportController::class, 'index'])->name('index');
+    Route::get('/transport/excel', [\App\Http\Controllers\ReportController::class, 'exportTransportExcel'])->name('transport.excel');
+    Route::get('/transport/pdf', [\App\Http\Controllers\ReportController::class, 'exportTransportPdf'])->name('transport.pdf');
+    Route::get('/fleet/excel', [\App\Http\Controllers\ReportController::class, 'exportFleetExcel'])->name('fleet.excel');
+    Route::get('/maintenance/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceExcel'])->name('maintenance.excel');
+    Route::get('/maintenance-due/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceDueExcel'])->name('maintenance-due.excel');
+});
