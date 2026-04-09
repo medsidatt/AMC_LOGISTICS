@@ -10,6 +10,75 @@ class FleetiService
 {
     private const DEFAULT_TAKE = 200;
 
+    /**
+     * Fetch historical telemetry values (fuel, speed, etc.) from Fleeti.
+     */
+    public function fetchAllValues(string $customerReference, string $from, string $to, array $assetIds = []): Collection
+    {
+        $skip = 0;
+        $results = collect();
+
+        do {
+            $query = array_filter([
+                'CustomerReference' => $customerReference,
+                'From' => $from,
+                'To' => $to,
+                'AssetIds' => !empty($assetIds) ? $assetIds : null,
+                'Skip' => $skip,
+                'Take' => self::DEFAULT_TAKE,
+            ], fn ($value) => !is_null($value) && $value !== '');
+
+            $response = Http::timeout(30)
+                ->retry(2, 500)
+                ->withHeaders($this->authHeaders())
+                ->get($this->baseUrl() . '/v1/Asset/History/SearchAllValues', $query)
+                ->throw()
+                ->json();
+
+            if (data_get($response, 'isSuccess') === false) {
+                throw new \RuntimeException((string) data_get($response, 'message', 'Fleeti History API returned an error.'));
+            }
+
+            $batch = collect(data_get($response, 'results', []));
+            $results = $results->merge($batch);
+            $skip += self::DEFAULT_TAKE;
+        } while ($batch->count() === self::DEFAULT_TAKE);
+
+        return $results;
+    }
+
+    /**
+     * Extract fuel litres from a telemetry/history record.
+     * Looks for fuel-related fields in the response data.
+     */
+    public function extractFuelFromHistoryRecord(array $record): ?float
+    {
+        // Check common fuel field names in telemetry data
+        $fuelFields = ['fuelLevel', 'fuel_level', 'fuelLiters', 'fuel', 'carburant',
+            'FuelLevel', 'Fuel', 'fuelQuantity', 'fuelAmount', 'analog1'];
+
+        foreach ($fuelFields as $field) {
+            $value = data_get($record, $field);
+            if (is_numeric($value) && (float) $value > 0) {
+                return round((float) $value, 2);
+            }
+        }
+
+        // Check nested data/values structures
+        $values = data_get($record, 'values', data_get($record, 'data', []));
+        if (is_array($values)) {
+            foreach ($values as $key => $val) {
+                $keyLower = Str::lower((string) $key);
+                if (is_numeric($val) && (float) $val > 0 &&
+                    Str::contains($keyLower, ['fuel', 'carburant', 'gasoil', 'litr'])) {
+                    return round((float) $val, 2);
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function fetchAssets(?string $customerReference = null, array $assetIds = []): Collection
     {
         $skip = 0;
