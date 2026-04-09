@@ -8,7 +8,8 @@ import FormSelect from '@/components/ui/FormSelect';
 import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
-import { Plus, FileText, Image, Filter, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { Plus, FileText, Image, Filter, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Search, X, Download } from 'lucide-react';
+import { exportToCsv } from '@/utils/csv-export';
 import { clsx } from 'clsx';
 
 interface Document {
@@ -220,16 +221,37 @@ export default function TrackingsIndex({ trackings, filters, transporters, truck
 
             <Card padding={false}>
                 <div className="p-5">
-                    {/* Search */}
-                    <div className="mb-4 relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Rechercher dans toutes les colonnes..."
-                            className="w-full sm:w-80 pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
-                        />
+                    {/* Search + Export */}
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Rechercher dans toutes les colonnes..."
+                                className="w-full sm:w-80 pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
+                            />
+                        </div>
+                        {processedData.length > 0 && (
+                            <button
+                                onClick={() => exportToCsv(processedData, [
+                                    { key: 'reference', label: 'Référence' },
+                                    { key: 'truck', label: 'Camion' },
+                                    { key: 'driver', label: 'Conducteur' },
+                                    { key: 'provider', label: 'Fournisseur' },
+                                    { key: 'provider_net_weight', label: 'Poids Fournisseur' },
+                                    { key: 'client_net_weight', label: 'Poids Client' },
+                                    { key: 'gap', label: 'Écart' },
+                                    { key: 'client_date', label: 'Date Client' },
+                                    { key: 'product', label: 'Produit' },
+                                ], `suivi-transport-${new Date().toISOString().slice(0, 10)}.csv`)}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition"
+                                title="Exporter en Excel"
+                            >
+                                <Download size={14} /> Excel
+                            </button>
+                        )}
                     </div>
 
                     {/* Desktop table */}
