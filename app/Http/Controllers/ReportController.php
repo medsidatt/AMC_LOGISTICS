@@ -31,24 +31,6 @@ class ReportController extends Controller
         return Excel::download(new TransportTrackingExport($filters), $name);
     }
 
-    public function exportTransportPdf(Request $request)
-    {
-        $filters = $request->only(['truck_id', 'driver_id', 'provider_id', 'transporter_id', 'product', 'from', 'to']);
-        $export = new TransportTrackingExport($filters);
-        $data = $export->collection();
-
-        $totals = [
-            'count' => $data->count(),
-            'provider_net' => $data->sum('poids_fournisseur_net'),
-            'client_net' => $data->sum('poids_client_net'),
-            'gap' => $data->sum('ecart'),
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.transport-tracking', compact('data', 'totals', 'filters'))
-            ->setPaper('a4', 'landscape');
-
-        return $pdf->download('suivi-transport-' . now()->format('d-m-Y') . '.pdf');
-    }
 
     // ── Fleet ──
 
