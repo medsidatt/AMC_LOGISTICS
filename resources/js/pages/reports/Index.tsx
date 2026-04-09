@@ -2,108 +2,115 @@ import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
-import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
-import { FileSpreadsheet, Truck, Wrench, Route, AlertTriangle } from 'lucide-react';
+import { FileSpreadsheet, Truck, Wrench, Route, AlertTriangle, Calendar, Download } from 'lucide-react';
+import { clsx } from 'clsx';
 
-function ReportCard({ title, description, icon, children }: { title: string; description: string; icon: React.ReactNode; children: React.ReactNode }) {
+function ReportSection({ title, description, icon, color, children }: {
+    title: string; description: string; icon: React.ReactNode; color: string; children: React.ReactNode;
+}) {
     return (
-        <Card>
-            <div className="flex items-start gap-3 mb-4">
-                <div className="p-2.5 rounded-xl bg-[var(--color-primary)]/10 shrink-0">{icon}</div>
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+            <div className={clsx('px-5 py-4 flex items-center gap-3', color)}>
+                <div className="p-2 rounded-lg bg-white/20">{icon}</div>
                 <div>
-                    <h3 className="text-lg font-semibold text-[var(--color-text)]">{title}</h3>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{description}</p>
+                    <h3 className="text-base font-semibold text-white">{title}</h3>
+                    <p className="text-xs text-white/70">{description}</p>
                 </div>
             </div>
-            {children}
-        </Card>
+            <div className="p-5">{children}</div>
+        </div>
     );
 }
 
-function DownloadButton({ href, label }: { href: string; label: string }) {
+function ExcelBtn({ href, label }: { href: string; label: string }) {
     return (
-        <a href={href} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition">
-            <FileSpreadsheet size={16} />
-            {label}
+        <a href={href} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition shadow-sm">
+            <Download size={16} /> {label}
         </a>
     );
 }
 
 export default function ReportsIndex() {
-    const [transportFrom, setTransportFrom] = useState('');
-    const [transportTo, setTransportTo] = useState('');
-    const [maintenanceFrom, setMaintenanceFrom] = useState('');
-    const [maintenanceTo, setMaintenanceTo] = useState('');
+    const [tFrom, setTFrom] = useState('');
+    const [tTo, setTTo] = useState('');
+    const [mFrom, setMFrom] = useState('');
+    const [mTo, setMTo] = useState('');
 
-    const transportParams = new URLSearchParams();
-    if (transportFrom) transportParams.set('from', transportFrom);
-    if (transportTo) transportParams.set('to', transportTo);
-    const tq = transportParams.toString() ? '?' + transportParams.toString() : '';
-
-    const maintenanceParams = new URLSearchParams();
-    if (maintenanceFrom) maintenanceParams.set('from', maintenanceFrom);
-    if (maintenanceTo) maintenanceParams.set('to', maintenanceTo);
-    const mq = maintenanceParams.toString() ? '?' + maintenanceParams.toString() : '';
+    const tq = [tFrom && `from=${tFrom}`, tTo && `to=${tTo}`].filter(Boolean).join('&');
+    const mq = [mFrom && `from=${mFrom}`, mTo && `to=${mTo}`].filter(Boolean).join('&');
 
     return (
         <AuthenticatedLayout title="Rapports">
             <Head title="Rapports" />
 
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-[var(--color-text)]">Centre de rapports</h1>
+                <p className="text-sm text-[var(--color-text-muted)] mt-1">Exportez vos données en fichiers Excel pour analyse externe</p>
+            </div>
+
             <div className="grid lg:grid-cols-2 gap-6">
-                {/* Transport Tracking */}
-                <ReportCard
+                {/* Transport */}
+                <ReportSection
                     title="Suivi Transport"
-                    description="Rotations, poids fournisseur/client, écarts par période (22→21)"
-                    icon={<Route size={20} className="text-[var(--color-primary)]" />}
+                    description="Rotations, poids, écarts — période 22→21"
+                    icon={<Route size={20} className="text-white" />}
+                    color="bg-[var(--color-primary)]"
                 >
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                        <FormInput label="Du" type="date" name="from" value={transportFrom} onChange={(e) => setTransportFrom(e.target.value)} />
-                        <FormInput label="Au" type="date" name="to" value={transportTo} onChange={(e) => setTransportTo(e.target.value)} />
+                        <FormInput label="Du" type="date" name="tf" value={tFrom} onChange={(e) => setTFrom(e.target.value)} />
+                        <FormInput label="Au" type="date" name="tt" value={tTo} onChange={(e) => setTTo(e.target.value)} />
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <DownloadButton href={`/reports/transport/excel${tq}`} label="Excel" />
+                        <ExcelBtn href={`/reports/transport/excel${tq ? '?' + tq : ''}`} label="Exporter les rotations" />
                     </div>
-                </ReportCard>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : référence, dates, camion, conducteur, fournisseur, poids brut/tare/net, écart</p>
+                </ReportSection>
 
                 {/* Fleet */}
-                <ReportCard
+                <ReportSection
                     title="Flotte de camions"
-                    description="Tous les camions avec compteur km, état maintenance, GPS Fleeti"
-                    icon={<Truck size={20} className="text-[var(--color-info)]" />}
+                    description="État complet de la flotte avec maintenance et GPS"
+                    icon={<Truck size={20} className="text-white" />}
+                    color="bg-cyan-600"
                 >
                     <div className="flex flex-wrap gap-2">
-                        <DownloadButton href="/reports/fleet/excel?active_only=true" label="Camions actifs (Excel)" />
-                        <DownloadButton href="/reports/fleet/excel?active_only=false" label="Tous les camions (Excel)" />
+                        <ExcelBtn href="/reports/fleet/excel?active_only=true" label="Camions actifs" />
+                        <ExcelBtn href="/reports/fleet/excel?active_only=false" label="Tous les camions" />
                     </div>
-                </ReportCard>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : matricule, transporteur, km, maintenance, GPS Fleeti, dernière sync</p>
+                </ReportSection>
 
                 {/* Maintenance History */}
-                <ReportCard
+                <ReportSection
                     title="Historique maintenance"
-                    description="Toutes les maintenances effectuées avec km, règle, notes"
-                    icon={<Wrench size={20} className="text-emerald-500" />}
+                    description="Toutes les maintenances enregistrées"
+                    icon={<Wrench size={20} className="text-white" />}
+                    color="bg-emerald-600"
                 >
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                        <FormInput label="Du" type="date" name="mfrom" value={maintenanceFrom} onChange={(e) => setMaintenanceFrom(e.target.value)} />
-                        <FormInput label="Au" type="date" name="mto" value={maintenanceTo} onChange={(e) => setMaintenanceTo(e.target.value)} />
+                        <FormInput label="Du" type="date" name="mf" value={mFrom} onChange={(e) => setMFrom(e.target.value)} />
+                        <FormInput label="Au" type="date" name="mt" value={mTo} onChange={(e) => setMTo(e.target.value)} />
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <DownloadButton href={`/reports/maintenance/excel${mq}`} label="Historique (Excel)" />
+                        <ExcelBtn href={`/reports/maintenance/excel${mq ? '?' + mq : ''}`} label="Exporter l'historique" />
                     </div>
-                </ReportCard>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : date, camion, type, km, seuil prévu, intervalle règle, notes</p>
+                </ReportSection>
 
                 {/* Maintenance Due */}
-                <ReportCard
+                <ReportSection
                     title="Maintenance requise"
-                    description="Camions nécessitant une maintenance urgente ou à prévoir"
-                    icon={<AlertTriangle size={20} className="text-amber-500" />}
+                    description="Camions nécessitant une intervention"
+                    icon={<AlertTriangle size={20} className="text-white" />}
+                    color="bg-amber-600"
                 >
                     <div className="flex flex-wrap gap-2">
-                        <DownloadButton href="/reports/maintenance-due/excel?only_due=true" label="Urgents seulement (Excel)" />
-                        <DownloadButton href="/reports/maintenance-due/excel?only_due=false" label="Tous les camions (Excel)" />
+                        <ExcelBtn href="/reports/maintenance-due/excel?only_due=true" label="Urgents seulement" />
+                        <ExcelBtn href="/reports/maintenance-due/excel?only_due=false" label="Tous avec état" />
                     </div>
-                </ReportCard>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : matricule, type maintenance, intervalle, compteur, restant, dernière date</p>
+                </ReportSection>
             </div>
         </AuthenticatedLayout>
     );
