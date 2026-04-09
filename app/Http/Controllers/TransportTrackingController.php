@@ -11,10 +11,13 @@ use App\Models\Provider;
 use App\Models\Transporter;
 use App\Models\TransportTracking;
 use App\Models\Truck;
+use App\Services\SharePointStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -113,7 +116,7 @@ class TransportTrackingController extends Controller
                     'original_name' => $d->original_name,
                     'mime_type' => $d->mime_type,
                     'type' => $d->type,
-                    'file_url' => asset('storage/' . $d->file_path),
+                    'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
                 ]),
                 'truck' => $t->truck ? ['id' => $t->truck->id, 'matricule' => $t->truck->matricule] : null,
                 'driver' => $t->driver ? ['id' => $t->driver->id, 'name' => $t->driver->name] : null,
@@ -264,9 +267,8 @@ class TransportTrackingController extends Controller
         /** ---------------- Files Upload ---------------- */
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
-                $path = $file->store('transport_trackings', 'public');
+                $upload = $this->uploadFile($file);
 
-                // Determine file type from filename or default to 'other'
                 $originalName = strtolower($file->getClientOriginalName());
                 $type = 'other';
                 if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
@@ -279,11 +281,13 @@ class TransportTrackingController extends Controller
 
                 Document::create([
                     'transport_tracking_id' => $record->id,
-                    'file_path' => $path,
+                    'file_path' => $upload['path'],
                     'original_name' => $file->getClientOriginalName(),
                     'mime_type' => $file->getMimeType(),
                     'size' => $file->getSize(),
                     'type' => $type,
+                    'sharepoint_id' => $upload['sharepoint_id'] ?? null,
+                    'sharepoint_url' => $upload['url'] ?? null,
                 ]);
             }
         }
@@ -483,7 +487,7 @@ class TransportTrackingController extends Controller
                     'original_name' => $d->original_name,
                     'mime_type' => $d->mime_type,
                     'type' => $d->type,
-                    'file_url' => asset('storage/' . $d->file_path),
+                    'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
                 ]),
             ],
         ]);
@@ -547,7 +551,7 @@ class TransportTrackingController extends Controller
                     'original_name' => $d->original_name,
                     'mime_type' => $d->mime_type,
                     'type' => $d->type,
-                    'file_url' => Storage::url($d->file_path),
+                    'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
                 ])->toArray(),
             ],
             'transporters' => $transporters->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
@@ -638,9 +642,8 @@ class TransportTrackingController extends Controller
         /** ---------------- Files (Append mode) ---------------- */
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
-                $path = $file->store('transport_trackings', 'public');
+                $upload = $this->uploadFile($file);
 
-                // Determine file type from filename or default to 'other'
                 $originalName = strtolower($file->getClientOriginalName());
                 $type = 'other';
                 if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
@@ -653,11 +656,13 @@ class TransportTrackingController extends Controller
 
                 Document::create([
                     'transport_tracking_id' => $transportTracking->id,
-                    'file_path' => $path,
+                    'file_path' => $upload['path'],
                     'original_name' => $file->getClientOriginalName(),
                     'mime_type' => $file->getMimeType(),
                     'size' => $file->getSize(),
                     'type' => $type,
+                    'sharepoint_id' => $upload['sharepoint_id'] ?? null,
+                    'sharepoint_url' => $upload['url'] ?? null,
                 ]);
             }
         }
@@ -677,8 +682,10 @@ class TransportTrackingController extends Controller
             ->where('transport_tracking_id', $tracking->id)
             ->firstOrFail();
 
-        // Delete file from storage
-        if (Storage::disk('public')->exists($document->file_path)) {
+        // Delete file from storage (SharePoint or local)
+        if (Str::startsWith($document->file_path, 'sharepoint://')) {
+            app(SharePointStorageService::class)->delete($document->file_path);
+        } elseif (Storage::disk('public')->exists($document->file_path)) {
             Storage::disk('public')->delete($document->file_path);
         }
 
@@ -1012,5 +1019,53 @@ EOT;
 
     }
 
+    /**
+     * Upload a file to SharePoint (with local fallback).
+     * Returns [path, url, sharepoint_id]
+     */
+    private function uploadFile(UploadedFile $file, string $folder = 'transport_trackings'): array
+    {
+        $sp = app(SharePointStorageService::class);
+
+        if ($sp->isConfigured()) {
+            $result = $sp->upload($file, $folder);
+            if ($result['success']) {
+                return [
+                    'path' => $result['path'],
+                    'url' => $result['url'],
+                    'sharepoint_id' => $result['sharepoint_id'] ?? null,
+                ];
+            }
+        }
+
+        // Fallback to local storage
+        $path = $file->store($folder, 'public');
+        return [
+            'path' => $path,
+            'url' => asset('storage/' . $path),
+            'sharepoint_id' => null,
+        ];
+    }
+
+    /**
+     * Get the public URL for a document (SharePoint or local).
+     */
+    private function getDocumentUrl(Document $doc): string
+    {
+        if ($doc->sharepoint_url) {
+            return $doc->sharepoint_url;
+        }
+
+        if (Str::startsWith($doc->file_path, 'sharepoint://')) {
+            $sp = app(SharePointStorageService::class);
+            $url = $sp->getUrl($doc->file_path);
+            if ($url) {
+                $doc->update(['sharepoint_url' => $url]);
+                return $url;
+            }
+        }
+
+        return asset('storage/' . $doc->file_path);
+    }
 }
 
