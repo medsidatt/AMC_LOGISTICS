@@ -47,6 +47,7 @@ export default function MyTrips({ driver, trips, truck }: Props) {
                         ]}
                         perPage={trips.per_page}
                         searchable
+                        exportable
                     />
                 </div>
                 <div className="px-5 pb-5">

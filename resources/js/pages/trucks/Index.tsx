@@ -76,6 +76,7 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
                             },
                         ]}
                         searchable
+                        exportable
                         searchKeys={['matricule', 'transporter']}
                     />
                 </div>

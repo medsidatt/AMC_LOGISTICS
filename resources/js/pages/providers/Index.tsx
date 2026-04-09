@@ -84,6 +84,7 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                         ]}
                         perPage={providers.per_page}
                         searchable
+                        exportable
                     />
                 </div>
                 <div className="px-5 pb-5">
