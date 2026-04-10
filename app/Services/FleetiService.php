@@ -111,6 +111,28 @@ class FleetiService
         return $results;
     }
 
+    /**
+     * Fetch a single asset by ID via /v1/Asset/Get.
+     * This endpoint returns FULL accessory sensor data including fuel (sensorType=15),
+     * which is NOT available via /v1/Asset/Search.
+     */
+    public function fetchAssetById(string $assetId): ?array
+    {
+        $response = Http::timeout(20)
+            ->retry(2, 500)
+            ->withHeaders($this->authHeaders())
+            ->get($this->baseUrl() . '/v1/Asset/Get', ['Id' => $assetId])
+            ->throw()
+            ->json();
+
+        if (data_get($response, 'isSuccess') === false) {
+            return null;
+        }
+
+        // Asset/Get returns result as 'results' or 'result' depending on API version
+        return data_get($response, 'results') ?? data_get($response, 'result');
+    }
+
     public function extractOdometerKilometers(array $asset): ?float
     {
         $candidates = collect();
@@ -153,7 +175,13 @@ class FleetiService
 
     /**
      * Extract fuel level in litres from Fleeti asset data.
-     * Searches counters, providerSensors, and accessories for fuel-related readings.
+     *
+     * IMPORTANT: This only works with data from /v1/Asset/Get (fetchAssetById),
+     * NOT from /v1/Asset/Search (fetchAssets). The Search endpoint returns
+     * accessories with empty providerSensors, while Get returns the full data.
+     *
+     * Per Fleeti support: fuel level sensors use sensorType = 15 inside
+     * gateways[].accessories[].providerSensors with units = 'litre'.
      */
     public function extractFuelLitres(array $asset): ?float
     {
@@ -161,29 +189,23 @@ class FleetiService
         $gateways = collect(data_get($asset, 'gateways', []));
 
         foreach ($gateways as $gateway) {
-            foreach (collect(data_get($gateway, 'counters', [])) as $counter) {
-                $unitType = Str::lower((string) data_get($counter, 'unitType', ''));
-                $value = data_get($counter, 'value');
-                if (is_numeric($value) && $this->isFuelUnit($unitType)) {
-                    $candidates->push((float) $value);
-                }
-            }
-
-            foreach (collect(data_get($gateway, 'providerSensors', [])) as $sensor) {
-                $units = Str::lower((string) data_get($sensor, 'units', ''));
-                $name = Str::lower((string) data_get($sensor, 'name', ''));
-                $value = data_get($sensor, 'value');
-                if (is_numeric($value) && ($this->isFuelUnit($units) || $this->isFuelName($name))) {
-                    $candidates->push((float) $value);
-                }
-            }
-
+            // Primary: sensorType = 15 inside accessories (confirmed by Fleeti support)
             foreach (collect(data_get($gateway, 'accessories', [])) as $accessory) {
                 foreach (collect(data_get($accessory, 'providerSensors', [])) as $sensor) {
-                    $units = Str::lower((string) data_get($sensor, 'units', ''));
-                    $name = Str::lower((string) data_get($sensor, 'name', ''));
+                    if ((int) data_get($sensor, 'sensorType') === 15) {
+                        $value = data_get($sensor, 'value');
+                        if (is_numeric($value) && (float) $value >= 0) {
+                            $candidates->push((float) $value);
+                        }
+                    }
+                }
+            }
+
+            // Fallback: sensorType = 15 at gateway level
+            foreach (collect(data_get($gateway, 'providerSensors', [])) as $sensor) {
+                if ((int) data_get($sensor, 'sensorType') === 15) {
                     $value = data_get($sensor, 'value');
-                    if (is_numeric($value) && ($this->isFuelUnit($units) || $this->isFuelName($name))) {
+                    if (is_numeric($value) && (float) $value >= 0) {
                         $candidates->push((float) $value);
                     }
                 }
