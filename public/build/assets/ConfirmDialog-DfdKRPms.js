@@ -1,6 +1,0 @@
-import{c as x}from"./createLucideIcon-B2WMvdNf.js";import{r as u,j as e,a as p}from"./app-xR9nSoEn.js";import{M as f}from"./Modal-CVR4mRIB.js";import{B as i}from"./Button-CoVWRrzm.js";import{T as h}from"./triangle-alert-Dor4FuDL.js";/**
- * @license lucide-react v1.7.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const j=[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"M12 5v14",key:"s699le"}]],k=x("plus",j);function M({open:n,onClose:r,title:c="Confirmer la suppression",message:o="Cette action est irréversible.",confirmLabel:l="Supprimer",deleteUrl:s,onConfirm:t}){const[d,a]=u.useState(!1),m=()=>{if(t){t(),r();return}s&&(a(!0),p.delete(s,{onFinish:()=>{a(!1),r()}}))};return e.jsx(f,{open:n,onClose:r,title:c,size:"sm",children:e.jsxs("div",{className:"text-center",children:[e.jsx("div",{className:"w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mx-auto mb-4",children:e.jsx(h,{size:28,className:"text-[var(--color-danger)]"})}),e.jsx("p",{className:"text-sm text-[var(--color-text-secondary)] mb-6",children:o}),e.jsxs("div",{className:"flex items-center justify-center gap-3",children:[e.jsx(i,{variant:"secondary",onClick:r,children:"Annuler"}),e.jsx(i,{variant:"danger",onClick:m,loading:d,children:l})]})]})})}export{M as C,k as P};
