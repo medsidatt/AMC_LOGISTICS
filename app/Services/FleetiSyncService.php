@@ -81,10 +81,26 @@ class FleetiSyncService
             $summary['trucks_matched']++;
 
             try {
-                $fuelLitres = $this->fleetiService->extractFuelLitres($asset);
+                // Fetch full asset details via /v1/Asset/Get — required to get fuel sensor data
+                // (sensorType=15) which is NOT returned by /v1/Asset/Search
+                $assetId = data_get($asset, 'id');
+                $fuelLitres = null;
+                if ($assetId) {
+                    try {
+                        $fullAsset = $this->fleetiService->fetchAssetById($assetId);
+                        if ($fullAsset) {
+                            $fuelLitres = $this->fleetiService->extractFuelLitres($fullAsset);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('Failed to fetch asset details for fuel', [
+                            'asset_id' => $assetId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
 
                 $truck->update(array_filter([
-                    'fleeti_asset_id' => data_get($asset, 'id') ?: $truck->fleeti_asset_id,
+                    'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
                     'fleeti_gateway_id' => data_get($asset, 'gateways.0.provider.gatewayId') ?? $truck->fleeti_gateway_id,
                     'fleeti_last_fuel_level' => $fuelLitres,
                 ], fn ($v) => !is_null($v)));
