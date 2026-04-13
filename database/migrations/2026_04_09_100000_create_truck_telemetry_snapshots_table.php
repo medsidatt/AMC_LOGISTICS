@@ -18,7 +18,7 @@ return new class extends Migration
 
             // Timestamps
             $table->timestamp('recorded_at')->nullable();   // when the reading actually happened (Fleeti timestamp)
-            $table->timestamp('synced_at');                  // when our sync fetched it
+            $table->timestamp('synced_at')->useCurrent();     // when our sync fetched it
             $table->string('source', 30)->default('fleeti'); // fleeti, checklist, manual
 
             // Core counters
