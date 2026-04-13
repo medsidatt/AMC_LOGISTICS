@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, Wifi, WifiOff, Fuel } from 'lucide-react';
 
 interface Truck {
     id: number;
@@ -16,6 +16,9 @@ interface Truck {
     maintenance_type: string;
     is_active: boolean;
     total_kilometers: number;
+    fleeti_connected: boolean;
+    fleeti_last_fuel_level: number | null;
+    fleeti_last_synced_at: string | null;
     level: string;
     remaining: number | string;
     unit: string;
@@ -33,6 +36,12 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
         const variant = level === 'red' ? 'danger' : level === 'yellow' ? 'warning' : 'success';
         const label = level === 'red' ? 'Urgent' : level === 'yellow' ? 'Bientôt' : 'OK';
         return <Badge variant={variant}>{label}</Badge>;
+    };
+
+    const fuelBadge = (litres: number | null) => {
+        if (litres == null) return <span className="text-[var(--color-text-muted)]">-</span>;
+        const variant = litres < 30 ? 'danger' : litres < 80 ? 'warning' : 'success';
+        return <Badge variant={variant}>{litres.toFixed(0)} L</Badge>;
     };
 
     return (
@@ -59,23 +68,32 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
                         columns={[
                             { key: 'matricule', label: 'Matricule' },
                             { key: 'transporter', label: 'Transporteur', hideOnMobile: true },
-                            { key: 'maintenance_type', label: 'Type Maintenance', hideOnMobile: true },
                             { key: 'total_kilometers', label: 'Compteur (km)', hideOnMobile: true, render: (r) => r.total_kilometers?.toLocaleString('fr-FR') ?? '-' },
+                            {
+                                key: 'fleeti_connected', label: 'GPS', sortable: false,
+                                render: (r) => r.fleeti_connected
+                                    ? <Wifi size={14} className="inline text-emerald-500" />
+                                    : <WifiOff size={14} className="inline text-[var(--color-text-muted)]" />,
+                            },
+                            { key: 'fleeti_last_fuel_level', label: 'Carburant', render: (r) => fuelBadge(r.fleeti_last_fuel_level) },
                             { key: 'level', label: 'État Maintenance', render: (r) => levelBadge(r.level) },
                             { key: 'remaining', label: 'Restant', hideOnMobile: true, render: (r) => `${r.remaining} ${r.unit}` },
+                            { key: 'fleeti_last_synced_at', label: 'Dernière sync', hideOnMobile: true, render: (r) => r.fleeti_last_synced_at ?? '-' },
                             { key: 'is_active', label: 'Actif', render: (r) => <Badge variant={r.is_active ? 'success' : 'muted'}>{r.is_active ? 'Oui' : 'Non'}</Badge> },
                             {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        viewHref={`/trucks/${r.id}/show`}
-                                        editHref={`/trucks/${r.id}/edit`}
+                                        viewHref={`/trucks/${r.id}/show-page`}
+                                        editHref={`/trucks/${r.id}/edit-page`}
                                         onDelete={() => setDeleteUrl(`/trucks/${r.id}/destroy`)}
                                     />
                                 ),
                             },
                         ]}
                         searchable
+                        exportable
+                        exportFilename={`camions-${new Date().toISOString().slice(0, 10)}.csv`}
                         searchKeys={['matricule', 'transporter']}
                     />
                 </div>

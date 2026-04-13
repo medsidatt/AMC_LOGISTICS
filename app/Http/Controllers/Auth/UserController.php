@@ -70,11 +70,14 @@ class UserController extends Controller
             'roles.*' => ['integer', 'exists:roles,id'],
         ]);
 
-        $user = User::firstOrCreate([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => bcrypt('password'),
-        ]);
+        $user = User::firstOrCreate(
+            ['email' => $request->email],
+            [
+                'name' => $request->name,
+                'password' => bcrypt('password'),
+                'must_change_password' => true,
+            ]
+        );
 
         if (! empty($request->roles)) {
             $roles = Role::query()->whereIn('id', $request->roles)->pluck('name');
@@ -227,5 +230,28 @@ class UserController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Compte mis à jour avec succès.');
+    }
+
+    public function forcePassword()
+    {
+        if (!auth()->user()->must_change_password) {
+            return redirect()->route('home');
+        }
+
+        return Inertia::render('auth/ForcePassword');
+    }
+
+    public function forcePasswordUpdate(Request $request)
+    {
+        $request->validate([
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        $user = auth()->user();
+        $user->password = bcrypt($request->password);
+        $user->must_change_password = false;
+        $user->save();
+
+        return redirect()->route('home')->with('success', 'Mot de passe mis à jour avec succès.');
     }
 }
