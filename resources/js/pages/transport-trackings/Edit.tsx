@@ -40,7 +40,7 @@ interface TrackingData {
 interface TruckOption {
     id: number;
     matricule: string;
-    driver_id: number | null;
+    last_driver_id: number | null;
     transporter_id: number | null;
 }
 
@@ -83,17 +83,15 @@ export default function TrackingsEdit({ transportTracking: t, transporters, truc
     const [previews, setPreviews] = useState<Record<number, string>>({});
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+    // Auto-select last driver when truck changes (only if different from the
+    // originally loaded driver — avoids overwriting the existing assignment on
+    // first render).
     useEffect(() => {
-        const gross = parseFloat(String(form.data.provider_gross_weight));
-        const tare = parseFloat(String(form.data.provider_tare_weight));
-        if (!isNaN(gross) && !isNaN(tare)) form.setData('provider_net_weight', String(gross - tare));
-    }, [form.data.provider_gross_weight, form.data.provider_tare_weight]);
-
-    useEffect(() => {
-        const gross = parseFloat(String(form.data.client_gross_weight));
-        const tare = parseFloat(String(form.data.client_tare_weight));
-        if (!isNaN(gross) && !isNaN(tare)) form.setData('client_net_weight', String(gross - tare));
-    }, [form.data.client_gross_weight, form.data.client_tare_weight]);
+        const selected = trucks.find((tk) => tk.id === Number(form.data.truck_id));
+        if (selected && selected.last_driver_id && Number(form.data.truck_id) !== t.truck_id) {
+            form.setData('driver_id', selected.last_driver_id);
+        }
+    }, [form.data.truck_id]);
 
     const addFiles = (newFiles: FileList | null) => {
         if (!newFiles) return;

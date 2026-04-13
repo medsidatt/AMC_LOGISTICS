@@ -12,7 +12,10 @@ use App\Models\Transporter;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\SharePointStorageService;
+use App\Services\TripSegmentBuilderService;
+use App\Services\WeightGapDetector;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -154,7 +157,9 @@ class TransportTrackingController extends Controller
                 return [
                     'id' => $truck->id,
                     'matricule' => $truck->matricule,
-                    'driver_id' => $truck->transportTrackings->first()?->driver_id,
+                    'last_driver_id' => $truck->transportTrackings()
+                        ->latest('client_date')
+                        ->value('driver_id'),
                     'transporter_id' => $truck?->transporter_id,
                 ];
             });
@@ -263,6 +268,9 @@ class TransportTrackingController extends Controller
             // Note: rotations_since_maintenance is now calculated dynamically from transport_trackings
             $truck->increment('total_rotations');
         }
+
+        // Theft-detection hooks: rebuild trip segment + weight-gap check
+        $this->runTheftDetectionHooks($record->fresh());
 
         /** ---------------- Files Upload ---------------- */
         if ($request->hasFile('files')) {
@@ -510,7 +518,9 @@ class TransportTrackingController extends Controller
             ->map(fn ($truck) => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'driver_id' => $truck->transportTrackings()->latest()->value('driver_id'),
+                'last_driver_id' => $truck->transportTrackings()
+                    ->latest('client_date')
+                    ->value('driver_id'),
                 'transporter_id' => $truck->transporter_id,
             ]);
         $drivers = Driver::withTrashed()->orderBy('name')->get();
@@ -638,6 +648,9 @@ class TransportTrackingController extends Controller
 
         /** ---------------- Update Record ---------------- */
         $transportTracking->update($data);
+
+        // Theft-detection hooks: rebuild trip segment + weight-gap check
+        $this->runTheftDetectionHooks($transportTracking->fresh());
 
         /** ---------------- Files (Append mode) ---------------- */
         if ($request->hasFile('files')) {
@@ -1066,6 +1079,61 @@ EOT;
         }
 
         return asset('storage/' . $doc->file_path);
+    }
+
+    /**
+     * Trip replay Inertia page — rendered as a shell; the heavy payload
+     * (snapshots, stops, incidents) is fetched client-side from
+     * /api/trip-replay/{tt} so large trails don't bloat the HTML response.
+     */
+    public function replayPage(TransportTracking $transportTracking)
+    {
+        $transportTracking->load(['truck:id,matricule', 'provider:id,name']);
+
+        return Inertia::render('transport-trackings/Replay', [
+            'transport' => [
+                'id' => $transportTracking->id,
+                'reference' => $transportTracking->reference,
+                'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
+                'client_date' => $transportTracking->client_date?->format('d/m/Y'),
+                'provider_net_weight' => $transportTracking->provider_net_weight,
+                'client_net_weight' => $transportTracking->client_net_weight,
+                'gap' => $transportTracking->gap,
+                'start_km' => $transportTracking->start_km,
+                'end_km' => $transportTracking->end_km,
+                'truck' => $transportTracking->truck ? [
+                    'id' => $transportTracking->truck->id,
+                    'matricule' => $transportTracking->truck->matricule,
+                ] : null,
+                'provider' => $transportTracking->provider ? [
+                    'id' => $transportTracking->provider->id,
+                    'name' => $transportTracking->provider->name,
+                ] : null,
+            ],
+            'dataUrl' => url("/api/trip-replay/{$transportTracking->id}"),
+        ]);
+    }
+
+    /**
+     * Rebuild the trip segment for this transport and run the weight-gap
+     * detector. Best-effort: never blocks the caller on failure.
+     */
+    private function runTheftDetectionHooks(TransportTracking $tt): void
+    {
+        try {
+            /** @var TripSegmentBuilderService $builder */
+            $builder = app(TripSegmentBuilderService::class);
+            $builder->buildForTransport($tt);
+
+            /** @var WeightGapDetector $weightGap */
+            $weightGap = app(WeightGapDetector::class);
+            $weightGap->inspect($tt);
+        } catch (\Throwable $e) {
+            Log::warning('Theft-detection hooks failed on transport save.', [
+                'transport_tracking_id' => $tt->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
 

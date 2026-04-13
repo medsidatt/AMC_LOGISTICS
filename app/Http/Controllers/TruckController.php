@@ -201,9 +201,9 @@ class TruckController extends Controller
                 'transporter' => $t->transporter?->name,
                 'maintenance_type' => $t->maintenance_type,
                 'is_active' => $t->is_active,
-                'total_kilometers' => $t->total_kilometers,
+                'total_kilometers' => (float) $t->total_kilometers,
                 'fleeti_connected' => !empty($t->fleeti_asset_id),
-                'fleeti_last_fuel_level' => $t->fleeti_last_fuel_level,
+                'fleeti_last_fuel_level' => $t->fleeti_last_fuel_level !== null ? (float) $t->fleeti_last_fuel_level : null,
                 'fleeti_last_synced_at' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
                 'level' => $t->maintenanceLevelByType(),
                 'remaining' => $t->maintenanceRemainingByType(),
@@ -447,5 +447,47 @@ class TruckController extends Controller
     public function replaceMaintenanceProfileInterval(Request $request, Truck $truck)
     {
         return app(MaintenanceController::class)->updateProfileInterval($request, $truck);
+    }
+
+    /**
+     * Live fleet map page — lists every active truck with its last known
+     * telemetry cache (no extra joins, everything is on the trucks table).
+     */
+    public function mapPage()
+    {
+        $trucks = Truck::query()
+            ->where('is_active', true)
+            ->orderBy('matricule')
+            ->get([
+                'id',
+                'matricule',
+                'fleeti_last_latitude',
+                'fleeti_last_longitude',
+                'fleeti_last_heading_deg',
+                'fleeti_last_speed_kmh',
+                'fleeti_last_movement_status',
+                'fleeti_last_ignition_on',
+                'fleeti_last_fuel_level',
+                'fleeti_last_synced_at',
+            ])
+            ->map(fn (Truck $t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'latitude' => $t->fleeti_last_latitude !== null ? (float) $t->fleeti_last_latitude : null,
+                'longitude' => $t->fleeti_last_longitude !== null ? (float) $t->fleeti_last_longitude : null,
+                'heading' => $t->fleeti_last_heading_deg !== null ? (float) $t->fleeti_last_heading_deg : null,
+                'speed' => $t->fleeti_last_speed_kmh !== null ? (float) $t->fleeti_last_speed_kmh : null,
+                'movement_status' => $t->fleeti_last_movement_status,
+                'ignition_on' => $t->fleeti_last_ignition_on,
+                'fuel_level' => $t->fleeti_last_fuel_level !== null ? (float) $t->fleeti_last_fuel_level : null,
+                'last_sync' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ])
+            ->filter(fn ($t) => $t['latitude'] !== null && $t['longitude'] !== null)
+            ->values()
+            ->all();
+
+        return \Inertia\Inertia::render('logistics/FleetMap', [
+            'trucks' => $trucks,
+        ]);
     }
 }
