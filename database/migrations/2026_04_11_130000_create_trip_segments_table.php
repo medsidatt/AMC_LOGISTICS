@@ -21,8 +21,8 @@ return new class extends Migration
                 ->constrained('transport_trackings')
                 ->cascadeOnDelete();
 
-            $table->timestamp('started_at');
-            $table->timestamp('ended_at');
+            $table->timestamp('started_at')->useCurrent();
+            $table->timestamp('ended_at')->useCurrent();
 
             $table->foreignId('start_snapshot_id')
                 ->nullable()
