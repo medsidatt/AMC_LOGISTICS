@@ -13,7 +13,14 @@ class FleetiSyncService
     public function __construct(
         private readonly FleetiService $fleetiService,
         private readonly TruckRepository $truckRepository,
-        private readonly KilometerService $kilometerService
+        private readonly KilometerService $kilometerService,
+        private readonly EngineHoursService $engineHoursService,
+        private readonly TelemetrySnapshotService $telemetrySnapshotService,
+        private readonly FuelTrackingService $fuelTrackingService,
+        private readonly FuelEventDetectorService $fuelEventDetector,
+        private readonly StopDetectorService $stopDetectorService,
+        private readonly PlaceClassifierService $placeClassifierService,
+        private readonly UnauthorizedStopDetector $unauthorizedStopDetector
     ) {
     }
 
@@ -24,16 +31,7 @@ class FleetiSyncService
             : $this->truckRepository->getAllForFleetiMatching();
 
         if ($candidateTrucks->isEmpty()) {
-            return [
-                'assets_received' => 0,
-                'assets_with_km' => 0,
-                'trucks_matched' => 0,
-                'trucks_updated' => 0,
-                'trackings_created' => 0,
-                'assets_skipped' => 0,
-                'errors' => [],
-                'note' => 'No trucks required synchronization.',
-            ];
+            return $this->emptySummary('No trucks required synchronization.');
         }
 
         $assetIds = $onlyRequired
@@ -41,113 +39,197 @@ class FleetiSyncService
             : [];
 
         if ($onlyRequired && empty($assetIds)) {
-            return [
-                'assets_received' => 0,
-                'assets_with_km' => 0,
-                'trucks_matched' => 0,
-                'trucks_updated' => 0,
-                'trackings_created' => 0,
-                'assets_skipped' => 0,
-                'errors' => [],
-                'note' => 'No trucks with Fleeti asset IDs required synchronization.',
-            ];
+            return $this->emptySummary('No trucks with Fleeti asset IDs required synchronization.');
         }
 
         $assets = $this->fleetiService->fetchAssets($customerReference, $assetIds);
+
         $summary = [
             'assets_received' => $assets->count(),
             'assets_with_km' => 0,
             'trucks_matched' => 0,
             'trucks_updated' => 0,
             'trackings_created' => 0,
+            'snapshots_created' => 0,
+            'engine_hour_trackings_created' => 0,
+            'fuel_trackings_created' => 0,
+            'fuel_events_detected' => 0,
+            'stops_closed' => 0,
+            'theft_incidents_opened' => 0,
             'assets_skipped' => 0,
             'errors' => [],
         ];
 
         foreach ($assets as $asset) {
-            $odometer = $this->fleetiService->extractOdometerKilometers($asset);
-            if (is_null($odometer)) {
-                $summary['assets_skipped']++;
-                continue;
-            }
+            $assetId = data_get($asset, 'id');
 
-            $summary['assets_with_km']++;
+            // Match truck first (cheap) before fetching full details
             $truck = $this->resolveTruck($asset, $candidateTrucks);
             if (! $truck) {
                 $summary['assets_skipped']++;
                 continue;
             }
 
+            // Fetch full asset details — only this endpoint exposes fuel sensor data.
+            $fullAsset = $asset;
+            if ($assetId) {
+                try {
+                    $fetched = $this->fleetiService->fetchAssetById($assetId);
+                    if ($fetched) {
+                        $fullAsset = $fetched;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to fetch asset details from Fleeti.', [
+                        'asset_id' => $assetId,
+                        'truck_id' => $truck->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Extract every telemetry field in one pass
+            $telemetry = $this->fleetiService->extractTelemetry($fullAsset);
+
+            if ($telemetry['odometer_km'] !== null) {
+                $summary['assets_with_km']++;
+            }
+
             $summary['trucks_matched']++;
 
             try {
-                // Fetch full asset details via /v1/Asset/Get — required to get fuel sensor data
-                // (sensorType=15) which is NOT returned by /v1/Asset/Search
-                $assetId = data_get($asset, 'id');
-                $fuelLitres = null;
-                if ($assetId) {
-                    try {
-                        $fullAsset = $this->fleetiService->fetchAssetById($assetId);
-                        if ($fullAsset) {
-                            $fuelLitres = $this->fleetiService->extractFuelLitres($fullAsset);
-                        }
-                    } catch (\Throwable $e) {
-                        Log::warning('Failed to fetch asset details for fuel', [
-                            'asset_id' => $assetId,
-                            'error' => $e->getMessage(),
-                        ]);
+                // Keep raw asset IDs fresh
+                $gatewayId = data_get($fullAsset, 'gateways.0.provider.gatewayId');
+                $truckUpdates = array_filter([
+                    'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
+                    'fleeti_gateway_id' => $gatewayId ?? $truck->fleeti_gateway_id,
+                    'fleeti_last_fuel_level' => $telemetry['fuel_litres'],
+                ], fn ($v) => ! is_null($v));
+
+                if (! empty($truckUpdates)) {
+                    $truck->update($truckUpdates);
+                }
+
+                // 1. Write the lossless snapshot (this also refreshes fleeti_last_* cache columns)
+                $snapshot = $this->telemetrySnapshotService->record(
+                    $truck->fresh(),
+                    $telemetry,
+                    $fullAsset,
+                    'fleeti'
+                );
+                $summary['snapshots_created']++;
+
+                $recordedAt = $snapshot->recorded_at ?? now();
+
+                // 2. Derived: odometer tracking
+                if ($telemetry['odometer_km'] !== null) {
+                    $odoResult = $this->kilometerService->applyExternalOdometerReading(
+                        $truck->fresh(),
+                        (float) $telemetry['odometer_km'],
+                        $recordedAt,
+                        'fleeti',
+                        $snapshot->id
+                    );
+                    if ($odoResult['updated']) {
+                        $summary['trucks_updated']++;
+                        $summary['trackings_created']++;
                     }
                 }
 
-                $truck->update(array_filter([
-                    'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
-                    'fleeti_gateway_id' => data_get($asset, 'gateways.0.provider.gatewayId') ?? $truck->fleeti_gateway_id,
-                    'fleeti_last_fuel_level' => $fuelLitres,
-                ], fn ($v) => !is_null($v)));
-
-                // Store fuel history if available
-                if ($fuelLitres !== null && $fuelLitres > 0) {
-                    \App\Models\FuelTracking::create([
-                        'truck_id' => $truck->id,
-                        'litres' => $fuelLitres,
-                        'kilometers_at' => $truck->fresh()->total_kilometers,
-                        'source' => 'fleeti',
-                    ]);
+                // 3. Derived: engine hours tracking
+                if ($telemetry['engine_hours'] !== null) {
+                    $hoursResult = $this->engineHoursService->applyExternalReading(
+                        $truck->fresh(),
+                        (float) $telemetry['engine_hours'],
+                        $recordedAt,
+                        'fleeti',
+                        $snapshot->id
+                    );
+                    if ($hoursResult['updated']) {
+                        $summary['engine_hour_trackings_created']++;
+                    }
                 }
 
-                $result = $this->kilometerService->applyExternalOdometerReading(
-                    $truck->fresh(),
-                    (float) $odometer,
-                    now(),
-                    'fleeti'
-                );
+                // 4. Derived: fuel tracking row (enriched with GPS + ignition context)
+                if ($telemetry['fuel_litres'] !== null && (float) $telemetry['fuel_litres'] > 0) {
+                    $fuelRow = $this->fuelTrackingService->record($truck->fresh(), $telemetry, $snapshot, 'fleeti');
+                    if ($fuelRow) {
+                        $summary['fuel_trackings_created']++;
+                    }
+                }
 
-                if ($result['updated']) {
-                    $summary['trucks_updated']++;
-                    $summary['trackings_created']++;
+                // 5. Derived business events (refills, drops, theft-suspected)
+                $event = $this->fuelEventDetector->analyze($truck->fresh(), $snapshot);
+                if ($event) {
+                    $summary['fuel_events_detected']++;
+                }
+
+                // 6. Theft-detection layer: extend/close stops, classify them,
+                //    and escalate any unknown-location stops to incidents.
+                try {
+                    $closedStops = $this->stopDetectorService->extendForTruck(
+                        $truck->fresh(),
+                        $snapshot
+                    );
+                    foreach ($closedStops as $stop) {
+                        $classified = $this->placeClassifierService->classify($stop);
+                        $summary['stops_closed']++;
+
+                        $incident = $this->unauthorizedStopDetector->inspect($classified);
+                        if ($incident) {
+                            $summary['theft_incidents_opened']++;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Never block a sync on the theft-detection layer — it's
+                    // best-effort and we log so ops can investigate.
+                    Log::warning('Theft-detection layer failed during sync.', [
+                        'truck_id' => $truck->id,
+                        'snapshot_id' => $snapshot->id ?? null,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             } catch (ValidationException $e) {
                 $summary['assets_skipped']++;
                 $summary['errors'][] = [
                     'truck_id' => $truck->id,
-                    'asset_id' => data_get($asset, 'id'),
+                    'asset_id' => $assetId,
                     'message' => $e->getMessage(),
                 ];
             } catch (\Throwable $e) {
                 Log::error('Fleeti sync failed for truck.', [
                     'truck_id' => $truck->id,
-                    'asset_id' => data_get($asset, 'id'),
+                    'asset_id' => $assetId,
                     'error' => $e->getMessage(),
                 ]);
                 $summary['errors'][] = [
                     'truck_id' => $truck->id,
-                    'asset_id' => data_get($asset, 'id'),
+                    'asset_id' => $assetId,
                     'message' => $e->getMessage(),
                 ];
             }
         }
 
         return $summary;
+    }
+
+    private function emptySummary(string $note): array
+    {
+        return [
+            'assets_received' => 0,
+            'assets_with_km' => 0,
+            'trucks_matched' => 0,
+            'trucks_updated' => 0,
+            'trackings_created' => 0,
+            'snapshots_created' => 0,
+            'engine_hour_trackings_created' => 0,
+            'fuel_trackings_created' => 0,
+            'fuel_events_detected' => 0,
+            'stops_closed' => 0,
+            'theft_incidents_opened' => 0,
+            'assets_skipped' => 0,
+            'errors' => [],
+            'note' => $note,
+        ];
     }
 
     private function resolveTruck(array $asset, Collection $trucks): ?Truck

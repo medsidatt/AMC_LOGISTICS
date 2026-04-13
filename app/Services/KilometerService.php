@@ -20,7 +20,8 @@ class KilometerService
         float $distanceKm,
         Carbon $date,
         ?string $notes = null,
-        string $source = 'manual'
+        string $source = 'manual',
+        ?int $telemetrySnapshotId = null
     ): ?KilometerTracking {
         if ($distanceKm <= 0) {
             throw ValidationException::withMessages([
@@ -30,6 +31,7 @@ class KilometerService
 
         $tracking = KilometerTracking::create([
             'truck_id' => $truck->id,
+            'telemetry_snapshot_id' => $telemetrySnapshotId,
             'kilometers' => round($distanceKm, 2),
             'date' => $date->toDateString(),
             'notes' => trim(($notes ? $notes.' | ' : '')."Source: {$source}"),
@@ -46,7 +48,8 @@ class KilometerService
         Truck $truck,
         float $odometerKm,
         Carbon $date,
-        string $source = 'fleeti'
+        string $source = 'fleeti',
+        ?int $telemetrySnapshotId = null
     ): array {
         $currentTotal = (float) $truck->total_kilometers;
         $lastRawOdometer = (float) ($truck->fleeti_last_kilometers ?? 0);
@@ -96,6 +99,7 @@ class KilometerService
 
         KilometerTracking::create([
             'truck_id' => $truck->id,
+            'telemetry_snapshot_id' => $telemetrySnapshotId,
             'kilometers' => $deltaKm,
             'date' => $date->toDateString(),
             'notes' => "Synced from {$source}".($event !== 'normal' ? " ({$event})" : ''),
