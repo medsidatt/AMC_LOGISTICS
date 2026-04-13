@@ -4148,3 +4148,6 @@ Stack trace:
 #65 C:/laragon/www/AMC Logistics/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php(23): require_once('C://laragon//www//...')
 #66 {main}
 "} 
+[2026-04-13 11:30:03] production.WARNING: Suspicious odometer rollback rejected. {"truck_id":92,"matricule":"AA498EM","source":"fleeti","current_total_km":775.83,"incoming_odometer_km":775.4} 
+[2026-04-13 13:00:03] production.WARNING: Suspicious odometer rollback rejected. {"truck_id":92,"matricule":"AA498EM","source":"fleeti","current_total_km":775.83,"incoming_odometer_km":775.4} 
+[2026-04-13 14:30:03] production.WARNING: Suspicious odometer rollback rejected. {"truck_id":92,"matricule":"AA498EM","source":"fleeti","current_total_km":775.83,"incoming_odometer_km":775.4} 
