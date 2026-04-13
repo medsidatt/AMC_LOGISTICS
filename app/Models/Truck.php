@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,6 +20,20 @@ class Truck extends Model
     protected $casts = [
         'fleeti_last_synced_at' => 'datetime',
         'km_maintenance_interval' => 'float',
+        'total_kilometers' => 'float',
+        'fleeti_last_kilometers' => 'float',
+        'fleeti_last_fuel_level' => 'float',
+        // Live telemetry cache (added in 2026_04_09_150000)
+        'fleeti_last_engine_hours' => 'float',
+        'fleeti_last_speed_kmh' => 'float',
+        'fleeti_last_latitude' => 'float',
+        'fleeti_last_longitude' => 'float',
+        'fleeti_last_heading_deg' => 'float',
+        'fleeti_last_ignition_on' => 'boolean',
+        'fleeti_last_battery_voltage' => 'float',
+        'fleeti_last_signal_strength' => 'integer',
+        'fleeti_device_last_seen_at' => 'datetime',
+        'is_active' => 'boolean',
     ];
 
     // Maximum rotations before maintenance is required
@@ -39,6 +54,46 @@ class Truck extends Model
     public function kilometerTrackings(): HasMany
     {
         return $this->hasMany(KilometerTracking::class);
+    }
+
+    public function fuelTrackings(): HasMany
+    {
+        return $this->hasMany(FuelTracking::class);
+    }
+
+    public function engineHourTrackings(): HasMany
+    {
+        return $this->hasMany(EngineHourTracking::class);
+    }
+
+    public function telemetrySnapshots(): HasMany
+    {
+        return $this->hasMany(TruckTelemetrySnapshot::class);
+    }
+
+    public function latestTelemetrySnapshot(): HasOne
+    {
+        return $this->hasOne(TruckTelemetrySnapshot::class)->latestOfMany('recorded_at');
+    }
+
+    public function fuelEvents(): HasMany
+    {
+        return $this->hasMany(FuelEvent::class);
+    }
+
+    public function truckStops(): HasMany
+    {
+        return $this->hasMany(TruckStop::class);
+    }
+
+    public function tripSegments(): HasMany
+    {
+        return $this->hasMany(TripSegment::class);
+    }
+
+    public function theftIncidents(): HasMany
+    {
+        return $this->hasMany(TheftIncident::class);
     }
 
     public function maintenances(): HasMany

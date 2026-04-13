@@ -2,7 +2,7 @@ import { usePage } from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
-    ClipboardCheck, Route, X,
+    ClipboardCheck, Route, X, Map, ShieldAlert, MapPin,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { clsx } from 'clsx';
@@ -80,7 +80,15 @@ const dataSections: NavSection[] = [
         header: 'Maintenance',
         items: [
             { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
-            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics' },
+            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
+        ],
+    },
+    {
+        header: 'Sécurité',
+        items: [
+            { label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18} />, match: '/logistics/fleet-map' },
+            { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
+            { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
         ],
     },
 ];

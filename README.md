@@ -1,66 +1,171 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# AMC Logistics
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Plateforme de gestion de flotte, transport de basalte et maintenance pour AMC Travaux (Sénégal / Mauritanie).
 
-## About Laravel
+## Stack technique
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Couche | Technologies |
+|--------|-------------|
+| Backend | Laravel 12, PHP 8.3 |
+| Frontend | React 19, TypeScript, Inertia.js, Tailwind CSS v4 |
+| Cartographie | Leaflet + react-leaflet (OpenStreetMap) |
+| Graphiques | ApexCharts |
+| Base de données | MySQL |
+| Télémétrie GPS | Fleeti API (Teltonika FMB125) |
+| Fichiers | SharePoint (Microsoft Graph API) |
+| Exports | Maatwebsite/Excel (Excel/CSV) |
+| Permissions | Spatie Laravel Permission |
+| Build | Vite 6.4 |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Modules
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Transport de basalte
+- Suivi des rotations (pesées fournisseur/client, écart de poids, références)
+- Validation avec verrouillage (les rotations validées sont immuables)
+- Import Excel en masse
+- Produits : 0/3, 3/8, 8/16
 
-## Learning Laravel
+### Gestion de flotte
+- Camions avec matricule, transporteur, compteur kilométrique
+- Conducteurs et transporteurs
+- Fournisseurs (avec coordonnées GPS optionnelles)
+- Synchronisation GPS Fleeti toutes les 30 minutes (planifié)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Télémétrie & snapshots
+- `truck_telemetry_snapshots` : capture lossless de chaque sync Fleeti (GPS, vitesse, carburant, heures moteur, tension batterie, signal, charge brute JSON)
+- `kilometer_trackings` : incréments de distance avec détection de reset compteur
+- `fuel_trackings` : historique carburant avec position GPS et état d'allumage
+- `engine_hour_trackings` : heures moteur (maintenance basée sur l'usure)
+- `fuel_events` : détection automatique de ravitaillements, baisses, et vols suspectés
+- Compactage mensuel des snapshots anciens (90j = 1/heure, 365j = 1/jour)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Détection de vol
+- **Vol de carburant** : baisse de niveau quand le moteur est éteint
+- **Écart de poids** : différence fournisseur/client au-delà du seuil (300 kg par défaut)
+- **Arrêts non autorisés** : arrêts > 20 min à des lieux inconnus pendant une mission
+- **Mouvement hors horaires** : camion en mouvement sans mission active en dehors des heures de travail
+- **Déviation d'itinéraire** : distance réelle >> distance attendue entre origine et destination
+- Incidents unifiés dans `theft_incidents` avec statut (En attente / Examiné / Confirmé / Rejeté)
+- Alertes mirrored dans `logistics_alerts` pour le tableau de bord logistique
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Cartographie
+- **Carte de la flotte** (`/logistics/fleet-map`) : position temps réel de tous les camions
+- **Reprise de trajet** (`/transport_tracking/{id}/replay`) : trace GPS polyline + arrêts + incidents
+- **Lieux / Géofences** (`/logistics/places`) : bases, sites fournisseurs, stations-service avec rayon configurable
+- Détection automatique des bases depuis les données de stationnement (commande nocturne)
 
-## Laravel Sponsors
+### Maintenance
+- Double système : rotations (12 max) ou kilométrage (configurable par type)
+- Profils de maintenance par camion (général, huile, pneus, filtres) avec intervalle immuable
+- Alertes automatiques quand la maintenance est due
+- Checklists quotidiens conducteurs
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Rapports & exports
+- Export Excel sur chaque DataTable (CSV UTF-8 BOM + séparateur `;` pour Excel français)
+- Rapports dédiés : transport, flotte, maintenance, maintenance due
+- Stockage documents sur SharePoint (Microsoft Graph API)
 
-### Premium Partners
+## Rôles
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+| Rôle | Accès |
+|------|-------|
+| Super Admin | Tout |
+| Admin | Tout sauf gestion des rôles |
+| Manager | Logistique, flotte, transport, maintenance, incidents de vol |
+| Driver | Checklist quotidien, mes voyages, mon camion |
 
-## Contributing
+## Installation
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+# Cloner le projet
+git clone <repo-url>
+cd AMC-Logistics
 
-## Code of Conduct
+# Backend
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Frontend
+npm install
+npm run build        # production
+npm run dev          # développement (HMR)
+```
 
-## Security Vulnerabilities
+## Variables d'environnement clés
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```env
+# Fleeti API
+FLEETI_API_URL=https://api.fleeti.co
+FLEETI_API_KEY=
+FLEETI_CUSTOMER_REFERENCE=
 
-## License
+# SharePoint (Microsoft Graph)
+MICROSOFT_GRAPH_TENANT_ID=
+MICROSOFT_GRAPH_CLIENT_ID=
+MICROSOFT_GRAPH_CLIENT_SECRET=
+SHAREPOINT_SITE_ID=
+SHAREPOINT_DRIVE_ID=
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Sync & détection
+FLEETI_SYNC_INTERVAL_MINUTES=30
+WEIGHT_GAP_THRESHOLD_KG=300
+UNAUTHORIZED_STOP_MIN_DURATION_SECONDS=1200
+LOGISTICS_WORK_HOURS_START=05:00
+LOGISTICS_WORK_HOURS_END=21:00
+LOGISTICS_WORK_DAYS=1,2,3,4,5,6
+```
+
+## Commandes planifiées
+
+| Commande | Fréquence | Description |
+|----------|-----------|-------------|
+| `fleeti:sync-kilometers` | 30 min | Synchronise télémétrie Fleeti (GPS, carburant, km, heures moteur) |
+| `logistics:notify-due-engine-maintenance` | 15 min | Alertes maintenance due |
+| `logistics:notify-missing-daily-checklists` | 15 min | Alertes checklists manquants |
+| `logistics:detect-off-hours-movement` | 1h | Détecte les camions en mouvement hors horaires |
+| `places:detect-hubs` | Quotidien 02:30 | Auto-détecte les bases depuis les données de stationnement |
+| `logistics:rebuild-trip-segments` | Quotidien 02:45 | Reconstruit les segments de trajet pour les transports récents |
+| `telemetry:compact` | Mensuel (1er) | Compacte les snapshots anciens |
+
+Pour activer le planificateur :
+
+```bash
+# Développement (reste actif dans le terminal)
+php artisan schedule:work
+
+# Production (cron Infomaniak — une seule entrée)
+* * * * * php /chemin/vers/artisan schedule:run >> /dev/null 2>&1
+```
+
+## Structure des services
+
+```
+app/Services/
+├── FleetiService.php              # Extracteurs API Fleeti (km, carburant, GPS, vitesse, etc.)
+├── FleetiSyncService.php          # Orchestrateur sync : snapshot → km → fuel → engine → stops → incidents
+├── TelemetrySnapshotService.php   # Écrit les snapshots + cache trucks.fleeti_last_*
+├── KilometerService.php           # Gestion des incréments km + détection reset compteur
+├── EngineHoursService.php         # Idem pour les heures moteur
+├── FuelTrackingService.php        # Écrit les enregistrements carburant enrichis (GPS, allumage)
+├── FuelEventDetectorService.php   # Détecte ravitaillements, baisses, vols suspectés
+├── GeoService.php                 # Haversine, point-in-radius, nearestPlace
+├── StopDetectorService.php        # Dérive les truck_stops depuis les snapshots
+├── PlaceClassifierService.php     # Classe chaque arrêt contre les géofences
+├── TripSegmentBuilderService.php  # Construit trip_segments pour chaque transport
+├── TheftIncidentService.php       # Écrit/déduplique les incidents de vol
+├── WeightGapDetector.php          # Détecte les écarts de poids suspects
+├── UnauthorizedStopDetector.php   # Détecte les arrêts non autorisés en mission
+├── OffHoursMovementDetector.php   # Détecte les mouvements hors horaires
+├── RouteDeviationDetector.php     # Détecte les déviations d'itinéraire
+├── MaintenanceStatusService.php   # Recalcule les profils de maintenance
+└── SharePointStorageService.php   # Upload/download fichiers vers SharePoint
+```
+
+## Tests
+
+```bash
+php vendor/bin/phpunit                          # tous les tests
+php vendor/bin/phpunit --filter=GeoServiceTest  # tests GeoService uniquement
+```
