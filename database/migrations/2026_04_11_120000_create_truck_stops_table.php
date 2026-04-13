@@ -25,7 +25,7 @@ return new class extends Migration
                 ->constrained('truck_telemetry_snapshots')
                 ->nullOnDelete();
 
-            $table->timestamp('started_at');
+            $table->timestamp('started_at')->useCurrent();
             $table->timestamp('ended_at')->nullable();      // null while still open
             $table->unsignedInteger('duration_seconds')->nullable();
 

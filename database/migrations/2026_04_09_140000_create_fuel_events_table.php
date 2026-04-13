@@ -26,7 +26,7 @@ return new class extends Migration
             $table->decimal('longitude', 10, 7)->nullable();
             $table->boolean('ignition_on')->nullable();
 
-            $table->timestamp('detected_at');
+            $table->timestamp('detected_at')->useCurrent();
 
             $table->foreignId('snapshot_before_id')
                 ->nullable()
