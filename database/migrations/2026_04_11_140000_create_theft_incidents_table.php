@@ -42,7 +42,7 @@ return new class extends Migration
             // 'pending' | 'reviewed' | 'dismissed' | 'confirmed'
             $table->string('status', 12)->default('pending');
 
-            $table->timestamp('detected_at');
+            $table->timestamp('detected_at')->useCurrent();
             $table->decimal('latitude', 10, 7)->nullable();
             $table->decimal('longitude', 10, 7)->nullable();
 
