@@ -40,8 +40,10 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
 
     const fuelBadge = (litres: number | null) => {
         if (litres == null) return <span className="text-[var(--color-text-muted)]">-</span>;
-        const variant = litres < 30 ? 'danger' : litres < 80 ? 'warning' : 'success';
-        return <Badge variant={variant}>{litres.toFixed(0)} L</Badge>;
+        const n = Number(litres);
+        if (!Number.isFinite(n)) return <span className="text-[var(--color-text-muted)]">-</span>;
+        const variant = n < 30 ? 'danger' : n < 80 ? 'warning' : 'success';
+        return <Badge variant={variant}>{n.toFixed(0)} L</Badge>;
     };
 
     return (
@@ -68,7 +70,7 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
                         columns={[
                             { key: 'matricule', label: 'Matricule' },
                             { key: 'transporter', label: 'Transporteur', hideOnMobile: true },
-                            { key: 'total_kilometers', label: 'Compteur (km)', hideOnMobile: true, render: (r) => r.total_kilometers?.toLocaleString('fr-FR') ?? '-' },
+                            { key: 'total_kilometers', label: 'Compteur (km)', hideOnMobile: true, render: (r) => Number(r.total_kilometers).toLocaleString('fr-FR') },
                             {
                                 key: 'fleeti_connected', label: 'GPS', sortable: false,
                                 render: (r) => r.fleeti_connected

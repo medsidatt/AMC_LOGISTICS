@@ -14,10 +14,16 @@ class KilometerTracking extends Model
 
     protected $casts = [
         'date' => 'date',
+        'kilometers' => 'float',
     ];
 
     public function truck(): BelongsTo
     {
         return $this->belongsTo(Truck::class);
+    }
+
+    public function snapshot(): BelongsTo
+    {
+        return $this->belongsTo(TruckTelemetrySnapshot::class, 'telemetry_snapshot_id');
     }
 }

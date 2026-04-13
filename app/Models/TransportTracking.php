@@ -167,4 +167,14 @@ class TransportTracking extends Model
         return $this->hasMany(Document::class);
     }
 
+    public function tripSegment(): HasOne
+    {
+        return $this->hasOne(TripSegment::class);
+    }
+
+    public function theftIncidents(): HasMany
+    {
+        return $this->hasMany(TheftIncident::class);
+    }
+
 }

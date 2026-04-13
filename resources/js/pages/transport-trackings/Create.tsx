@@ -10,7 +10,7 @@ import { ArrowLeft, X, FileText, Image, Eye } from 'lucide-react';
 interface TruckOption {
     id: number;
     matricule: string;
-    driver_id: number | null;
+    last_driver_id: number | null;
     transporter_id: number | null;
 }
 
@@ -53,27 +53,14 @@ export default function TrackingsCreate({ transporters, trucks, drivers, provide
     const [previews, setPreviews] = useState<Record<number, string>>({});
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    // Auto-select driver & transporter when truck changes
+    // Auto-select last driver & transporter when truck changes
     useEffect(() => {
         const selected = trucks.find((t) => t.id === Number(form.data.truck_id));
         if (selected) {
-            if (selected.driver_id) form.setData('driver_id', selected.driver_id);
+            if (selected.last_driver_id) form.setData('driver_id', selected.last_driver_id);
             if (selected.transporter_id) form.setData('transporter_id', selected.transporter_id);
         }
     }, [form.data.truck_id]);
-
-    // Auto-calculate net weights
-    useEffect(() => {
-        const gross = parseFloat(String(form.data.provider_gross_weight));
-        const tare = parseFloat(String(form.data.provider_tare_weight));
-        if (!isNaN(gross) && !isNaN(tare)) form.setData('provider_net_weight', String(gross - tare));
-    }, [form.data.provider_gross_weight, form.data.provider_tare_weight]);
-
-    useEffect(() => {
-        const gross = parseFloat(String(form.data.client_gross_weight));
-        const tare = parseFloat(String(form.data.client_tare_weight));
-        if (!isNaN(gross) && !isNaN(tare)) form.setData('client_net_weight', String(gross - tare));
-    }, [form.data.client_gross_weight, form.data.client_tare_weight]);
 
     const addFiles = (newFiles: FileList | null) => {
         if (!newFiles) return;
