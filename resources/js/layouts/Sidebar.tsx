@@ -1,7 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
-    Wrench, Users, Mail, ShieldCheck,
+    Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -65,6 +65,7 @@ const dataSections: NavSection[] = [
             { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
             { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
             { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
+            { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
         ],
     },
     {

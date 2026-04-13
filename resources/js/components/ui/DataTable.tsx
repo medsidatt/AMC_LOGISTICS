@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Search, Download } from 'lucide-react';
 import { clsx } from 'clsx';
+import { exportToCsv } from '@/utils/csv-export';
 
 interface Column<T> {
     key: string;
@@ -19,12 +20,14 @@ interface DataTableProps<T> {
     searchKeys?: string[];
     emptyMessage?: string;
     mobileCard?: (row: T) => React.ReactNode;
+    exportable?: boolean;
+    exportFilename?: string;
 }
 
 type SortDir = 'asc' | 'desc' | null;
 
 export default function DataTable<T extends Record<string, any>>({
-    data, columns, perPage = 10, searchable = true, searchKeys, emptyMessage = 'Aucune donnée', mobileCard,
+    data, columns, perPage = 10, searchable = true, searchKeys, emptyMessage = 'Aucune donnée', mobileCard, exportable = false, exportFilename,
 }: DataTableProps<T>) {
     const [search, setSearch] = useState('');
     const [sortKey, setSortKey] = useState<string | null>(null);
@@ -71,18 +74,39 @@ export default function DataTable<T extends Record<string, any>>({
         return <ChevronDown size={14} />;
     };
 
+    const handleExport = () => {
+        const exportCols = columns
+            .filter((c) => c.key !== 'actions' && c.sortable !== false)
+            .map((c) => ({ key: c.key, label: c.label }));
+        const name = exportFilename ?? `export-${new Date().toISOString().slice(0, 10)}.csv`;
+        exportToCsv(filtered, exportCols, name);
+    };
+
     return (
         <div>
-            {searchable && (
-                <div className="mb-4 relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-                        placeholder="Rechercher..."
-                        className="w-full sm:w-72 pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
-                    />
+            {(searchable || exportable) && (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                    {searchable && (
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                            <input
+                                type="text"
+                                value={search}
+                                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                                placeholder="Rechercher..."
+                                className="w-full sm:w-72 pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
+                            />
+                        </div>
+                    )}
+                    {exportable && filtered.length > 0 && (
+                        <button
+                            onClick={handleExport}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition"
+                            title="Exporter en Excel (CSV)"
+                        >
+                            <Download size={14} /> Excel
+                        </button>
+                    )}
                 </div>
             )}
 

@@ -11,6 +11,10 @@ Route::group(['prefix' => 'auth', 'middleware' => ['auth']], function () {
     Route::put('/account/update', [UserController::class, 'updateAccount'])->name('auth.account.update');
     Route::get('/password', [UserController::class, 'password'])->name('auth.password');
     Route::put('/password/update', [UserController::class, 'updatePassword'])->name('auth.password.update');
+
+    // Force password change on first login
+    Route::get('/force-password', [UserController::class, 'forcePassword'])->name('force-password');
+    Route::put('/force-password/update', [UserController::class, 'forcePasswordUpdate'])->name('force-password.update');
 });
 
 Route::group(['prefix' => 'users', 'middleware' => ['auth']], function () {

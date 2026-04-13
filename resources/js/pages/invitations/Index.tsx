@@ -92,6 +92,7 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
                         ]}
                         perPage={invitations.per_page}
                         searchable
+                        exportable
                     />
                 </div>
                 <div className="px-5 pb-5">

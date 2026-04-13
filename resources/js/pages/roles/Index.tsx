@@ -62,6 +62,7 @@ export default function RolesIndex({ roles }: Props) {
                         ]}
                         perPage={roles.per_page}
                         searchable
+                        exportable
                     />
                 </div>
                 <div className="px-5 pb-5">
