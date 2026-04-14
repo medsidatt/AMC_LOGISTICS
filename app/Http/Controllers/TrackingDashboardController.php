@@ -40,17 +40,18 @@ class TrackingDashboardController extends Controller
 
     public function index(Request $req)
     {
-        $from = $this->periodStart($req->input('from'));
-        $to   = $this->periodEnd($req->input('to'));
-
+        $fromInput  = $req->input('from');
+        $toInput    = $req->input('to');
         $driverId   = $req->input('driver_id');
         $truckId    = $req->input('truck_id');
         $providerId = $req->input('provider_id');
         $product    = $req->input('product');
         $base       = $req->input('base');
 
-        $q = TransportTracking::query()
-            ->whereBetween('client_date', [$from, $to]);
+        // No default date filter — show ALL data unless user explicitly filters
+        $q = TransportTracking::query();
+        if ($fromInput) $q->whereDate('client_date', '>=', Carbon::parse($fromInput)->startOfDay());
+        if ($toInput)   $q->whereDate('client_date', '<=', Carbon::parse($toInput)->endOfDay());
 
         if ($driverId)   $q->where('driver_id', $driverId);
         if ($truckId)    $q->where('truck_id', $truckId);
@@ -279,8 +280,8 @@ class TrackingDashboardController extends Controller
                 ['id' => 'sn', 'name' => 'Sénégal'],
             ],
             'filters' => array_filter([
-                'from' => $from->toDateString(),
-                'to' => $to->toDateString(),
+                'from' => $fromInput,
+                'to' => $toInput,
                 'driver_id' => $driverId,
                 'truck_id' => $truckId,
                 'provider_id' => $providerId,
