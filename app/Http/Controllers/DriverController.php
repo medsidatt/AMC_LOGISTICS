@@ -184,8 +184,8 @@ class DriverController extends Controller
             'trips' => $trips->through(fn ($trip) => [
                 'id' => $trip->id,
                 'reference' => $trip->reference,
-                'provider_date' => $trip->provider_date,
-                'client_date' => $trip->client_date,
+                'provider_date' => $trip->provider_date?->format('d/m/Y'),
+                'client_date' => $trip->client_date?->format('d/m/Y'),
                 'provider_net_weight' => $trip->provider_net_weight,
                 'client_net_weight' => $trip->client_net_weight,
                 'product' => $trip->product,
@@ -245,7 +245,9 @@ class DriverController extends Controller
                 'maintenance_level' => $truck->maintenanceLevelByType(),
                 'maintenances' => $truck->maintenances->map(fn ($m) => [
                     'id' => $m->id,
-                    'maintenance_date' => $m->maintenance_date,
+                    'maintenance_date' => $m->maintenance_date instanceof \Carbon\Carbon
+                        ? $m->maintenance_date->format('d/m/Y')
+                        : $m->maintenance_date,
                     'type' => $m->type,
                     'description' => $m->description,
                     'cost' => $m->cost,
@@ -317,7 +319,9 @@ class DriverController extends Controller
             ],
             'todayChecklist' => $todayChecklist ? [
                 'id' => $todayChecklist->id,
-                'checklist_date' => $todayChecklist->checklist_date,
+                'checklist_date' => $todayChecklist->checklist_date instanceof \Carbon\Carbon
+                    ? $todayChecklist->checklist_date->format('d/m/Y')
+                    : $todayChecklist->checklist_date,
                 'start_km' => $todayChecklist->start_km,
                 'end_km' => $todayChecklist->end_km,
                 'fuel_filled' => $todayChecklist->fuel_filled,
@@ -337,7 +341,9 @@ class DriverController extends Controller
             ] : null,
             'history' => $history->map(fn ($c) => [
                 'id' => $c->id,
-                'checklist_date' => $c->checklist_date,
+                'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon
+                    ? $c->checklist_date->format('d/m/Y')
+                    : $c->checklist_date,
                 'start_km' => $c->start_km,
                 'end_km' => $c->end_km,
                 'tire_condition' => $c->tire_condition,
