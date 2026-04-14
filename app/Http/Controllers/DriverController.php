@@ -230,12 +230,19 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'total_kilometers' => $truck->total_kilometers,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
                 'is_active' => $truck->is_active,
                 'transporter' => $truck->transporter ? [
                     'id' => $truck->transporter->id,
                     'name' => $truck->transporter->name,
                 ] : null,
+                'fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'speed' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'movement_status' => $truck->fleeti_last_movement_status,
+                'latitude' => $truck->fleeti_last_latitude !== null ? (float) $truck->fleeti_last_latitude : null,
+                'longitude' => $truck->fleeti_last_longitude !== null ? (float) $truck->fleeti_last_longitude : null,
+                'last_sync' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'maintenance_level' => $truck->maintenanceLevelByType(),
                 'maintenances' => $truck->maintenances->map(fn ($m) => [
                     'id' => $m->id,
                     'maintenance_date' => $m->maintenance_date,
@@ -293,7 +300,12 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'total_kilometers' => $truck->total_kilometers,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
+                'fleeti_last_kilometers' => $truck->fleeti_last_kilometers !== null ? (float) $truck->fleeti_last_kilometers : null,
+                'fleeti_last_fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'fleeti_last_synced_at' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'fleeti_last_speed_kmh' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'fleeti_last_movement_status' => $truck->fleeti_last_movement_status,
             ],
             'options' => [
                 'tire' => DailyChecklist::TIRE_OPTIONS,

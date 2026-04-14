@@ -191,7 +191,15 @@ class DashboardDataService
 
         return [
             'driver' => $driver ? ['id' => $driver->id, 'name' => $driver->name, 'email' => $driver->email] : null,
-            'truck' => $truck ? ['id' => $truck->id, 'matricule' => $truck->matricule] : null,
+            'truck' => $truck ? [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
+                'fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'speed' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'movement_status' => $truck->fleeti_last_movement_status,
+                'last_sync' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ] : null,
             'todayChecklistDone' => $todayChecklist !== null,
             'myTripsMonth' => $myTripsMonth,
             'myTonnageMonth' => round($myTonnageMonth, 2),
