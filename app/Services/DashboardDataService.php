@@ -183,7 +183,7 @@ class DashboardDataService
                 ->get()
                 ->map(fn ($c) => [
                     'id' => $c->id,
-                    'checklist_date' => $c->checklist_date,
+                    'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon ? $c->checklist_date->format('d/m/Y') : $c->checklist_date,
                     'issues_count' => $c->issues->count(),
                     'unresolved_count' => $c->issues->whereNull('resolved_at')->count(),
                 ]);
@@ -253,7 +253,7 @@ class DashboardDataService
             ->get()
             ->map(fn ($c) => [
                 'id' => $c->id,
-                'checklist_date' => $c->checklist_date,
+                'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon ? $c->checklist_date->format('d/m/Y') : $c->checklist_date,
                 'truck' => $c->truck?->matricule,
                 'driver' => $c->driver?->name,
                 'issues_count' => $c->issues->count(),
