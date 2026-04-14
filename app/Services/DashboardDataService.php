@@ -172,6 +172,7 @@ class DashboardDataService
                     'provider' => $t->provider?->name,
                     'provider_net_weight' => $t->provider_net_weight,
                     'client_net_weight' => $t->client_net_weight,
+                    'provider_date' => $t->provider_date?->format('d/m/Y'),
                     'client_date' => $t->client_date?->format('d/m/Y'),
                 ]);
 

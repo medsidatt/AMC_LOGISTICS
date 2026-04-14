@@ -152,14 +152,24 @@ class TransportTrackingController extends Controller
     public function createPage()
     {
         $transporters = Transporter::all();
+        // Fetch last driver per truck in a single query to avoid N+1
+        $lastDriverMap = DB::table('transport_trackings')
+            ->select('truck_id', 'driver_id')
+            ->whereIn('id', function ($sub) {
+                $sub->selectRaw('MAX(id)')
+                    ->from('transport_trackings')
+                    ->whereNotNull('truck_id')
+                    ->whereNull('deleted_at')
+                    ->groupBy('truck_id');
+            })
+            ->pluck('driver_id', 'truck_id');
+
         $trucks = Truck::get()
-            ->map(function ($truck) {
+            ->map(function ($truck) use ($lastDriverMap) {
                 return [
                     'id' => $truck->id,
                     'matricule' => $truck->matricule,
-                    'last_driver_id' => $truck->transportTrackings()
-                        ->latest('client_date')
-                        ->value('driver_id'),
+                    'last_driver_id' => $lastDriverMap[$truck->id] ?? null,
                     'transporter_id' => $truck?->transporter_id,
                 ];
             });
@@ -514,13 +524,23 @@ class TransportTrackingController extends Controller
         $transportTracking->load('documents');
 
         $transporters = Transporter::withTrashed()->orderBy('name')->get();
+        // Fetch last driver per truck in a single query to avoid N+1
+        $lastDriverMap = DB::table('transport_trackings')
+            ->select('truck_id', 'driver_id')
+            ->whereIn('id', function ($sub) {
+                $sub->selectRaw('MAX(id)')
+                    ->from('transport_trackings')
+                    ->whereNotNull('truck_id')
+                    ->whereNull('deleted_at')
+                    ->groupBy('truck_id');
+            })
+            ->pluck('driver_id', 'truck_id');
+
         $trucks = Truck::withTrashed()->orderBy('matricule')->get()
             ->map(fn ($truck) => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'last_driver_id' => $truck->transportTrackings()
-                    ->latest('client_date')
-                    ->value('driver_id'),
+                'last_driver_id' => $lastDriverMap[$truck->id] ?? null,
                 'transporter_id' => $truck->transporter_id,
             ]);
         $drivers = Driver::withTrashed()->orderBy('name')->get();
