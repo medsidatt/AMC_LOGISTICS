@@ -42,6 +42,20 @@ class LoginController extends Controller
         $this->middleware('auth')->only('logout');
     }
 
+    /**
+     * Override the default post-login redirect so Drivers always land on
+     * /dashboard (their DriverDashboard) instead of a stored "intended"
+     * URL they may not have permission for.
+     */
+    protected function authenticated(\Illuminate\Http\Request $request, $user)
+    {
+        if ($user->hasRole('Driver')) {
+            return redirect('/dashboard');
+        }
+
+        return redirect()->intended($this->redirectPath());
+    }
+
     public function redirectToAzure()
     {
         return Socialite::driver('mailgun')->redirect();
