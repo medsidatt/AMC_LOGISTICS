@@ -159,11 +159,12 @@ export default function TrackingsIndex({ trackings, filters, transporters, truck
         { key: 'provider', label: 'Fournisseur', hideOnMobile: true, render: (r) => r.provider?.name ?? '-' },
         { key: 'provider_net_weight', label: 'Poids Fourn.', render: (r) => r.provider_net_weight?.toLocaleString('fr-FR') ?? '-' },
         { key: 'client_net_weight', label: 'Poids Client', render: (r) => r.client_net_weight?.toLocaleString('fr-FR') ?? '-' },
-        { key: 'gap', label: 'Écart', render: (r) => (
-            <Badge variant={r.gap < 0 ? 'danger' : r.gap > 0 ? 'warning' : 'success'}>
-                {r.gap?.toLocaleString('fr-FR')}
-            </Badge>
-        )},
+        { key: 'gap', label: 'Perte / Exc.', render: (r) => {
+            const g = r.gap ?? 0;
+            if (g < 0) return <Badge variant="danger">Perte {Math.abs(g).toLocaleString('fr-FR')} kg</Badge>;
+            if (g > 0) return <Badge variant="info">Exc. +{g.toLocaleString('fr-FR')} kg</Badge>;
+            return <Badge variant="success">OK</Badge>;
+        }},
         { key: 'client_date', label: 'Date', hideOnMobile: true, render: (r) => r.client_date ?? r.provider_date ?? '-' },
         { key: 'files', label: 'Fichiers', sortable: false, hideOnMobile: true, render: (r) => (
             r.documents && r.documents.length > 0 ? (
@@ -242,7 +243,7 @@ export default function TrackingsIndex({ trackings, filters, transporters, truck
                                     { key: 'provider', label: 'Fournisseur' },
                                     { key: 'provider_net_weight', label: 'Poids Fournisseur' },
                                     { key: 'client_net_weight', label: 'Poids Client' },
-                                    { key: 'gap', label: 'Écart' },
+                                    { key: 'gap', label: 'Perte' },
                                     { key: 'client_date', label: 'Date Client' },
                                     { key: 'product', label: 'Produit' },
                                 ], `suivi-transport-${new Date().toISOString().slice(0, 10)}.csv`)}

@@ -74,10 +74,11 @@ export default function Dashboard(props: Props) {
         { key: 'provider_net_weight', label: 'Poids Fourni.', render: (r: any) => r.provider_net_weight ? `${formatNumber(r.provider_net_weight)} T` : '-' },
         { key: 'client_net_weight', label: 'Poids Client', render: (r: any) => r.client_net_weight ? `${formatNumber(r.client_net_weight)} T` : '-' },
         {
-            key: 'gap', label: 'Écart', render: (r: any) => {
-                const gap = r.gap ?? 0;
-                const variant = gap === 0 ? 'success' : gap < 0 ? 'danger' : 'warning';
-                return <Badge variant={variant}>{formatNumber(gap, 2)} T</Badge>;
+            key: 'gap', label: 'Perte / Exc.', render: (r: any) => {
+                const g = r.gap ?? 0;
+                if (g < 0) return <Badge variant="danger">Perte {formatNumber(Math.abs(g), 2)} T</Badge>;
+                if (g > 0) return <Badge variant="info">Exc. +{formatNumber(g, 2)} T</Badge>;
+                return <Badge variant="success">OK</Badge>;
             },
         },
     ];
@@ -187,7 +188,7 @@ export default function Dashboard(props: Props) {
                                     { key: 'driver', label: 'Conducteur' },
                                     { key: 'provider_net_weight', label: 'Poids Fournisseur' },
                                     { key: 'client_net_weight', label: 'Poids Client' },
-                                    { key: 'gap', label: 'Écart' },
+                                    { key: 'gap', label: 'Perte' },
                                 ], 'rotations.csv')}
                                 className="p-1.5 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
                                 title="Exporter CSV"

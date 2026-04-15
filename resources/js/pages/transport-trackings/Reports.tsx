@@ -109,7 +109,7 @@ export default function Reports(props: Props) {
             <KpiGrid>
                 <KpiCard label="Poids transporté" value={totalProviderWeight} unit="T" icon={<Weight size={22} />} color="var(--color-primary)" />
                 <KpiCard label="Poids reçu" value={totalClientWeight} unit="T" icon={<Scale size={22} />} color="var(--color-success)" />
-                <KpiCard label="Écart total" value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color="var(--color-danger)" />
+                <KpiCard label="Perte totale" value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color="var(--color-danger)" />
                 <KpiCard label="Rotations" value={totalTrips} icon={<BarChart3 size={22} />} color="var(--color-info)" />
             </KpiGrid>
 
@@ -124,9 +124,9 @@ export default function Reports(props: Props) {
                     <p className="text-xl font-bold text-[var(--color-text)] mt-1">{fmtT(thisYearTonnage)}</p>
                 </Card>
                 <Card>
-                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Anomalies</p>
+                    <p className="text-xs text-[var(--color-text-muted)] uppercase">Anomalies de poids</p>
                     <p className="text-xl font-bold text-[var(--color-danger)] mt-1">{totalDiscrepanciesCount}</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">{fmtT(totalDiscrepancyKg)} d'écart</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">{fmtT(totalDiscrepancyKg)} de perte</p>
                 </Card>
                 <Card>
                     <p className="text-xs text-[var(--color-text-muted)] uppercase">Conducteurs suspects</p>
@@ -145,7 +145,7 @@ export default function Reports(props: Props) {
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Période</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Reçu</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rotations</th>
                                 </tr>
                             </thead>
@@ -170,7 +170,7 @@ export default function Reports(props: Props) {
             <div className="grid lg:grid-cols-2 gap-6 mt-6">
                 {gapByProduct.length > 0 && (
                     <Card>
-                        <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Écart par produit</h3>
+                        <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Perte par produit</h3>
                         <div className="space-y-3">
                             {gapByProduct.map((g) => (
                                 <div key={g.product} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-surface-hover)]">
@@ -186,7 +186,7 @@ export default function Reports(props: Props) {
                 )}
                 {gapByBase.length > 0 && (
                     <Card>
-                        <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Écart par base</h3>
+                        <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Perte par base</h3>
                         <div className="space-y-3">
                             {gapByBase.map((g) => (
                                 <div key={g.base} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-surface-hover)]">
@@ -207,7 +207,7 @@ export default function Reports(props: Props) {
                 <Card className="mt-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Users size={18} className="text-amber-500" />
-                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Classement conducteurs par écart</h3>
+                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Classement conducteurs par perte</h3>
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
                         <table className="w-full text-sm">
@@ -215,9 +215,9 @@ export default function Reports(props: Props) {
                                 <tr className="bg-[var(--color-surface-hover)]">
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Conducteur</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rotations</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart total</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart moyen</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Gros écarts</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte totale</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte moyen</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Grosses pertes</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -236,12 +236,12 @@ export default function Reports(props: Props) {
                 </Card>
             )}
 
-            {/* Anomalies */}
+            {/* Anomalies de poids */}
             {anomalies.length > 0 && (
                 <Card className="mt-6">
                     <div className="flex items-center gap-2 mb-4">
                         <FileWarning size={18} className="text-[var(--color-danger)]" />
-                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Anomalies ({anomalies.length})</h3>
+                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Anomalies de poids ({anomalies.length})</h3>
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
                         <table className="w-full text-sm">
@@ -253,7 +253,7 @@ export default function Reports(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Conducteur</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Reçu</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -291,7 +291,7 @@ export default function Reports(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Produit</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Reçu</th>
-                                    <th className="px-3 py-2 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-3 py-2 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -307,7 +307,12 @@ export default function Reports(props: Props) {
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(t.provider_net_weight)}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmt(t.client_net_weight)}</td>
                                         <td className="px-3 py-2 text-center">
-                                            <Badge variant={Math.abs(t.gap) > 150 ? 'danger' : t.gap !== 0 ? 'warning' : 'success'}>{fmt(t.gap)}</Badge>
+                                            {t.gap < 0
+                                                ? <Badge variant="danger">Perte {fmt(Math.abs(t.gap))}</Badge>
+                                                : t.gap > 0
+                                                    ? <Badge variant="info">Exc. +{fmt(t.gap)}</Badge>
+                                                    : <Badge variant="success">OK</Badge>
+                                            }
                                         </td>
                                     </tr>
                                 ))}
