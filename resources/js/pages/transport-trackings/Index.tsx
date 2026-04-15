@@ -130,9 +130,9 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
         { key: 'client_net_weight', label: 'Poids Client', sortable: true, render: (r) => r.client_net_weight?.toLocaleString('fr-FR') ?? '-' },
         { key: 'gap', label: 'Perte / Exc.', sortable: true, render: (r) => {
             const g = r.gap ?? 0;
-            if (g < 0) return <Badge variant="danger">Perte {Math.abs(g).toLocaleString('fr-FR')} kg</Badge>;
-            if (g > 0) return <Badge variant="info">Exc. +{g.toLocaleString('fr-FR')} kg</Badge>;
-            return <Badge variant="success">OK</Badge>;
+            if (g < 0) return <Badge variant="danger">{g.toLocaleString('fr-FR')}</Badge>;
+            if (g > 0) return <Badge variant="info">+{g.toLocaleString('fr-FR')}</Badge>;
+            return <Badge variant="success">0</Badge>;
         }},
         { key: 'client_date', label: 'Date', sortable: true, hideOnMobile: true, render: (r) => r.client_date ?? r.provider_date ?? '-' },
         { key: 'files', label: 'Fichiers', sortable: false, hideOnMobile: true, render: (r) => (
