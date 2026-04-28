@@ -172,6 +172,7 @@ class DashboardDataService
                     'provider' => $t->provider?->name,
                     'provider_net_weight' => $t->provider_net_weight,
                     'client_net_weight' => $t->client_net_weight,
+                    'provider_date' => $t->provider_date?->format('d/m/Y'),
                     'client_date' => $t->client_date?->format('d/m/Y'),
                 ]);
 
@@ -182,7 +183,7 @@ class DashboardDataService
                 ->get()
                 ->map(fn ($c) => [
                     'id' => $c->id,
-                    'checklist_date' => $c->checklist_date,
+                    'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon ? $c->checklist_date->format('d/m/Y') : $c->checklist_date,
                     'issues_count' => $c->issues->count(),
                     'unresolved_count' => $c->issues->whereNull('resolved_at')->count(),
                 ]);
@@ -190,7 +191,15 @@ class DashboardDataService
 
         return [
             'driver' => $driver ? ['id' => $driver->id, 'name' => $driver->name, 'email' => $driver->email] : null,
-            'truck' => $truck ? ['id' => $truck->id, 'matricule' => $truck->matricule] : null,
+            'truck' => $truck ? [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
+                'fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'speed' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'movement_status' => $truck->fleeti_last_movement_status,
+                'last_sync' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+            ] : null,
             'todayChecklistDone' => $todayChecklist !== null,
             'myTripsMonth' => $myTripsMonth,
             'myTonnageMonth' => round($myTonnageMonth, 2),
@@ -244,7 +253,7 @@ class DashboardDataService
             ->get()
             ->map(fn ($c) => [
                 'id' => $c->id,
-                'checklist_date' => $c->checklist_date,
+                'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon ? $c->checklist_date->format('d/m/Y') : $c->checklist_date,
                 'truck' => $c->truck?->matricule,
                 'driver' => $c->driver?->name,
                 'issues_count' => $c->issues->count(),

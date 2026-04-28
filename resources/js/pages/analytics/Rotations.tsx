@@ -72,7 +72,7 @@ export default function RotationsDashboard(props: Props) {
                 <KpiCard label="Rotations" value={totalTrips} icon={<BarChart3 size={22} />} color="var(--color-info)" />
                 <KpiCard label="Poids transporté" value={totalProviderWeight} unit="T" icon={<Weight size={22} />} color="var(--color-primary)" />
                 <KpiCard label="Poids reçu" value={totalClientWeight} unit="T" icon={<Scale size={22} />} color="var(--color-success)" />
-                <KpiCard label="Écart total" value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color="var(--color-danger)" />
+                <KpiCard label="Perte totale" value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color="var(--color-danger)" />
             </KpiGrid>
 
             {/* Monthly breakdown */}
@@ -87,7 +87,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rotations</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Reçu</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -121,7 +121,7 @@ export default function RotationsDashboard(props: Props) {
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Rotations</span><span className="font-mono">{p.trips}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Transporté</span><span className="font-mono">{fmtT(p.prov)}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Reçu</span><span className="font-mono">{fmtT(p.client)}</span></div>
-                                    <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Écart</span><span className="font-mono text-[var(--color-danger)]">{fmtT(Math.abs(p.prov - p.client))}</span></div>
+                                    <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Perte</span><span className="font-mono text-[var(--color-danger)]">{fmtT(Math.abs(p.prov - p.client))}</span></div>
                                 </div>
                             </div>
                         ))}
@@ -143,7 +143,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rot.</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -173,7 +173,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Conducteur</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rot.</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
