@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'permission:logistics-dashboard'])->group(function () {
     // Fleet live map
     Route::get('/logistics/fleet-map', [TruckController::class, 'mapPage'])
         ->name('fleet-map');

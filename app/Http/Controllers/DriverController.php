@@ -184,8 +184,8 @@ class DriverController extends Controller
             'trips' => $trips->through(fn ($trip) => [
                 'id' => $trip->id,
                 'reference' => $trip->reference,
-                'provider_date' => $trip->provider_date,
-                'client_date' => $trip->client_date,
+                'provider_date' => $trip->provider_date?->format('d/m/Y'),
+                'client_date' => $trip->client_date?->format('d/m/Y'),
                 'provider_net_weight' => $trip->provider_net_weight,
                 'client_net_weight' => $trip->client_net_weight,
                 'product' => $trip->product,
@@ -230,15 +230,24 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'total_kilometers' => $truck->total_kilometers,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
                 'is_active' => $truck->is_active,
                 'transporter' => $truck->transporter ? [
                     'id' => $truck->transporter->id,
                     'name' => $truck->transporter->name,
                 ] : null,
+                'fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'speed' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'movement_status' => $truck->fleeti_last_movement_status,
+                'latitude' => $truck->fleeti_last_latitude !== null ? (float) $truck->fleeti_last_latitude : null,
+                'longitude' => $truck->fleeti_last_longitude !== null ? (float) $truck->fleeti_last_longitude : null,
+                'last_sync' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'maintenance_level' => $truck->maintenanceLevelByType(),
                 'maintenances' => $truck->maintenances->map(fn ($m) => [
                     'id' => $m->id,
-                    'maintenance_date' => $m->maintenance_date,
+                    'maintenance_date' => $m->maintenance_date instanceof \Carbon\Carbon
+                        ? $m->maintenance_date->format('d/m/Y')
+                        : $m->maintenance_date,
                     'type' => $m->type,
                     'description' => $m->description,
                     'cost' => $m->cost,
@@ -293,7 +302,12 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'total_kilometers' => $truck->total_kilometers,
+                'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
+                'fleeti_last_kilometers' => $truck->fleeti_last_kilometers !== null ? (float) $truck->fleeti_last_kilometers : null,
+                'fleeti_last_fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
+                'fleeti_last_synced_at' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'fleeti_last_speed_kmh' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
+                'fleeti_last_movement_status' => $truck->fleeti_last_movement_status,
             ],
             'options' => [
                 'tire' => DailyChecklist::TIRE_OPTIONS,
@@ -305,7 +319,9 @@ class DriverController extends Controller
             ],
             'todayChecklist' => $todayChecklist ? [
                 'id' => $todayChecklist->id,
-                'checklist_date' => $todayChecklist->checklist_date,
+                'checklist_date' => $todayChecklist->checklist_date instanceof \Carbon\Carbon
+                    ? $todayChecklist->checklist_date->format('d/m/Y')
+                    : $todayChecklist->checklist_date,
                 'start_km' => $todayChecklist->start_km,
                 'end_km' => $todayChecklist->end_km,
                 'fuel_filled' => $todayChecklist->fuel_filled,
@@ -325,7 +341,9 @@ class DriverController extends Controller
             ] : null,
             'history' => $history->map(fn ($c) => [
                 'id' => $c->id,
-                'checklist_date' => $c->checklist_date,
+                'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon
+                    ? $c->checklist_date->format('d/m/Y')
+                    : $c->checklist_date,
                 'start_km' => $c->start_km,
                 'end_km' => $c->end_km,
                 'tire_condition' => $c->tire_condition,
