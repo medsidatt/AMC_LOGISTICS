@@ -109,8 +109,9 @@ class TrackingDashboardController extends Controller
 
         // Monthly tonnage (provider vs client)
         // Monthly grouped by custom periods (22nd to 21st) using client_date
+        // Day >= 22 belongs to next month's period, Day 1-21 belongs to current month's period
         $monthlyRaw = (clone $q)
-            ->selectRaw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->selectRaw("CASE WHEN DAY(client_date) >= 22 THEN DATE_FORMAT(DATE_ADD(client_date, INTERVAL 1 MONTH), '%Y-%m') ELSE DATE_FORMAT(client_date, '%Y-%m') END as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(client_net_weight - provider_net_weight) as gap_sum, COUNT(*) as trips")
             ->whereNotNull('client_date')
             ->groupBy('ym')
             ->orderBy('ym')
@@ -124,14 +125,14 @@ class TrackingDashboardController extends Controller
 
         // Gap distribution by product
         $gapByProduct = (clone $q)
-            ->selectRaw("product, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->selectRaw("product, SUM(client_net_weight - provider_net_weight) as gap_sum, COUNT(*) as trips")
             ->whereNotNull('product')
             ->groupBy('product')
             ->get();
 
         // Driver risk ranking (top 10)
         $driverRisk = (clone $q)
-            ->selectRaw('driver_id, SUM(ABS(provider_net_weight - client_net_weight)) as sum_gap, COUNT(*) as trip_count, SUM(CASE WHEN ABS(provider_net_weight - client_net_weight) > ? THEN 1 ELSE 0 END) as large_count', [$this->gapThresholdKg])
+            ->selectRaw('driver_id, SUM(client_net_weight - provider_net_weight) as sum_gap, COUNT(*) as trip_count, SUM(CASE WHEN (client_net_weight - provider_net_weight) < -? THEN 1 ELSE 0 END) as large_count', [$this->gapThresholdKg])
             ->groupBy('driver_id')
             ->orderByDesc('sum_gap')
             ->limit(10)
@@ -144,7 +145,7 @@ class TrackingDashboardController extends Controller
 
         // Gap by base
         $gapByBase = (clone $q)
-            ->selectRaw("base, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->selectRaw("base, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(client_net_weight - provider_net_weight) as gap_sum, COUNT(*) as trips")
             ->whereNotNull('base')
             ->groupBy('base')
             ->get();
@@ -420,8 +421,9 @@ class TrackingDashboardController extends Controller
         $totalGap = $totalClientWeight - $totalProviderWeight;
 
         // Monthly breakdown (22→21)
+        // Day >= 22 belongs to next month's period, Day 1-21 belongs to current month's period
         $monthlyRaw = (clone $q)
-            ->selectRaw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum, COUNT(*) as trips")
+            ->selectRaw("CASE WHEN DAY(client_date) >= 22 THEN DATE_FORMAT(DATE_ADD(client_date, INTERVAL 1 MONTH), '%Y-%m') ELSE DATE_FORMAT(client_date, '%Y-%m') END as ym, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(client_net_weight - provider_net_weight) as gap_sum, COUNT(*) as trips")
             ->whereNotNull('client_date')
             ->groupBy('ym')
             ->orderBy('ym')
@@ -429,7 +431,7 @@ class TrackingDashboardController extends Controller
 
         // Top trucks by rotations
         $topTrucks = (clone $q)
-            ->selectRaw('truck_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum')
+            ->selectRaw('truck_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(client_net_weight - provider_net_weight) as gap_sum')
             ->groupBy('truck_id')
             ->orderByDesc('trips')
             ->limit(15)
@@ -444,7 +446,7 @@ class TrackingDashboardController extends Controller
 
         // Top drivers by rotations
         $topDrivers = (clone $q)
-            ->selectRaw('driver_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(ABS(provider_net_weight - client_net_weight)) as gap_sum')
+            ->selectRaw('driver_id, COUNT(*) as trips, SUM(provider_net_weight) as prov, SUM(client_net_weight) as client, SUM(client_net_weight - provider_net_weight) as gap_sum')
             ->groupBy('driver_id')
             ->orderByDesc('trips')
             ->limit(15)

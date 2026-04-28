@@ -49,8 +49,9 @@ interface TruckData {
 interface Props {
     driver: { id: number; name: string };
     truck: TruckData;
-    todayChecklist: ChecklistEntry | null;
-    history: ChecklistEntry[];
+    currentWeekStart: string;
+    currentChecklist: (ChecklistEntry & { week_start_date?: string; status?: string }) | null;
+    history: (ChecklistEntry & { week_start_date?: string; status?: string })[];
     options: {
         tire: Record<string, string>;
         brake: Record<string, string>;
@@ -161,7 +162,7 @@ const MOVEMENT_LABEL: Record<string, string> = {
     parked: 'Stationn',
 };
 
-export default function Checklist({ driver, truck, todayChecklist, history, options }: Props) {
+export default function Checklist({ driver, truck, currentChecklist, history, options }: Props) {
     const [showHistory, setShowHistory] = useState(false);
 
     // Best available odometer: prefer Fleeti live km, fallback to total_kilometers
@@ -284,40 +285,40 @@ export default function Checklist({ driver, truck, todayChecklist, history, opti
                 </div>
             </div>
 
-            {todayChecklist ? (
+            {currentChecklist ? (
                 /* ── Already submitted ── */
                 <Card>
                     <div className="flex items-center gap-2 mb-4">
                         <CheckCircle2 size={22} className="text-emerald-500" />
-                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Checklist soumise</h3>
+                        <h3 className="text-lg font-semibold text-[var(--color-text)]">Checklist hebdomadaire soumise{currentChecklist.week_start_date ? ` — semaine du ${currentChecklist.week_start_date}` : ''}{currentChecklist.status ? ` (${currentChecklist.status})` : ''}</h3>
                     </div>
 
-                    {(todayChecklist.start_km != null || todayChecklist.end_km != null) && (
+                    {(currentChecklist.start_km != null || currentChecklist.end_km != null) && (
                         <div className="flex gap-4 mb-4 p-4 rounded-xl bg-[var(--color-surface-hover)]">
-                            {todayChecklist.start_km != null && (
+                            {currentChecklist.start_km != null && (
                                 <div>
                                     <span className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">Dpart</span>
-                                    <p className="text-sm font-bold">{todayChecklist.start_km.toLocaleString('fr-FR')} km</p>
+                                    <p className="text-sm font-bold">{currentChecklist.start_km.toLocaleString('fr-FR')} km</p>
                                 </div>
                             )}
-                            {todayChecklist.end_km != null && (
+                            {currentChecklist.end_km != null && (
                                 <div>
                                     <span className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">Arrive</span>
-                                    <p className="text-sm font-bold">{todayChecklist.end_km.toLocaleString('fr-FR')} km</p>
+                                    <p className="text-sm font-bold">{currentChecklist.end_km.toLocaleString('fr-FR')} km</p>
                                 </div>
                             )}
-                            {todayChecklist.start_km != null && todayChecklist.end_km != null && (
+                            {currentChecklist.start_km != null && currentChecklist.end_km != null && (
                                 <div>
                                     <span className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">Distance</span>
                                     <p className="text-sm font-bold text-[var(--color-primary)]">
-                                        {(todayChecklist.end_km - todayChecklist.start_km).toLocaleString('fr-FR')} km
+                                        {(currentChecklist.end_km - currentChecklist.start_km).toLocaleString('fr-FR')} km
                                     </p>
                                 </div>
                             )}
-                            {todayChecklist.fuel_filled != null && (
+                            {currentChecklist.fuel_filled != null && (
                                 <div>
                                     <span className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">Carburant ajout</span>
-                                    <p className="text-sm font-bold">{todayChecklist.fuel_filled} L</p>
+                                    <p className="text-sm font-bold">{currentChecklist.fuel_filled} L</p>
                                 </div>
                             )}
                         </div>
@@ -325,12 +326,12 @@ export default function Checklist({ driver, truck, todayChecklist, history, opti
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {([
-                            ['Pneus', todayChecklist.tire_condition, options.tire],
-                            ['Carburant', todayChecklist.fuel_level, options.fuel],
-                            ['Huile', todayChecklist.oil_level, options.oil],
-                            ['Freins', todayChecklist.brakes, options.brake],
-                            ['Feux', todayChecklist.lights, options.light],
-                            ['tat gnral', todayChecklist.general_condition_notes, options.general],
+                            ['Pneus', currentChecklist.tire_condition, options.tire],
+                            ['Carburant', currentChecklist.fuel_level, options.fuel],
+                            ['Huile', currentChecklist.oil_level, options.oil],
+                            ['Freins', currentChecklist.brakes, options.brake],
+                            ['Feux', currentChecklist.lights, options.light],
+                            ['tat gnral', currentChecklist.general_condition_notes, options.general],
                         ] as [string, string, Record<string, string>][]).map(([label, value, opts]) => (
                             <div key={label} className="p-3 rounded-lg bg-[var(--color-surface-hover)]">
                                 <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
@@ -341,18 +342,18 @@ export default function Checklist({ driver, truck, todayChecklist, history, opti
                         ))}
                     </div>
 
-                    {todayChecklist.notes && (
+                    {currentChecklist.notes && (
                         <div className="mt-3 p-3 rounded-lg bg-[var(--color-surface-hover)]">
                             <p className="text-xs text-[var(--color-text-muted)]">Notes</p>
-                            <p className="text-sm text-[var(--color-text)]">{todayChecklist.notes}</p>
+                            <p className="text-sm text-[var(--color-text)]">{currentChecklist.notes}</p>
                         </div>
                     )}
 
-                    {todayChecklist.issues.filter(i => i.flagged).length > 0 && (
+                    {currentChecklist.issues.filter(i => i.flagged).length > 0 && (
                         <div className="mt-4">
                             <p className="text-xs text-[var(--color-text-muted)] uppercase mb-2">Problmes signals</p>
                             <div className="flex flex-wrap gap-2">
-                                {todayChecklist.issues.filter(i => i.flagged).map((issue) => (
+                                {currentChecklist.issues.filter(i => i.flagged).map((issue) => (
                                     <Badge key={issue.id} variant="danger">
                                         {issue.category}{issue.issue_notes ? ` — ${issue.issue_notes}` : ''}
                                     </Badge>
@@ -516,7 +517,7 @@ export default function Checklist({ driver, truck, todayChecklist, history, opti
 
                     <Button type="submit" loading={form.processing} className="w-full sm:w-auto" disabled={hasKmError}>
                         <ClipboardCheck size={16} className="mr-2" />
-                        Soumettre la checklist
+                        Soumettre la checklist hebdomadaire
                     </Button>
                 </form>
             )}

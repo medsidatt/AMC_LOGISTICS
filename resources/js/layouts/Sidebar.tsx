@@ -113,9 +113,40 @@ const driverSections: NavSection[] = [
     {
         header: 'Mon espace',
         items: [
-            { label: 'Checklist quotidien', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18} /> },
+            { label: 'Checklist hebdomadaire', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18} /> },
             { label: 'Mes voyages', href: '/drivers/my-trips', icon: <Route size={18} /> },
             { label: 'Mon camion', href: '/drivers/my-truck', icon: <Truck size={18} /> },
+        ],
+    },
+];
+
+const hseSections: NavSection[] = [
+    {
+        header: 'HSE',
+        items: [
+            { label: 'Mes inspections', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
+            { label: 'Nouvelle inspection', href: '/hse/inspections/create', icon: <ClipboardCheck size={18} /> },
+        ],
+    },
+];
+
+const logisticsResponsibleSections: NavSection[] = [
+    {
+        header: 'Validation',
+        items: [
+            { label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18} />, match: '/logistics/validation/checklists' },
+            { label: 'Inspections HSE', href: '/logistics/validation/inspections', icon: <ShieldCheck size={18} />, match: '/logistics/validation/inspections' },
+        ],
+    },
+    {
+        header: 'Logistique',
+        items: [
+            { label: 'Tableau logistique', href: '/logistics/dashboard', icon: <BarChart3 size={18} />, match: '/logistics/dashboard' },
+            { label: 'Camions', href: '/trucks', icon: <Truck size={18} /> },
+            { label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18} /> },
+            { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
+            { label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
+            { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
         ],
     },
 ];
@@ -130,12 +161,18 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
     const { auth } = usePage().props;
     const isDriver = auth.roles.includes('Driver');
     const isAdmin = auth.roles.includes('Admin') || auth.roles.includes('Super Admin');
+    const isHse = auth.roles.includes('HSE Agent');
+    const isLogisticsResp = auth.roles.includes('Logistics Responsible');
 
     let sections: NavSection[];
-    if (isDriver) {
-        sections = [...driverSections, accountSection];
-    } else if (isAdmin) {
+    if (isAdmin) {
         sections = [...dataSections, adminSection, accountSection];
+    } else if (isDriver) {
+        sections = [...driverSections, accountSection];
+    } else if (isHse) {
+        sections = [...hseSections, accountSection];
+    } else if (isLogisticsResp) {
+        sections = [...logisticsResponsibleSections, accountSection];
     } else {
         sections = [...dataSections, accountSection];
     }

@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
+use App\Models\InspectionChecklist;
+use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\TransportTracking;
 use App\Models\Truck;
@@ -56,8 +58,9 @@ class DashboardDataService
             ]);
 
         // Monthly tonnage grouped by custom periods (22nd to 21st), using client_date
+        // Day >= 22 belongs to next month's period, Day 1-21 belongs to current month's period
         $monthlyTonnage = TransportTracking::select(
-                DB::raw("DATE_FORMAT(DATE_ADD(client_date, INTERVAL 10 DAY), '%Y-%m') as month"),
+                DB::raw("CASE WHEN DAY(client_date) >= 22 THEN DATE_FORMAT(DATE_ADD(client_date, INTERVAL 1 MONTH), '%Y-%m') ELSE DATE_FORMAT(client_date, '%Y-%m') END as month"),
                 DB::raw('SUM(provider_net_weight) as provider_total'),
                 DB::raw('SUM(client_net_weight) as client_total'),
                 DB::raw('COUNT(*) as trip_count')
@@ -264,6 +267,126 @@ class DashboardDataService
             'dueEngineTrucks' => $dueEngineTrucks,
             'unresolvedIssues' => $unresolvedIssues,
             'lastChecklists' => $lastChecklists,
+        ];
+    }
+
+    public function getHseData($user): array
+    {
+        $myInspections = InspectionChecklist::query()
+            ->where('inspector_id', $user->id);
+
+        $kpis = [
+            'drafts' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_DRAFT)->count(),
+            'submitted' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_SUBMITTED)->count(),
+            'validated' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_VALIDATED)->count(),
+            'rejected' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_REJECTED)->count(),
+            'open_critical_issues' => InspectionChecklistIssue::query()
+                ->whereHas('inspectionChecklist', fn ($q) => $q->where('inspector_id', $user->id))
+                ->where('severity', 'critical')
+                ->whereNull('resolved_at')
+                ->count(),
+        ];
+
+        $recent = (clone $myInspections)
+            ->with(['truck:id,matricule', 'issues'])
+            ->orderByDesc('inspection_date')
+            ->orderByDesc('id')
+            ->limit(8)
+            ->get()
+            ->map(fn (InspectionChecklist $i) => [
+                'id' => $i->id,
+                'inspection_date' => $i->inspection_date?->format('d/m/Y'),
+                'truck' => $i->truck?->matricule,
+                'category' => $i->category,
+                'status' => $i->status,
+                'issues_count' => $i->issues->count(),
+            ])->values();
+
+        $cutoff = now()->subDays(30)->toDateString();
+        $trucksNeedingInspection = Truck::query()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->whereDoesntHave('inspectionChecklists', function ($q) use ($cutoff) {
+                $q->whereDate('inspection_date', '>=', $cutoff);
+            })
+            ->orderBy('matricule')
+            ->limit(10)
+            ->get(['id', 'matricule'])
+            ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule]);
+
+        return [
+            'kpis' => $kpis,
+            'recentInspections' => $recent,
+            'trucksNeedingInspection' => $trucksNeedingInspection,
+        ];
+    }
+
+    public function getLogisticsResponsibleData(): array
+    {
+        $pendingChecklists = DailyChecklist::query()->where('status', DailyChecklist::STATUS_PENDING)->count();
+        $pendingInspections = InspectionChecklist::query()->where('status', InspectionChecklist::STATUS_SUBMITTED)->count();
+        $unresolvedFlagged = DailyChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
+        $unresolvedInspectionFlagged = InspectionChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
+
+        $dueEngineTrucks = Truck::query()
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (Truck $t) => (float) $t->total_kilometers >= (float) $t->nextMaintenanceAtKm())
+            ->count();
+
+        $nextChecklists = DailyChecklist::query()
+            ->where('status', DailyChecklist::STATUS_PENDING)
+            ->with(['truck:id,matricule', 'driver:id,name', 'issues'])
+            ->orderByDesc('week_start_date')
+            ->limit(5)
+            ->get()
+            ->map(fn (DailyChecklist $c) => [
+                'id' => $c->id,
+                'week_start_date' => $c->week_start_date?->format('d/m/Y'),
+                'truck' => $c->truck?->matricule,
+                'driver' => $c->driver?->name,
+                'issues_count' => $c->issues->count(),
+            ])->values();
+
+        $nextInspections = InspectionChecklist::query()
+            ->where('status', InspectionChecklist::STATUS_SUBMITTED)
+            ->with(['truck:id,matricule', 'inspector:id,name', 'issues'])
+            ->orderByDesc('inspection_date')
+            ->limit(5)
+            ->get()
+            ->map(fn (InspectionChecklist $i) => [
+                'id' => $i->id,
+                'inspection_date' => $i->inspection_date?->format('d/m/Y'),
+                'truck' => $i->truck?->matricule,
+                'inspector' => $i->inspector?->name,
+                'category' => $i->category,
+                'critical_count' => $i->issues->where('severity', 'critical')->count(),
+            ])->values();
+
+        $alerts = LogisticsAlert::query()
+            ->whereNull('read_at')
+            ->whereNull('resolved_at')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(fn ($a) => [
+                'id' => $a->id,
+                'type' => $a->type,
+                'message' => $a->message,
+                'created_at' => $a->created_at->format('d/m/Y H:i'),
+            ]);
+
+        return [
+            'kpis' => [
+                'pending_checklists' => $pendingChecklists,
+                'pending_inspections' => $pendingInspections,
+                'unresolved_flagged' => $unresolvedFlagged,
+                'unresolved_inspection_flagged' => $unresolvedInspectionFlagged,
+                'due_engine_trucks' => $dueEngineTrucks,
+            ],
+            'nextChecklists' => $nextChecklists,
+            'nextInspections' => $nextInspections,
+            'alerts' => $alerts,
         ];
     }
 }

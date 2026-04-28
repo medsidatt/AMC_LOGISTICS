@@ -101,6 +101,11 @@ class Truck extends Model
         return $this->hasMany(Maintenance::class);
     }
 
+    public function inspectionChecklists(): HasMany
+    {
+        return $this->hasMany(InspectionChecklist::class);
+    }
+
     public function maintenanceProfiles(): HasMany
     {
         return $this->hasMany(TruckMaintenanceProfile::class);
