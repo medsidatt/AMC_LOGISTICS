@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
+use App\Models\InspectionChecklist;
+use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\TransportTracking;
 use App\Models\Truck;
@@ -18,7 +20,14 @@ class LogisticsManagerController extends Controller
         private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
         private readonly RotationService $rotationService,
     ) {
-        $this->middleware('permission:logistics-dashboard');
+        $this->middleware('permission:logistics-dashboard', ['except' => [
+            'pendingChecklists', 'validateChecklist',
+            'pendingInspections', 'validateInspection',
+            'resolveInspectionIssue',
+        ]]);
+        $this->middleware('permission:weekly-checklist-validate', ['only' => ['pendingChecklists', 'validateChecklist']]);
+        $this->middleware('permission:inspection-validate', ['only' => ['pendingInspections', 'validateInspection']]);
+        $this->middleware('permission:checklist-issue-resolve', ['only' => ['resolveInspectionIssue']]);
     }
 
     public function dashboard()
@@ -179,5 +188,98 @@ class LogisticsManagerController extends Controller
     {
         $this->rotationService->validateRotation($transportTracking, auth()->user());
         return redirect()->back()->with('success', 'Rotation validée avec succès. Kilométrage mis à jour.');
+    }
+
+    public function pendingChecklists()
+    {
+        $pending = DailyChecklist::query()
+            ->where('status', DailyChecklist::STATUS_PENDING)
+            ->with(['truck:id,matricule', 'driver:id,name', 'issues'])
+            ->orderByDesc('week_start_date')
+            ->paginate(25)
+            ->through(fn ($c) => [
+                'id' => $c->id,
+                'week_start_date' => $c->week_start_date?->format('d/m/Y'),
+                'checklist_date' => $c->checklist_date?->format('d/m/Y'),
+                'truck' => $c->truck?->matricule,
+                'driver' => $c->driver?->name,
+                'issues_count' => $c->issues->count(),
+                'flagged_count' => $c->issues->where('flagged', true)->whereNull('resolved_at')->count(),
+            ]);
+
+        return \Inertia\Inertia::render('logistics/PendingChecklists', [
+            'checklists' => $pending,
+        ]);
+    }
+
+    public function validateChecklist(Request $request, DailyChecklist $dailyChecklist)
+    {
+        $data = $request->validate([
+            'decision' => 'required|in:validated,rejected',
+            'validation_notes' => 'nullable|string|max:2000',
+        ]);
+
+        $dailyChecklist->update([
+            'status' => $data['decision'],
+            'validated_by' => auth()->id(),
+            'validated_at' => now(),
+            'validation_notes' => $data['validation_notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', 'Checklist hebdomadaire mise à jour.');
+    }
+
+    public function pendingInspections()
+    {
+        $pending = InspectionChecklist::query()
+            ->pendingValidation()
+            ->with(['truck:id,matricule', 'inspector:id,name', 'issues'])
+            ->orderByDesc('inspection_date')
+            ->paginate(25)
+            ->through(fn ($i) => [
+                'id' => $i->id,
+                'inspection_date' => $i->inspection_date?->format('d/m/Y'),
+                'truck' => $i->truck?->matricule,
+                'inspector' => $i->inspector?->name,
+                'category' => $i->category,
+                'issues_count' => $i->issues->count(),
+                'critical_count' => $i->issues->where('severity', 'critical')->count(),
+            ]);
+
+        return \Inertia\Inertia::render('logistics/PendingInspections', [
+            'inspections' => $pending,
+        ]);
+    }
+
+    public function validateInspection(Request $request, InspectionChecklist $inspection)
+    {
+        $data = $request->validate([
+            'decision' => 'required|in:validated,rejected',
+            'validation_notes' => 'nullable|string|max:2000',
+        ]);
+
+        $inspection->update([
+            'status' => $data['decision'],
+            'validated_by' => auth()->id(),
+            'validated_at' => now(),
+            'validation_notes' => $data['validation_notes'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', 'Inspection mise à jour.');
+    }
+
+    public function resolveInspectionIssue(Request $request, InspectionChecklistIssue $issue)
+    {
+        $data = $request->validate([
+            'resolution_notes' => 'required|string|max:10000',
+        ]);
+
+        $issue->update([
+            'resolution_notes' => $data['resolution_notes'],
+            'resolved_at' => now(),
+            'resolved_by' => auth()->id(),
+        ]);
+
+        return redirect()->back()->with('success', 'Issue d\'inspection résolue.');
     }
 }
