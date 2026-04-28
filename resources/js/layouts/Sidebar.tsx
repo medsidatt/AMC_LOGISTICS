@@ -19,11 +19,27 @@ interface NavSection {
     items: NavItem[];
 }
 
-function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-    const { url } = usePage();
-    const isActive = item.match
-        ? url.startsWith(item.match)
-        : url === item.href || url.startsWith(item.href + '/');
+function pathFor(item: NavItem): string {
+    return item.match ?? item.href;
+}
+
+function pickActiveHref(url: string, items: NavItem[]): string | null {
+    let best: { item: NavItem; len: number } | null = null;
+    for (const item of items) {
+        const path = pathFor(item);
+        const matches = item.match
+            ? url.startsWith(item.match)
+            : url === item.href || url.startsWith(item.href + '/');
+        if (!matches) continue;
+        if (!best || path.length > best.len) {
+            best = { item, len: path.length };
+        }
+    }
+    return best ? best.item.href : null;
+}
+
+function SidebarLink({ item, collapsed, activeHref }: { item: NavItem; collapsed: boolean; activeHref: string | null }) {
+    const isActive = item.href === activeHref;
 
     return (
         <li>
@@ -177,6 +193,15 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
         sections = [...dataSections, accountSection];
     }
 
+    const dashboardItem: NavItem = {
+        label: 'Dashboard',
+        href: '/dashboard',
+        icon: <LayoutDashboard size={18} />,
+    };
+    const allItems: NavItem[] = [dashboardItem, ...sections.flatMap((s) => s.items)];
+    const { url } = usePage();
+    const activeHref = pickActiveHref(url, allItems);
+
     return (
         <>
             {mobileOpen && (
@@ -214,21 +239,13 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto py-3 px-2">
                     <ul className="space-y-0.5">
-                        <SidebarLink
-                            item={{
-                                label: 'Dashboard',
-                                href: '/dashboard',
-                                icon: <LayoutDashboard size={18} />,
-                                match: '/dashboard',
-                            }}
-                            collapsed={collapsed}
-                        />
+                        <SidebarLink item={dashboardItem} collapsed={collapsed} activeHref={activeHref} />
 
                         {sections.map((section) => (
                             <div key={section.header}>
                                 <SectionHeader label={section.header} collapsed={collapsed} />
                                 {section.items.map((item) => (
-                                    <SidebarLink key={item.href} item={item} collapsed={collapsed} />
+                                    <SidebarLink key={item.href} item={item} collapsed={collapsed} activeHref={activeHref} />
                                 ))}
                             </div>
                         ))}
