@@ -17,6 +17,11 @@ interface Inspection {
     [key: string]: any;
 }
 
+interface Section {
+    label: string;
+    fields: Record<string, string>;
+}
+
 interface Props {
     inspection: Inspection;
     trucks: { id: number; matricule: string }[];
@@ -24,6 +29,7 @@ interface Props {
         categories: Record<string, string>;
         conditions: Record<string, string>;
         fields: string[];
+        sections: Record<string, Section>;
     };
 }
 
@@ -70,20 +76,22 @@ export default function InspectionEdit({ inspection, options }: Props) {
                     </div>
                 </Card>
 
-                <Card>
-                    <h2 className="text-lg font-semibold mb-3">Points d'inspection</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {options.fields.map((field) => (
-                            <FormSelect
-                                key={field}
-                                label={field}
-                                value={form.data[field] as string}
-                                onChange={(v) => form.setData(field, v)}
-                                options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
-                            />
-                        ))}
-                    </div>
-                </Card>
+                {Object.entries(options.sections).map(([sectionKey, section]) => (
+                    <Card key={sectionKey}>
+                        <h2 className="text-lg font-semibold mb-3">{section.label}</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {Object.entries(section.fields).map(([field, label]) => (
+                                <FormSelect
+                                    key={field}
+                                    label={label}
+                                    value={form.data[field] as string}
+                                    onChange={(v) => form.setData(field, v)}
+                                    options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
+                                />
+                            ))}
+                        </div>
+                    </Card>
+                ))}
 
                 <Card>
                     <FormTextarea label="Constatations" value={form.data.findings_summary} onChange={(e) => form.setData('findings_summary', e.target.value)} rows={3} />

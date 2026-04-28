@@ -9,31 +9,20 @@ import { ShieldCheck } from 'lucide-react';
 
 interface Truck { id: number; matricule: string; }
 
+interface Section {
+    label: string;
+    fields: Record<string, string>;
+}
+
 interface Props {
     trucks: Truck[];
     options: {
         categories: Record<string, string>;
         conditions: Record<string, string>;
         fields: string[];
+        sections: Record<string, Section>;
     };
 }
-
-const FIELD_LABELS: Record<string, string> = {
-    seatbelts: 'Ceintures de sécurité',
-    extinguisher_status: 'Extincteur',
-    first_aid_kit: 'Trousse de secours',
-    reflective_triangles: 'Triangles réfléchissants',
-    tire_tread_depth: 'Profondeur des sculptures (pneus)',
-    brake_test_result: 'Test de freinage',
-    lights_full_check: 'Feux (vérification complète)',
-    mirrors: 'Rétroviseurs',
-    horn: 'Avertisseur sonore',
-    steering_play: 'Jeu de direction',
-    suspension: 'Suspension',
-    exhaust_emissions: 'Émissions échappement',
-    chassis_condition: 'État du châssis',
-    cargo_securing_equipment: 'Équipement d\'arrimage',
-};
 
 export default function InspectionCreate({ trucks, options }: Props) {
     const initial: Record<string, any> = {
@@ -98,35 +87,37 @@ export default function InspectionCreate({ trucks, options }: Props) {
                     </div>
                 </Card>
 
-                <Card>
-                    <h2 className="text-lg font-semibold mb-3">Points d'inspection</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {options.fields.map((field) => (
-                            <FormSelect
-                                key={field}
-                                label={FIELD_LABELS[field] ?? field}
-                                value={form.data[field] as string}
-                                onChange={(v) => form.setData(field, v)}
-                                options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
-                            />
-                        ))}
-                    </div>
-                </Card>
+                {Object.entries(options.sections).map(([sectionKey, section]) => (
+                    <Card key={sectionKey}>
+                        <h2 className="text-lg font-semibold mb-3">{section.label}</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {Object.entries(section.fields).map(([field, label]) => (
+                                <FormSelect
+                                    key={field}
+                                    label={label}
+                                    value={form.data[field] as string}
+                                    onChange={(v) => form.setData(field, v)}
+                                    options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
+                                />
+                            ))}
+                        </div>
+                    </Card>
+                ))}
 
                 <Card>
                     <h2 className="text-lg font-semibold mb-3">Issues détectées</h2>
                     <div className="space-y-2">
-                        {options.fields.map((field) => {
+                        {Object.entries(options.sections).flatMap(([_, section]) => Object.entries(section.fields)).map(([field, label]) => {
                             const flagged = (form.data.issue_flags as string[]).includes(field);
                             return (
                                 <div key={field} className="flex items-start gap-3 p-2 rounded-lg border border-[var(--color-border)]">
-                                    <label className="flex items-center gap-2 min-w-[220px]">
+                                    <label className="flex items-center gap-2 min-w-[260px]">
                                         <input
                                             type="checkbox"
                                             checked={flagged}
                                             onChange={() => toggleIssue(field)}
                                         />
-                                        <span className="text-sm">{FIELD_LABELS[field] ?? field}</span>
+                                        <span className="text-sm">{label}</span>
                                     </label>
                                     {flagged && (
                                         <>
