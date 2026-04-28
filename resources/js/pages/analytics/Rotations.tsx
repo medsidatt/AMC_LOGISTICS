@@ -72,7 +72,7 @@ export default function RotationsDashboard(props: Props) {
                 <KpiCard label="Rotations" value={totalTrips} icon={<BarChart3 size={22} />} color="var(--color-info)" />
                 <KpiCard label="Poids transporté" value={totalProviderWeight} unit="T" icon={<Weight size={22} />} color="var(--color-primary)" />
                 <KpiCard label="Poids reçu" value={totalClientWeight} unit="T" icon={<Scale size={22} />} color="var(--color-success)" />
-                <KpiCard label="Perte totale" value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color="var(--color-danger)" />
+                <KpiCard label={totalGap < 0 ? 'Perte nette' : 'Excédent net'} value={Math.abs(totalGap)} unit="T" icon={<TrendingDown size={22} />} color={totalGap < 0 ? 'var(--color-danger)' : 'var(--color-info)'} />
             </KpiGrid>
 
             {/* Monthly breakdown */}
@@ -87,7 +87,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rotations</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
                                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Reçu</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -97,7 +97,7 @@ export default function RotationsDashboard(props: Props) {
                                         <td className="px-4 py-3 text-right font-mono text-[var(--color-text)]">{monthlyTrips[i]}</td>
                                         <td className="px-4 py-3 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyProvider[i])}</td>
                                         <td className="px-4 py-3 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyClient[i])}</td>
-                                        <td className="px-4 py-3 text-right"><span className={clsx('font-mono', monthlyGap[i] > 500 ? 'text-red-600 font-bold' : 'text-[var(--color-text)]')}>{fmtT(monthlyGap[i])}</span></td>
+                                        <td className="px-4 py-3 text-right"><span className={clsx('font-mono', monthlyGap[i] < -500 ? 'text-red-600 font-bold' : monthlyGap[i] > 0 ? 'text-blue-600' : 'text-[var(--color-text)]')}>{monthlyGap[i] > 0 ? '+' : ''}{fmtT(monthlyGap[i])}</span></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -121,7 +121,7 @@ export default function RotationsDashboard(props: Props) {
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Rotations</span><span className="font-mono">{p.trips}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Transporté</span><span className="font-mono">{fmtT(p.prov)}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Reçu</span><span className="font-mono">{fmtT(p.client)}</span></div>
-                                    <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Perte</span><span className="font-mono text-[var(--color-danger)]">{fmtT(Math.abs(p.prov - p.client))}</span></div>
+                                    <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Écart</span><span className={clsx('font-mono', (p.client - p.prov) < 0 ? 'text-[var(--color-danger)]' : (p.client - p.prov) > 0 ? 'text-blue-600' : '')}>{(p.client - p.prov) > 0 ? '+' : ''}{fmtT(p.client - p.prov)}</span></div>
                                 </div>
                             </div>
                         ))}
@@ -143,7 +143,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rot.</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -152,7 +152,11 @@ export default function RotationsDashboard(props: Props) {
                                         <td className="px-3 py-2 font-medium text-[var(--color-text)]">{t.truck}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{t.trips}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmtT(t.prov)}</td>
-                                        <td className="px-3 py-2 text-right"><Badge variant={t.gap > 500 ? 'danger' : 'warning'}>{fmtT(t.gap)}</Badge></td>
+                                        <td className="px-3 py-2 text-right">
+                                            <Badge variant={t.gap < 0 ? (t.gap < -500 ? 'danger' : 'warning') : t.gap > 0 ? 'info' : 'success'}>
+                                                {t.gap < 0 ? '' : t.gap > 0 ? '+' : ''}{fmtT(t.gap)}
+                                            </Badge>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -173,7 +177,7 @@ export default function RotationsDashboard(props: Props) {
                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Conducteur</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Rot.</th>
                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Transporté</th>
-                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Perte</th>
+                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Écart</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
@@ -182,7 +186,11 @@ export default function RotationsDashboard(props: Props) {
                                         <td className="px-3 py-2 font-medium text-[var(--color-text)]">{d.driver}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{d.trips}</td>
                                         <td className="px-3 py-2 text-right font-mono text-[var(--color-text)]">{fmtT(d.prov)}</td>
-                                        <td className="px-3 py-2 text-right"><Badge variant={d.gap > 500 ? 'danger' : 'warning'}>{fmtT(d.gap)}</Badge></td>
+                                        <td className="px-3 py-2 text-right">
+                                            <Badge variant={d.gap < 0 ? (d.gap < -500 ? 'danger' : 'warning') : d.gap > 0 ? 'info' : 'success'}>
+                                                {d.gap < 0 ? '' : d.gap > 0 ? '+' : ''}{fmtT(d.gap)}
+                                            </Badge>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

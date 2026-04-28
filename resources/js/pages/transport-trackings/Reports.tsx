@@ -211,7 +211,9 @@ export default function Reports(props: Props) {
                                         <span className="text-sm font-bold text-[var(--color-text)]">{g.product}</span>
                                         <span className="text-xs text-[var(--color-text-muted)] ml-2">{g.trips} rot.</span>
                                     </div>
-                                    <Badge variant={g.gap_sum > 1000 ? 'danger' : 'warning'}>{fmtT(g.gap_sum)}</Badge>
+                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -1000 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
+                                        {g.gap_sum < 0 ? '' : g.gap_sum > 0 ? '+' : ''}{fmtT(g.gap_sum)}
+                                    </Badge>
                                 </div>
                             ))}
                         </div>
@@ -229,7 +231,9 @@ export default function Reports(props: Props) {
                                         <span className="text-sm font-bold text-[var(--color-text)]">{BASE_LABELS[g.base] ?? g.base}</span>
                                         <span className="text-xs text-[var(--color-text-muted)] ml-2">{g.trips} rot.</span>
                                     </div>
-                                    <Badge variant={g.gap_sum > 1000 ? 'danger' : 'warning'}>{fmtT(g.gap_sum)}</Badge>
+                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -1000 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
+                                        {g.gap_sum < 0 ? '' : g.gap_sum > 0 ? '+' : ''}{fmtT(g.gap_sum)}
+                                    </Badge>
                                 </div>
                             ))}
                         </div>
@@ -263,8 +267,12 @@ export default function Reports(props: Props) {
                                             <span className={clsx('font-medium', i < 3 ? 'text-red-600' : 'text-[var(--color-text)]')}>{d.driver_name}</span>
                                         </td>
                                         <td className="px-4 py-2.5 text-right text-[var(--color-text)]">{d.trip_count}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono text-red-600">{fmtT(d.sum_gap)}</td>
-                                        <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmtT(d.avg_gap)}</td>
+                                        <td className={clsx('px-4 py-2.5 text-right font-mono', d.sum_gap < 0 ? 'text-red-600' : d.sum_gap > 0 ? 'text-blue-600' : 'text-[var(--color-text)]')}>
+                                            {d.sum_gap < 0 ? '' : d.sum_gap > 0 ? '+' : ''}{fmtT(d.sum_gap)}
+                                        </td>
+                                        <td className={clsx('px-4 py-2.5 text-right font-mono', d.avg_gap < 0 ? 'text-red-600' : d.avg_gap > 0 ? 'text-blue-600' : 'text-[var(--color-text)]')}>
+                                            {d.avg_gap < 0 ? '' : d.avg_gap > 0 ? '+' : ''}{fmtT(d.avg_gap)}
+                                        </td>
                                         <td className="px-4 py-2.5 text-right">
                                             {d.large_count > 0
                                                 ? <Badge variant="danger">{d.large_count}</Badge>

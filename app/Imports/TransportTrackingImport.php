@@ -80,9 +80,7 @@ class TransportTrackingImport implements ToModel, WithHeadingRow, WithCalculated
             'client_net_weight'     => $this->parseDecimal($row['client_net_weight']) ?? $tracking->client_net_weight,
             'client_gross_weight'   => $this->parseDecimal($row['client_gross_weight']) ?? $tracking->client_gross_weight,
             'client_tare_weight'    => $this->parseDecimal($row['client_tare']) ?? $tracking->client_tare_weight,
-            'gap'                   => $this->parseDecimal(
-                    ($row['supplier_net_weight'] ?? 0) - ($row['client_net_weight'] ?? 0)
-                ) ?? $tracking->gap,
+            // gap is auto-calculated in model boot(): client_net_weight - provider_net_weight
         ];
 
         // Update only if something changed

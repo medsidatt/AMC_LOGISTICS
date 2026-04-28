@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan *)",
+      "Bash(php -l app/Services/DashboardDataService.php)",
+      "Bash(php -l app/Http/Controllers/HomeController.php)",
+      "Bash(php -l app/Models/Truck.php)",
+      "Bash(npm run *)"
+    ]
+  }
+}
