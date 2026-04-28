@@ -277,20 +277,20 @@ class DriverController extends Controller
                 ->with('error', 'Aucun camion actif assigne a ce conducteur.');
         }
 
-        $today = now()->toDateString();
+        $weekStart = DailyChecklist::weekStartFor(now())->toDateString();
 
-        $todayChecklist = DailyChecklist::query()
+        $currentChecklist = DailyChecklist::query()
             ->where('driver_id', $driver->id)
             ->where('truck_id', $truck->id)
-            ->whereDate('checklist_date', $today)
+            ->whereDate('week_start_date', $weekStart)
             ->with('issues')
             ->first();
 
         $history = DailyChecklist::query()
             ->where('driver_id', $driver->id)
             ->where('truck_id', $truck->id)
-            ->orderByDesc('checklist_date')
-            ->limit(7)
+            ->orderByDesc('week_start_date')
+            ->limit(8)
             ->with('issues')
             ->get();
 
@@ -317,22 +317,27 @@ class DriverController extends Controller
                 'fuel' => DailyChecklist::FUEL_LEVEL_OPTIONS,
                 'general' => DailyChecklist::GENERAL_CONDITION_OPTIONS,
             ],
-            'todayChecklist' => $todayChecklist ? [
-                'id' => $todayChecklist->id,
-                'checklist_date' => $todayChecklist->checklist_date instanceof \Carbon\Carbon
-                    ? $todayChecklist->checklist_date->format('d/m/Y')
-                    : $todayChecklist->checklist_date,
-                'start_km' => $todayChecklist->start_km,
-                'end_km' => $todayChecklist->end_km,
-                'fuel_filled' => $todayChecklist->fuel_filled,
-                'tire_condition' => $todayChecklist->tire_condition,
-                'fuel_level' => $todayChecklist->fuel_level,
-                'oil_level' => $todayChecklist->oil_level,
-                'brakes' => $todayChecklist->brakes,
-                'lights' => $todayChecklist->lights,
-                'general_condition_notes' => $todayChecklist->general_condition_notes,
-                'notes' => $todayChecklist->notes,
-                'issues' => $todayChecklist->issues->map(fn ($i) => [
+            'currentWeekStart' => $weekStart,
+            'currentChecklist' => $currentChecklist ? [
+                'id' => $currentChecklist->id,
+                'checklist_date' => $currentChecklist->checklist_date instanceof \Carbon\Carbon
+                    ? $currentChecklist->checklist_date->format('d/m/Y')
+                    : $currentChecklist->checklist_date,
+                'week_start_date' => $currentChecklist->week_start_date instanceof \Carbon\Carbon
+                    ? $currentChecklist->week_start_date->format('d/m/Y')
+                    : $currentChecklist->week_start_date,
+                'status' => $currentChecklist->status,
+                'start_km' => $currentChecklist->start_km,
+                'end_km' => $currentChecklist->end_km,
+                'fuel_filled' => $currentChecklist->fuel_filled,
+                'tire_condition' => $currentChecklist->tire_condition,
+                'fuel_level' => $currentChecklist->fuel_level,
+                'oil_level' => $currentChecklist->oil_level,
+                'brakes' => $currentChecklist->brakes,
+                'lights' => $currentChecklist->lights,
+                'general_condition_notes' => $currentChecklist->general_condition_notes,
+                'notes' => $currentChecklist->notes,
+                'issues' => $currentChecklist->issues->map(fn ($i) => [
                     'id' => $i->id,
                     'category' => $i->category,
                     'flagged' => $i->flagged,
@@ -344,6 +349,10 @@ class DriverController extends Controller
                 'checklist_date' => $c->checklist_date instanceof \Carbon\Carbon
                     ? $c->checklist_date->format('d/m/Y')
                     : $c->checklist_date,
+                'week_start_date' => $c->week_start_date instanceof \Carbon\Carbon
+                    ? $c->week_start_date->format('d/m/Y')
+                    : $c->week_start_date,
+                'status' => $c->status,
                 'start_km' => $c->start_km,
                 'end_km' => $c->end_km,
                 'tire_condition' => $c->tire_condition,
@@ -411,20 +420,23 @@ class DriverController extends Controller
             DB::beginTransaction();
 
             $date = $data['checklist_date'];
+            $weekStart = DailyChecklist::weekStartFor(\Carbon\Carbon::parse($date))->toDateString();
 
             $already = DailyChecklist::query()
                 ->where('truck_id', $truck->id)
-                ->whereDate('checklist_date', $date)
+                ->whereDate('week_start_date', $weekStart)
                 ->exists();
 
             if ($already) {
-                throw new \Exception('Une checklist journaliere existe deja pour ce camion a cette date.');
+                throw new \Exception('Une checklist hebdomadaire existe deja pour ce camion cette semaine.');
             }
 
             $dailyChecklist = DailyChecklist::create([
                 'truck_id' => $truck->id,
                 'driver_id' => $driver->id,
                 'checklist_date' => $date,
+                'week_start_date' => $weekStart,
+                'status' => DailyChecklist::STATUS_PENDING,
                 'start_km' => $data['start_km'] ?? null,
                 'end_km' => $data['end_km'] ?? null,
                 'fuel_filled' => $data['fuel_filled'] ?? null,
@@ -451,7 +463,7 @@ class DriverController extends Controller
             }
 
             $syncResult = $this->sharePointDailyChecklistService->syncDailyChecklist([
-                'Title' => sprintf('Daily checklist %s - %s', $truck->matricule, $date),
+                'Title' => sprintf('Weekly checklist %s - week of %s', $truck->matricule, $weekStart),
                 'DriverName' => $driver->name,
                 'DriverEmail' => $driver->email,
                 'TruckMatricule' => $truck->matricule,

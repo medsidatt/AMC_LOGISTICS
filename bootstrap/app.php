@@ -51,8 +51,9 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->runInBackground();
 
-        $schedule->command('logistics:notify-missing-daily-checklists')
-            ->everyFifteenMinutes()
+        $schedule->command('logistics:notify-missing-weekly-checklists')
+            ->mondays()
+            ->at('07:00')
             ->withoutOverlapping()
             ->runInBackground();
 

@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Auth\User;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -18,7 +21,19 @@ class DailyChecklist extends Model
         'start_km' => 'float',
         'end_km' => 'float',
         'fuel_filled' => 'float',
+        'checklist_date' => 'date',
+        'week_start_date' => 'date',
+        'validated_at' => 'datetime',
     ];
+
+    const STATUS_PENDING = 'pending';
+    const STATUS_VALIDATED = 'validated';
+    const STATUS_REJECTED = 'rejected';
+
+    public static function weekStartFor(Carbon $date): Carbon
+    {
+        return $date->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+    }
 
     // ── Standardized options for analytics ──
 
@@ -89,5 +104,21 @@ class DailyChecklist extends Model
     public function issues(): HasMany
     {
         return $this->hasMany(DailyChecklistIssue::class);
+    }
+
+    public function validator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validated_by');
+    }
+
+    public function scopeForWeek(Builder $query, int $truckId, Carbon $date): Builder
+    {
+        return $query->where('truck_id', $truckId)
+            ->whereDate('week_start_date', self::weekStartFor($date)->toDateString());
+    }
+
+    public function scopePending(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_PENDING);
     }
 }
