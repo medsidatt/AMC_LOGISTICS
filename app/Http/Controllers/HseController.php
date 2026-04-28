@@ -60,6 +60,7 @@ class HseController extends Controller
                 'categories' => InspectionChecklist::CATEGORY_OPTIONS,
                 'conditions' => InspectionChecklist::CONDITION_OPTIONS,
                 'fields' => InspectionChecklist::INSPECTION_FIELDS,
+                'sections' => InspectionChecklist::SECTIONS,
             ],
         ]);
     }
@@ -140,6 +141,7 @@ class HseController extends Controller
                 'categories' => InspectionChecklist::CATEGORY_OPTIONS,
                 'conditions' => InspectionChecklist::CONDITION_OPTIONS,
                 'fields' => InspectionChecklist::INSPECTION_FIELDS,
+                'sections' => InspectionChecklist::SECTIONS,
             ],
         ]);
     }
@@ -165,6 +167,7 @@ class HseController extends Controller
                 'categories' => InspectionChecklist::CATEGORY_OPTIONS,
                 'conditions' => InspectionChecklist::CONDITION_OPTIONS,
                 'fields' => InspectionChecklist::INSPECTION_FIELDS,
+                'sections' => InspectionChecklist::SECTIONS,
             ],
         ]);
     }

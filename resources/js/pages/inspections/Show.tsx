@@ -31,12 +31,18 @@ interface Inspection {
     [key: string]: any;
 }
 
+interface Section {
+    label: string;
+    fields: Record<string, string>;
+}
+
 interface Props {
     inspection: Inspection;
     options: {
         categories: Record<string, string>;
         conditions: Record<string, string>;
         fields: string[];
+        sections: Record<string, Section>;
     };
 }
 
@@ -82,17 +88,19 @@ export default function InspectionShow({ inspection, options }: Props) {
                     </div>
                 </Card>
 
-                <Card>
-                    <h2 className="text-lg font-semibold mb-3">Points d'inspection</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                        {options.fields.map((f) => (
-                            <div key={f} className="flex justify-between border-b border-[var(--color-border)] py-1">
-                                <span>{f}</span>
-                                <span className="font-medium">{options.conditions[inspection[f]] ?? '—'}</span>
-                            </div>
-                        ))}
-                    </div>
-                </Card>
+                {Object.entries(options.sections).map(([sectionKey, section]) => (
+                    <Card key={sectionKey}>
+                        <h2 className="text-lg font-semibold mb-3">{section.label}</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            {Object.entries(section.fields).map(([field, label]) => (
+                                <div key={field} className="flex justify-between border-b border-[var(--color-border)] py-1">
+                                    <span>{label}</span>
+                                    <span className="font-medium">{options.conditions[inspection[field]] ?? '—'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                ))}
 
                 {inspection.issues.length > 0 && (
                     <Card>
