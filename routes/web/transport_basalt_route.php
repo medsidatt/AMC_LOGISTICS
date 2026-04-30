@@ -144,4 +144,8 @@ Route::group(['prefix' => 'reports', 'as' => 'reports.', 'middleware' => ['auth'
     Route::get('/fleet/excel', [\App\Http\Controllers\ReportController::class, 'exportFleetExcel'])->name('fleet.excel');
     Route::get('/maintenance/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceExcel'])->name('maintenance.excel');
     Route::get('/maintenance-due/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceDueExcel'])->name('maintenance-due.excel');
+
+    Route::get('/idle-hourly', [\App\Http\Controllers\ReportController::class, 'idleHourly'])->name('idle-hourly');
+    Route::get('/idle-hourly/data', [\App\Http\Controllers\ReportController::class, 'idleHourlyData'])->name('idle-hourly.data');
+    Route::get('/idle-hourly/excel', [\App\Http\Controllers\ReportController::class, 'exportIdleHourlyExcel'])->name('idle-hourly.excel');
 });

@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Exports\FleetReport;
+use App\Exports\IdleHourlyReportExport;
 use App\Exports\MaintenanceDueExport;
 use App\Exports\MaintenanceHistoryExport;
 use App\Exports\TransportTrackingExport;
+use App\Models\Truck;
+use App\Services\IdleHourlyReportService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -52,5 +57,47 @@ class ReportController extends Controller
     {
         $onlyDue = $request->boolean('only_due', true);
         return Excel::download(new MaintenanceDueExport($onlyDue), 'maintenance-requise-' . now()->format('d-m-Y') . '.xlsx');
+    }
+
+    // ── Idle Hourly (engine on, not moving) ──
+
+    public function idleHourly()
+    {
+        $trucks = Truck::query()
+            ->orderBy('matricule')
+            ->get(['id', 'matricule'])
+            ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule]);
+
+        return Inertia::render('reports/IdleHourly', [
+            'trucks' => $trucks,
+        ]);
+    }
+
+    public function idleHourlyData(Request $request, IdleHourlyReportService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'truck_ids' => ['required', 'array', 'min:1'],
+            'truck_ids.*' => ['integer'],
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date'],
+        ]);
+
+        $from = Carbon::parse($data['from'])->startOfDay();
+        $to = Carbon::parse($data['to'])->endOfDay();
+
+        $rows = $service->build($data['truck_ids'], $from, $to);
+
+        return response()->json(['rows' => $rows]);
+    }
+
+    public function exportIdleHourlyExcel(Request $request)
+    {
+        $filters = [
+            'truck_ids' => $request->input('truck_ids', []),
+            'from' => $request->input('from'),
+            'to' => $request->input('to'),
+        ];
+        $name = 'idle-horaire-' . now()->format('d-m-Y') . '.xlsx';
+        return Excel::download(new IdleHourlyReportExport($filters), $name);
     }
 }
