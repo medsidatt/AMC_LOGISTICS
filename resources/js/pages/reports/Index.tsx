@@ -3,7 +3,7 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormInput from '@/components/ui/FormInput';
-import { FileSpreadsheet, Truck, Wrench, Route, AlertTriangle, Calendar, Download } from 'lucide-react';
+import { FileSpreadsheet, Truck, Wrench, Route, AlertTriangle, Calendar, Download, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 
 function ReportSection({ title, description, icon, color, children }: {
@@ -96,6 +96,24 @@ export default function ReportsIndex() {
                         <ExcelBtn href={`/reports/maintenance/excel${mq ? '?' + mq : ''}`} label="Exporter l'historique" />
                     </div>
                     <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : date, camion, type, km, seuil prévu, intervalle règle, notes</p>
+                </ReportSection>
+
+                {/* Idle Hourly */}
+                <ReportSection
+                    title="Ralenti horaire"
+                    description="Heures moteur tournant à l'arrêt — carrière vs route"
+                    icon={<Clock size={20} className="text-white" />}
+                    color="bg-violet-600"
+                >
+                    <div className="flex flex-wrap gap-2">
+                        <a
+                            href="/reports/idle-hourly"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition shadow-sm"
+                        >
+                            <Clock size={16} /> Ouvrir le rapport
+                        </a>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">Inclut : camion, date, heure, minutes ralenti, lieu (carrière/site/route), coordonnées</p>
                 </ReportSection>
 
                 {/* Maintenance Due */}
