@@ -12,6 +12,8 @@ return [
 
     'ajax_token' => env('AJAX_TOKEN', 'MySecretToken123'),
 
+    'cron_token' => env('CRON_TOKEN'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment
