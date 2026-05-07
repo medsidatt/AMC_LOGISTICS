@@ -21,7 +21,7 @@ class UserController extends Controller
         $this->middleware('permission:user-delete', ['only' => ['destroy']]);
         $this->middleware('permission:user-invitation', ['only' => ['resendInvitation']]);
         $this->middleware('permission:user-suspend', ['only' => ['suspend']]);
-        $this->middleware('permission:user-change-password', ['only' => ['changePassword', 'updatePassword']]);
+        $this->middleware('permission:user-change-password', ['only' => ['changePassword', 'changeUserPassword']]);
     }
 
     // index
