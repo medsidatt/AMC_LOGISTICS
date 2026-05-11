@@ -38,7 +38,7 @@ export default function Login() {
                     error={errors.password}
                     required
                 />
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center mb-6">
                     <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer">
                         <input
                             type="checkbox"
@@ -48,9 +48,6 @@ export default function Login() {
                         />
                         Se souvenir
                     </label>
-                    <a href="/password/email" className="text-sm text-[var(--color-primary)] hover:underline">
-                        Mot de passe oublié ?
-                    </a>
                 </div>
                 <Button type="submit" loading={processing} className="w-full">
                     Connexion

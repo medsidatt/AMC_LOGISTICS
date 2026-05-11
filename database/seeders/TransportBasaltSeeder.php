@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Driver;
-use App\Models\Provider;
 use App\Models\Transporter;
 use App\Models\Truck;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -81,19 +80,6 @@ class TransportBasaltSeeder extends Seeder
             ],
         ];
 
-        $providers = [
-            [
-                'name' => 'CSE GRANULATS',
-                'address' => '',
-                'phone' => '',
-            ],
-            [
-                'name' => 'CO.GE.CA',
-                'address' => '96 Rufisque, Dakar',
-                'phone' => '839 87 27 / 836 33 88',
-            ],
-        ];
-
         foreach ($drivers as $driver) {
             Driver::firstOrCreate(
                 ['name' => $driver['name']],
@@ -109,16 +95,6 @@ class TransportBasaltSeeder extends Seeder
                 ['matricule' => $truck['matricule']],
                 [
                     'transporter_id' => $truck['transporter_id'],
-                ]
-            );
-        }
-
-        foreach ($providers as $provider) {
-            Provider::firstOrCreate(
-                ['name' => $provider['name']],
-                [
-                    'address' => $provider['address'],
-                    'phone' => $provider['phone'],
                 ]
             );
         }
