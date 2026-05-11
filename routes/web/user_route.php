@@ -34,7 +34,6 @@ Route::group(['prefix' => 'users', 'middleware' => ['auth']], function () {
 
 Route::get('auth/invitations/{token}/accept', [InvitationController::class, 'accept'])
     ->name('invitation.accept');
-Route::post('auth/invitations/register', [InvitationController::class, 'register'])->name('invitation.register');
 
 Route::group(['prefix' => 'auth/invitations', 'middleware' => [
     'auth'
