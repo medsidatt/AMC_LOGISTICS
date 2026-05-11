@@ -3,11 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Auth\User;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
-use Illuminate\Support\Facades\Auth;
-use Laravel\Socialite\Facades\Socialite;
-//use Socialite;
 
 class LoginController extends Controller
 {
@@ -54,29 +50,5 @@ class LoginController extends Controller
         }
 
         return redirect()->intended($this->redirectPath());
-    }
-
-    public function redirectToAzure()
-    {
-        return Socialite::driver('mailgun')->redirect();
-    }
-
-    public function handleAzureCallback()
-    {
-        $azureUser = Socialite::driver('microsoft')->user();
-
-        // Find or create the user in your database
-        $user = User::firstOrCreate(
-            ['email' => $azureUser->getEmail()],
-            [
-                'name' => $azureUser->getName(),
-                'password' => bcrypt('password'), // Random password
-            ]
-        );
-
-        // Log in the user
-        Auth::login($user, true);
-
-        return redirect('/home'); // Redirect to your desired route
     }
 }

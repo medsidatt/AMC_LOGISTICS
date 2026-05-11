@@ -26,13 +26,28 @@ class IdleHourlyReportExport implements FromCollection, WithHeadings, WithStyles
 
         $rows = app(IdleHourlyReportService::class)->build($truckIds, $from, $to);
 
+        $categoryLabels = [
+            'parking' => 'Parking',
+            'provider_site' => 'Carrière',
+            'client_site' => 'Base client',
+            'base' => 'Base / Hub',
+            'fuel_station' => 'Station-service',
+            'other_place' => 'Zone connue',
+            'on_road' => 'Sur route',
+        ];
+
         return $rows->map(fn ($r) => [
             'camion' => $r['truck_matricule'],
             'date' => Carbon::parse($r['date'])->format('d/m/Y'),
             'heure' => sprintf('%02d:00', $r['hour']),
             'minutes_ralenti' => $r['idle_minutes'],
             'lieu' => $r['location_label'],
+            'categorie' => $categoryLabels[$r['category']] ?? $r['category'],
             'classification' => $r['classification'],
+            'carriere_proche' => $r['nearest_quarry_name'] ?? '-',
+            'carriere_km' => $r['nearest_quarry_km'],
+            'client_proche' => $r['nearest_client_name'] ?? '-',
+            'client_km' => $r['nearest_client_km'],
             'latitude' => $r['latitude'],
             'longitude' => $r['longitude'],
         ]);
@@ -42,7 +57,10 @@ class IdleHourlyReportExport implements FromCollection, WithHeadings, WithStyles
     {
         return [
             'Camion', 'Date', 'Heure', 'Minutes ralenti',
-            'Lieu', 'Classification', 'Latitude', 'Longitude',
+            'Lieu', 'Catégorie', 'Classification',
+            'Carrière la plus proche', 'Distance carrière (km)',
+            'Client le plus proche', 'Distance client (km)',
+            'Latitude', 'Longitude',
         ];
     }
 
@@ -59,6 +77,12 @@ class IdleHourlyReportExport implements FromCollection, WithHeadings, WithStyles
 
     public function columnWidths(): array
     {
-        return ['A' => 14, 'B' => 12, 'C' => 8, 'D' => 14, 'E' => 24, 'F' => 16, 'G' => 12, 'H' => 12];
+        return [
+            'A' => 14, 'B' => 12, 'C' => 8, 'D' => 14,
+            'E' => 32, 'F' => 16, 'G' => 16,
+            'H' => 22, 'I' => 16,
+            'J' => 22, 'K' => 16,
+            'L' => 12, 'M' => 12,
+        ];
     }
 }

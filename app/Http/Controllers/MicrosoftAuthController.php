@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Providers\CustomAzureProvider;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use App\Models\Auth\User;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -34,7 +35,10 @@ class MicrosoftAuthController extends Controller
 
         $user = User::firstOrCreate(
             ['email' => $email],
-            ['name' => $microsoftUser->name]
+            [
+                'name' => $microsoftUser->name,
+                'password' => Str::random(40),
+            ]
         );
 
         Auth::login($user);

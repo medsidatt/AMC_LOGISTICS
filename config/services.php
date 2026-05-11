@@ -32,20 +32,10 @@ return [
     ],
 
     'azure' => [
-        'client_id' => env('MICROSOFT_CLIENT_ID'),
-        'client_secret' => env('MICROSOFT_CLIENT_SECRET'),
+        'client_id' => env('SHAREPOINT_CLIENT_ID'),
+        'client_secret' => env('SHAREPOINT_CLIENT_SECRET'),
+        'tenant' => env('SHAREPOINT_TENANT_ID'),
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
-        'tenant' => env('MICROSOFT_TENANT_ID'),
-    ],
-
-    'microsoft' => [
-        'client_id' => env('AZURE_CLIENT_ID'),
-        'client_secret' => env('AZURE_CLIENT_SECRET'),
-        'redirect' => env('AZURE_REDIRECT_URI'),
-        'tenant' => env('AZURE_TENANT_ID'),
-        'url_authorize' => 'https://login.microsoftonline.com/' . env('AZURE_TENANT_ID') . '/oauth2/v2.0/authorize',
-        'url_access_token' => 'https://login.microsoftonline.com/' . env('AZURE_TENANT_ID') . '/oauth2/v2.0/token',
-        'url_resource_owner_details' => 'https://graph.microsoft.com/v1.0/me',
     ],
 
     'fleeti' => [
