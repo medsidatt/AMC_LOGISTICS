@@ -60,4 +60,14 @@ class LoginController extends Controller
 
         return redirect()->intended($this->redirectPath());
     }
+
+    protected function loggedOut(Request $request)
+    {
+        // Block the auth middleware from immediately re-authenticating the
+        // user via silent SSO (their Microsoft browser session is still
+        // active). Cleared the next time they explicitly start a sign-in.
+        SilentSso::markLoggedOut($request);
+
+        return redirect('/login');
+    }
 }
