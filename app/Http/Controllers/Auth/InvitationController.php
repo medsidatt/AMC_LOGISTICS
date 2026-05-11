@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
+use App\Support\SilentSso;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -112,12 +113,10 @@ class InvitationController extends Controller
         // creation with the invited role once the user authenticates.
         $request->session()->put('invitation_token', $token);
 
-        // First visit: try silent Microsoft SSO. If the user is already
-        // signed into the tenant account matching this invitation, they're
-        // straight in. Otherwise the callback bounces back here and renders
-        // the manual button.
-        if (! $request->session()->get('accept_sso_attempted')) {
-            $request->session()->put('accept_sso_attempted', true);
+        // Try silent SSO if we haven't recently failed it. If the user is
+        // already signed into the tenant account matching this invitation,
+        // they're straight in. Otherwise we render the manual button.
+        if (SilentSso::shouldAttempt($request)) {
             return redirect('/auth/microsoft?silent=1');
         }
 

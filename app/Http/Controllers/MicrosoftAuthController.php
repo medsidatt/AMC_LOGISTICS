@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
+use App\Support\SilentSso;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
@@ -32,12 +34,19 @@ class MicrosoftAuthController extends Controller
         // Microsoft signals silent-SSO failure (or any OAuth error) via
         // ?error= on the redirect.
         if ($request->filled('error')) {
+            Log::info('Microsoft OAuth callback error', [
+                'error' => $request->query('error'),
+                'error_description' => $request->query('error_description'),
+            ]);
+            SilentSso::markFailed($request);
             return $this->bounceOnFailure($request, $invitationToken);
         }
 
         try {
             $microsoftUser = Socialite::driver('azure')->stateless()->user();
         } catch (\Throwable $e) {
+            Log::warning('Microsoft OAuth user resolution failed', ['message' => $e->getMessage()]);
+            SilentSso::markFailed($request);
             return $this->bounceOnFailure($request, $invitationToken, 'La connexion Microsoft a échoué.');
         }
 
@@ -46,6 +55,7 @@ class MicrosoftAuthController extends Controller
             ?? ($microsoftUser->user['userPrincipalName'] ?? null);
 
         if (! $email) {
+            SilentSso::markFailed($request);
             return $this->bounceOnFailure($request, $invitationToken, 'Aucune adresse email Microsoft trouvée.');
         }
 
@@ -56,12 +66,14 @@ class MicrosoftAuthController extends Controller
         $user = User::where('email', $email)->first();
 
         if (! $user) {
+            SilentSso::markFailed($request);
             return $this->failToLogin(
                 $request,
                 "Aucun compte n'est associé à cette adresse Microsoft. Contactez l'administrateur."
             );
         }
 
+        SilentSso::clearCooldown($request);
         Auth::login($user);
 
         return redirect()->intended(route('home'));
@@ -72,7 +84,7 @@ class MicrosoftAuthController extends Controller
         $invitation = Invitation::where('token', $token)->first();
 
         if (! $invitation || $invitation->is_used || $invitation->isExpired()) {
-            $request->session()->forget(['invitation_token', 'accept_sso_attempted']);
+            $request->session()->forget('invitation_token');
             return $this->failToLogin($request, 'Cette invitation est invalide ou expirée.');
         }
 
@@ -104,8 +116,8 @@ class MicrosoftAuthController extends Controller
             return $user;
         });
 
-        $request->session()->forget(['invitation_token', 'accept_sso_attempted']);
-
+        $request->session()->forget('invitation_token');
+        SilentSso::clearCooldown($request);
         Auth::login($user);
 
         return redirect()->intended(route('home'));
@@ -125,11 +137,7 @@ class MicrosoftAuthController extends Controller
 
     protected function failToLogin(Request $request, ?string $message = null)
     {
-        // Prevent the auto-silent-SSO loop on the next request.
-        $request->session()->put('sso_attempted', true);
-
         $redirect = redirect('/login');
-
         return $message ? $redirect->with('error', $message) : $redirect;
     }
 }
