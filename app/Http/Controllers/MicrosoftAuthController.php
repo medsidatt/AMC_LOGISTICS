@@ -12,13 +12,14 @@ class MicrosoftAuthController extends Controller
     public function redirect()
     {
         return Socialite::driver('azure')
+            ->stateless()
             ->scopes(['openid', 'profile', 'email', 'User.Read'])
             ->redirect();
     }
 
     public function callback()
     {
-        $microsoftUser = Socialite::driver('azure')->user();
+        $microsoftUser = Socialite::driver('azure')->stateless()->user();
 
         $email = $microsoftUser->getEmail()
             ?? ($microsoftUser->user['mail'] ?? null)
