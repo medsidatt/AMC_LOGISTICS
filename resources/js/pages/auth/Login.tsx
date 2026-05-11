@@ -1,9 +1,10 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import GuestLayout from '@/layouts/GuestLayout';
 import FormInput from '@/components/ui/FormInput';
 import Button from '@/components/ui/Button';
 
 export default function Login() {
+    const { flash } = usePage<{ flash: { error?: string | null } }>().props;
     const { data, setData, post, processing, errors } = useForm({
         email: '',
         password: '',
@@ -18,6 +19,11 @@ export default function Login() {
     return (
         <GuestLayout title="Connectez-vous à votre compte">
             <Head title="Connexion" />
+            {flash?.error && (
+                <div className="mb-4 p-3 rounded-lg border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-sm text-[var(--color-danger)]">
+                    {flash.error}
+                </div>
+            )}
             <form onSubmit={submit}>
                 <FormInput
                     label="Email"

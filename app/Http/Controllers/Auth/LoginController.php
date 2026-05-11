@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Illuminate\Http\Request;
 
 class LoginController extends Controller
 {
@@ -22,8 +23,16 @@ class LoginController extends Controller
 
     protected $redirectTo = '/dashboard';
 
-    public function showLoginForm()
+    public function showLoginForm(Request $request)
     {
+        // Try silent Microsoft SSO once per session. If the user is signed in
+        // to a tenant account we get them straight in; otherwise the callback
+        // bounces back here and we render the form.
+        if (! $request->session()->has('sso_attempted') && ! $request->session()->has('error')) {
+            $request->session()->put('sso_attempted', true);
+            return redirect('/auth/microsoft?silent=1');
+        }
+
         return \Inertia\Inertia::render('auth/Login');
     }
 

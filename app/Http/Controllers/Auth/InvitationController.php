@@ -5,10 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
-use App\Models\Auth\User;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -101,7 +98,7 @@ class InvitationController extends Controller
 
     }
 
-    public function accept($token)
+    public function accept(Request $request, $token)
     {
         $invitation = Invitation::where('token', $token)->firstOrFail();
 
@@ -111,49 +108,14 @@ class InvitationController extends Controller
             ]);
         }
 
-        return view('auth.register', ['email' => $invitation->email, 'token' => $token]);
-    }
+        // Stash the token so the Microsoft callback can finalise account
+        // creation with the invited role once the user authenticates.
+        $request->session()->put('invitation_token', $token);
 
-    public function register(Request $request)
-    {
-        $request->validate([
-            'first_name' => 'required',
-            'last_name' => 'required',
-            'phone' => 'required|numeric|digits:8',
-            'password' => 'required|confirmed',
-            'password_confirmation' => ['required', 'same:password'],
-            'token' => 'required',
-        ]);
-
-        $invitation = Invitation::where('token', $request->token)->firstOrFail();
-
-        if ($invitation->is_used || $invitation->isExpired()) {
-            return response()->json(['message' => 'Invalid or expired invitation.'], 400);
-        }
-
-        $user = User::firstOrCreate([
+        return Inertia::render('auth/AcceptInvitation', [
             'email' => $invitation->email,
-        ], [
-            'name' => $request->first_name . ' ' . $request->last_name,
-            'password' => bcrypt($request->password),
+            'roleName' => $invitation->role_name,
         ]);
-
-        if (! empty($invitation->role_name)) {
-            $role = Role::query()->where('name', $invitation->role_name)->first();
-            if ($role) {
-                $user->syncRoles([$role->name]);
-            }
-        }
-
-        $invitation->update(['is_used' => true]);
-
-        try {
-            Auth::login($user);
-        } catch (\Exception $e) {
-            return redirect()->route('login')->with('error', 'Failed to login.');
-        }
-
-        return redirect()->route('home');
     }
 
     public function update(Request $request, $id)
