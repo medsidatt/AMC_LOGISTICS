@@ -31,6 +31,18 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'horizontal' => \App\Http\Middleware\MenuType::class,
         ]);
+
+        // Send guests through a silent Microsoft sign-in attempt before
+        // showing the login form. Users already authenticated against the
+        // tenant land straight on the intended page; the rest fall through
+        // to /login (and the form) after one bounce.
+        $middleware->redirectGuestsTo(function (\Illuminate\Http\Request $request) {
+            if ($request->expectsJson() || $request->session()->get('sso_attempted')) {
+                return '/login';
+            }
+            $request->session()->put('sso_attempted', true);
+            return '/auth/microsoft?silent=1';
+        });
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

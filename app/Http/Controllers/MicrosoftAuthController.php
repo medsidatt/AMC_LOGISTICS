@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
-use Spatie\Permission\Models\Role;
 
 class MicrosoftAuthController extends Controller
 {
@@ -28,16 +27,18 @@ class MicrosoftAuthController extends Controller
 
     public function callback(Request $request)
     {
+        $invitationToken = $request->session()->get('invitation_token');
+
         // Microsoft signals silent-SSO failure (or any OAuth error) via
-        // ?error= on the redirect — fall back to the login form.
+        // ?error= on the redirect.
         if ($request->filled('error')) {
-            return $this->failToLogin($request);
+            return $this->bounceOnFailure($request, $invitationToken);
         }
 
         try {
             $microsoftUser = Socialite::driver('azure')->stateless()->user();
         } catch (\Throwable $e) {
-            return $this->failToLogin($request, 'La connexion Microsoft a échoué.');
+            return $this->bounceOnFailure($request, $invitationToken, 'La connexion Microsoft a échoué.');
         }
 
         $email = $microsoftUser->getEmail()
@@ -45,15 +46,13 @@ class MicrosoftAuthController extends Controller
             ?? ($microsoftUser->user['userPrincipalName'] ?? null);
 
         if (! $email) {
-            return $this->failToLogin($request, 'Aucune adresse email Microsoft trouvée.');
+            return $this->bounceOnFailure($request, $invitationToken, 'Aucune adresse email Microsoft trouvée.');
         }
 
-        // Invitation flow — user clicked an invite link and just authenticated.
-        if ($invitationToken = $request->session()->pull('invitation_token')) {
+        if ($invitationToken) {
             return $this->finishInvitation($request, $invitationToken, $email, $microsoftUser->getName());
         }
 
-        // Login-only flow.
         $user = User::where('email', $email)->first();
 
         if (! $user) {
@@ -65,7 +64,7 @@ class MicrosoftAuthController extends Controller
 
         Auth::login($user);
 
-        return redirect()->route('home');
+        return redirect()->intended(route('home'));
     }
 
     protected function finishInvitation(Request $request, string $token, string $microsoftEmail, ?string $microsoftName)
@@ -73,13 +72,17 @@ class MicrosoftAuthController extends Controller
         $invitation = Invitation::where('token', $token)->first();
 
         if (! $invitation || $invitation->is_used || $invitation->isExpired()) {
+            $request->session()->forget(['invitation_token', 'accept_sso_attempted']);
             return $this->failToLogin($request, 'Cette invitation est invalide ou expirée.');
         }
 
+        // Wrong Microsoft account active in the browser — keep the
+        // invitation alive and send them back to the accept page where they
+        // can re-trigger an interactive sign-in after switching account.
         if (strcasecmp($invitation->email, $microsoftEmail) !== 0) {
-            return $this->failToLogin(
-                $request,
-                "Cette invitation a été émise pour {$invitation->email}, mais vous êtes connecté en tant que {$microsoftEmail}."
+            return redirect("/auth/invitations/{$token}/accept")->with(
+                'error',
+                "Cette invitation a été émise pour {$invitation->email}, mais vous êtes connecté en tant que {$microsoftEmail}. Déconnectez-vous de Microsoft et réessayez."
             );
         }
 
@@ -101,14 +104,28 @@ class MicrosoftAuthController extends Controller
             return $user;
         });
 
+        $request->session()->forget(['invitation_token', 'accept_sso_attempted']);
+
         Auth::login($user);
 
-        return redirect()->route('home');
+        return redirect()->intended(route('home'));
+    }
+
+    protected function bounceOnFailure(Request $request, ?string $invitationToken, ?string $message = null)
+    {
+        // Mid-invitation: keep the user in that flow so they can retry from
+        // the accept page (button forces an interactive sign-in).
+        if ($invitationToken) {
+            $redirect = redirect("/auth/invitations/{$invitationToken}/accept");
+            return $message ? $redirect->with('error', $message) : $redirect;
+        }
+
+        return $this->failToLogin($request, $message);
     }
 
     protected function failToLogin(Request $request, ?string $message = null)
     {
-        // Prevent the /login auto-silent-SSO loop on the next request.
+        // Prevent the auto-silent-SSO loop on the next request.
         $request->session()->put('sso_attempted', true);
 
         $redirect = redirect('/login');
