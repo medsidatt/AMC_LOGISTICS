@@ -64,6 +64,7 @@ class ReportController extends Controller
     public function idleHourly()
     {
         $trucks = Truck::query()
+            ->where('is_active', true)
             ->orderBy('matricule')
             ->get(['id', 'matricule'])
             ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule]);
