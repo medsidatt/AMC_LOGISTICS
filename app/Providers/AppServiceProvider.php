@@ -7,14 +7,12 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Socialite\Facades\Socialite;
-use SocialiteProviders\Azure\AzureExtendSocialite;
 use SocialiteProviders\Azure\Provider as AzureProvider;
-use SocialiteProviders\Manager\SocialiteWasCalled;
+use SocialiteProviders\Manager\Config as SocialiteConfig;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,14 +29,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Manually register the 'azure' driver
+        // SocialiteProviders\Manager is deferred via its parent and never boots
+        // for HTTP requests, so register the `azure` driver directly here and
+        // pass services.azure (incl. tenant) through setConfig so the provider
+        // hits https://login.microsoftonline.com/<tenant>/oauth2/v2.0/...
         Socialite::extend('azure', function ($app) {
             $config = $app['config']['services.azure'];
-            return Socialite::buildProvider(AzureProvider::class, $config);
+            $provider = Socialite::buildProvider(AzureProvider::class, $config);
+            $provider->setConfig(new SocialiteConfig(
+                $config['client_id'],
+                $config['client_secret'],
+                $config['redirect'],
+                $config,
+            ));
+            return $provider;
         });
-
-        // Socialite event listener
-        Event::listen(SocialiteWasCalled::class, AzureExtendSocialite::class.'@handle');
 
         Carbon::setLocale('fr');
 

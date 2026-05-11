@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Providers\CustomAzureProvider;
+use App\Models\Auth\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use App\Models\Auth\User;
 use Laravel\Socialite\Facades\Socialite;
 
 class MicrosoftAuthController extends Controller
@@ -19,24 +18,16 @@ class MicrosoftAuthController extends Controller
 
     public function callback()
     {
-        $microsoftUser = Socialite::buildProvider(
-            CustomAzureProvider::class,
-            [
-                'client_id' => config('services.azure.client_id'),
-                'client_secret' => config('services.azure.client_secret'),
-                'redirect' => config('services.azure.redirect'),
-                'tenant' => config('services.azure.tenant'),
-            ]
-        )->stateless()->user();
+        $microsoftUser = Socialite::driver('azure')->user();
 
-        $email = $microsoftUser->email
-            ?? $microsoftUser->user['mail']
-            ?? $microsoftUser->user['userPrincipalName'];
+        $email = $microsoftUser->getEmail()
+            ?? ($microsoftUser->user['mail'] ?? null)
+            ?? ($microsoftUser->user['userPrincipalName'] ?? null);
 
         $user = User::firstOrCreate(
             ['email' => $email],
             [
-                'name' => $microsoftUser->name,
+                'name' => $microsoftUser->getName() ?? $email,
                 'password' => Str::random(40),
             ]
         );
