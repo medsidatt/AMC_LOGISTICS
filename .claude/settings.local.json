@@ -8,7 +8,8 @@
       "Bash(npm run *)",
       "Bash(php -l app/Models/InspectionChecklist.php)",
       "Bash(php -l app/Http/Controllers/HseController.php)",
-      "Bash(php -l database/migrations/2026_04_28_130000_add_amc_inspection_fields.php)"
+      "Bash(php -l database/migrations/2026_04_28_130000_add_amc_inspection_fields.php)",
+      "Bash(findstr /i \"socialite microsoft auth\")"
     ]
   }
 }

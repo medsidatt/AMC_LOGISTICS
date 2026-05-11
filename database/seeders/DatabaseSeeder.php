@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
             PermissionTableSeeder::class,
             RoleAndPermissionSeeder::class,
             TransportBasaltSeeder::class,
+            ProviderCarrierSeeder::class,
+            ProviderClientSeeder::class,
+            ParkingPlacesSeeder::class,
         ]);
     }
 }
