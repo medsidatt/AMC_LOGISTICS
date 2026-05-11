@@ -112,6 +112,15 @@ class InvitationController extends Controller
         // creation with the invited role once the user authenticates.
         $request->session()->put('invitation_token', $token);
 
+        // First visit: try silent Microsoft SSO. If the user is already
+        // signed into the tenant account matching this invitation, they're
+        // straight in. Otherwise the callback bounces back here and renders
+        // the manual button.
+        if (! $request->session()->get('accept_sso_attempted')) {
+            $request->session()->put('accept_sso_attempted', true);
+            return redirect('/auth/microsoft?silent=1');
+        }
+
         return Inertia::render('auth/AcceptInvitation', [
             'email' => $invitation->email,
             'roleName' => $invitation->role_name,
