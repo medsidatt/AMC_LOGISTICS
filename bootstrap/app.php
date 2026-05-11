@@ -35,13 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Send guests through a silent Microsoft sign-in attempt before
         // showing the login form. Users already authenticated against the
         // tenant land straight on the intended page; the rest fall through
-        // to /login (and the form) after one bounce.
+        // to /login (and the form). A short cooldown after the last failure
+        // prevents redirect loops without permanently disabling silent SSO.
         $middleware->redirectGuestsTo(function (\Illuminate\Http\Request $request) {
-            if ($request->expectsJson() || $request->session()->get('sso_attempted')) {
-                return '/login';
-            }
-            $request->session()->put('sso_attempted', true);
-            return '/auth/microsoft?silent=1';
+            return \App\Support\SilentSso::nextRedirectFor($request, '/login');
         });
     })
     ->withExceptions(function (Exceptions $exceptions) {

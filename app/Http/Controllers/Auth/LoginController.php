@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Support\SilentSso;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
 
@@ -25,11 +26,10 @@ class LoginController extends Controller
 
     public function showLoginForm(Request $request)
     {
-        // Try silent Microsoft SSO once per session. If the user is signed in
-        // to a tenant account we get them straight in; otherwise the callback
-        // bounces back here and we render the form.
-        if (! $request->session()->has('sso_attempted') && ! $request->session()->has('error')) {
-            $request->session()->put('sso_attempted', true);
+        // Try silent Microsoft SSO if we haven't recently failed it. After
+        // a failure the helper enforces a short cooldown so the user sees
+        // the form without an immediate re-redirect.
+        if (SilentSso::shouldAttempt($request) && ! $request->session()->has('error')) {
             return redirect('/auth/microsoft?silent=1');
         }
 

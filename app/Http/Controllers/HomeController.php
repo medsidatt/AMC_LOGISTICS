@@ -17,7 +17,7 @@ class HomeController extends Controller
     {
         $user = auth()->user();
 
-        if ($user->hasRole('Driver')) {
+        if ($user->hasRole('Driver') && ! $user->hasRole('Admin') && ! $user->hasRole('Super Admin')) {
             return Inertia::render('DriverDashboard', $this->dashboardService->getDriverData($user));
         }
 
