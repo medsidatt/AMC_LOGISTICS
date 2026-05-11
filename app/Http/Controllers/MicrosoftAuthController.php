@@ -16,6 +16,10 @@ class MicrosoftAuthController extends Controller
 {
     public function redirect(Request $request)
     {
+        // An explicit sign-in attempt clears any "I just logged out" guard
+        // so the user can sign in again without first being on /login.
+        SilentSso::clearCooldown($request);
+
         $driver = Socialite::driver('azure')
             ->stateless()
             ->scopes(['openid', 'profile', 'email', 'User.Read']);
