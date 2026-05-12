@@ -29,4 +29,9 @@ class Driver extends Model
     {
         return $this->hasMany(DailyChecklist::class);
     }
+
+    public function disciplineRecords(): HasMany
+    {
+        return $this->hasMany(DriverDisciplineRecord::class);
+    }
 }
