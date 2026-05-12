@@ -30,5 +30,16 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
     Route::get('', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 });
 
+Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
+    Route::get('fleet', [App\Http\Controllers\FleetSettingsController::class, 'edit'])->name('settings.fleet.edit');
+    Route::put('fleet', [App\Http\Controllers\FleetSettingsController::class, 'update'])->name('settings.fleet.update');
+});
+
+Route::group(['middleware' => ['auth'], 'prefix' => 'drivers'], function () {
+    Route::get('{driver}/discipline', [App\Http\Controllers\DriverDisciplineController::class, 'index'])->name('drivers.discipline.index');
+    Route::post('{driver}/discipline', [App\Http\Controllers\DriverDisciplineController::class, 'store'])->name('drivers.discipline.store');
+    Route::delete('discipline/{record}', [App\Http\Controllers\DriverDisciplineController::class, 'destroy'])->name('drivers.discipline.destroy');
+});
+
 Route::get('/language/switch/{locale}', [LanguageController::class, 'switchLanguage'])->name('language.switch');
 Route::get('/translations', [LanguageController::class, 'getTranslations'])->name('translations');

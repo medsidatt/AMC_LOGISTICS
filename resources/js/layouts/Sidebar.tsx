@@ -2,7 +2,7 @@ import { usePage } from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
-    ClipboardCheck, Route, X, Map, ShieldAlert, MapPin,
+    ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { clsx } from 'clsx';
@@ -122,6 +122,7 @@ const adminSection: NavSection = {
         { label: 'Utilisateurs', href: '/users', icon: <Users size={18} /> },
         { label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18} />, match: '/auth/invitations' },
         { label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18} /> },
+        { label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18} />, match: '/settings/fleet' },
     ],
 };
 
@@ -221,12 +222,15 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
                 {/* Logo */}
                 <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-sidebar-border)]">
                     {!collapsed && (
-                        <span className="text-lg font-bold text-[var(--color-sidebar-title)] tracking-tight">
-                            AMC <span className="text-[var(--color-primary)]">Logistics</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <img src="/images/logo.png" alt="" className="w-8 h-8 object-contain shrink-0" />
+                            <span className="text-lg font-bold text-[var(--color-sidebar-title)] tracking-tight">
+                                AMC <span className="text-[var(--color-primary)]">Travaux SN</span>
+                            </span>
+                        </div>
                     )}
                     {collapsed && (
-                        <span className="text-lg font-bold text-[var(--color-primary)] mx-auto">A</span>
+                        <img src="/images/logo.png" alt="AMC Travaux SN" className="w-8 h-8 object-contain mx-auto" />
                     )}
                     <button
                         onClick={onClose}
