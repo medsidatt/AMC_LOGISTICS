@@ -1,8 +1,8 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 interface Props {
     driver: {
@@ -30,10 +30,17 @@ export default function DriversShow({ driver }: Props) {
         <AuthenticatedLayout title={driver.name}>
             <Head title={driver.name} />
 
-            <div className="mb-4">
+            <div className="mb-4 flex items-center justify-between">
                 <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>
                     Retour
                 </Button>
+                <Link
+                    href={`/drivers/${driver.id}/discipline`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text)]"
+                >
+                    <ShieldCheck size={14} />
+                    Discipline
+                </Link>
             </div>
 
             <Card>

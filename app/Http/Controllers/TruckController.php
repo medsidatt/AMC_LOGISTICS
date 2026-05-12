@@ -236,6 +236,7 @@ class TruckController extends Controller
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
+            'capacity_tonnage' => 'nullable|numeric|min:0',
         ]);
 
         $truck = Truck::firstOrCreate([
@@ -243,7 +244,12 @@ class TruckController extends Controller
             'transporter_id' => $request->transporter_id,
         ], [
             'km_maintenance_interval' => $request->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE,
+            'capacity_tonnage' => $request->capacity_tonnage ?? 25,
         ]);
+
+        if ($request->filled('capacity_tonnage')) {
+            $truck->update(['capacity_tonnage' => $request->capacity_tonnage]);
+        }
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
             $truck->fresh(),
@@ -336,6 +342,7 @@ class TruckController extends Controller
                 'transporter_id' => $truck->transporter_id,
                 'maintenance_type' => $truck->maintenance_type,
                 'km_maintenance_interval' => $truck->km_maintenance_interval,
+                'capacity_tonnage' => $truck->capacity_tonnage,
                 'is_active' => $truck->is_active,
             ],
             'transporters' => $transporters,
@@ -351,12 +358,14 @@ class TruckController extends Controller
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
+            'capacity_tonnage' => 'nullable|numeric|min:0',
         ]);
 
         $truck->update([
             'matricule' => $request->matricule,
             'transporter_id' => $request->transporter_id,
             'km_maintenance_interval' => $request->km_maintenance_interval ?? $truck->km_maintenance_interval,
+            'capacity_tonnage' => $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 25,
         ]);
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
