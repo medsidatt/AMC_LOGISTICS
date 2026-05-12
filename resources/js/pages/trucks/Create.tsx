@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function TrucksCreate({ transporters }: Props) {
-    const form = useForm({ matricule: '', transporter_id: '' as string | number, km_maintenance_interval: '' });
+    const form = useForm({ matricule: '', transporter_id: '' as string | number, km_maintenance_interval: '', capacity_tonnage: '25' });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,6 +33,7 @@ export default function TrucksCreate({ transporters }: Props) {
                     <FormInput label="Matricule" name="matricule" value={form.data.matricule} onChange={(e) => form.setData('matricule', e.target.value)} error={form.errors.matricule} required autoFocus />
                     <FormSelect label="Transporteur" options={transporters} value={form.data.transporter_id} onChange={(v) => form.setData('transporter_id', v ?? '')} error={form.errors.transporter_id} required />
                     <FormInput label="Intervalle maintenance (km)" name="km_maintenance_interval" type="number" value={form.data.km_maintenance_interval} onChange={(e) => form.setData('km_maintenance_interval', e.target.value)} error={form.errors.km_maintenance_interval} />
+                    <FormInput label="Capacité (tonnes)" name="capacity_tonnage" type="number" value={form.data.capacity_tonnage} onChange={(e) => form.setData('capacity_tonnage', e.target.value)} error={form.errors.capacity_tonnage} />
                     <div className="flex gap-2 pt-4">
                         <Button variant="secondary" onClick={() => window.history.back()}>Annuler</Button>
                         <Button type="submit" loading={form.processing}>Créer</Button>

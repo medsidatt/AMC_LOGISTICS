@@ -21,6 +21,7 @@ class Truck extends Model
         'fleeti_last_synced_at' => 'datetime',
         'km_maintenance_interval' => 'float',
         'total_kilometers' => 'float',
+        'capacity_tonnage' => 'float',
         'fleeti_last_kilometers' => 'float',
         'fleeti_last_fuel_level' => 'float',
         // Live telemetry cache (added in 2026_04_09_150000)
@@ -265,6 +266,11 @@ class Truck extends Model
         return $this->usesKilometerMaintenance()
             ? $this->km_maintenance_due
             : $this->maintenance_due;
+    }
+
+    public function isAvailable(): bool
+    {
+        return (bool) $this->is_active && ! $this->isMaintenanceDueByType();
     }
 
     public function maintenanceLevelByType(): string

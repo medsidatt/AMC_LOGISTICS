@@ -9,11 +9,34 @@ import VehicleUtilization from '@/components/charts/VehicleUtilization';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import DataTable from '@/components/ui/DataTable';
+import PeriodFilter from '@/components/dashboard/PeriodFilter';
+import RatioCard from '@/components/dashboard/RatioCard';
+import TopList from '@/components/dashboard/TopList';
 import { usePolling } from '@/hooks/usePolling';
 import { generateAdminInsights } from '@/utils/insights';
-import { formatNumber, formatWeight, formatDate, calcChange } from '@/utils/formatters';
-import { Truck, Users, Route, Weight, Wrench, Download } from 'lucide-react';
+import { formatNumber, formatDate, calcChange } from '@/utils/formatters';
+import { Truck, Users, Route, Weight, Wrench, Download, Activity, Target, Gauge, Fuel, Trophy, UserCheck } from 'lucide-react';
 import { useExport } from '@/hooks/useExport';
+
+interface KpiRatio {
+    rate: number;
+}
+
+interface AvailabilityKpi extends KpiRatio { available: number; total: number; }
+interface SaturationKpi extends KpiRatio { active: number; available: number; }
+interface ProductionKpi extends KpiRatio { delivered: number; planned: number; monthly_target: number; }
+interface LoadKpi extends KpiRatio { delivered: number; theoretical: number; avg_capacity: number; }
+interface RotationsKpi { total: number; }
+interface FuelYieldKpi { litres_per_tonne: number; litres: number; tonnage: number; }
+
+interface TopTruckRow {
+    id: number; label: string; rotations: number; tonnage: number;
+    load_rate: number; fuel_yield: number | null; score: number;
+}
+interface TopDriverRow extends TopTruckRow {
+    avg_load_rate: number; manual_points: number; checklist_on_time_rate: number;
+    flagged_issues: number; gap_violations: number; gap_ratio: number; discipline_score: number;
+}
 
 interface Props {
     trucksCount: number;
@@ -45,6 +68,20 @@ interface Props {
         total_kilometers: number;
     }>;
     utilization: Array<{ label: string; value: number }>;
+    kpi: {
+        period: { from: string; to: string; days: number };
+        kpis: {
+            availability: AvailabilityKpi;
+            saturation: SaturationKpi;
+            production_target: ProductionKpi;
+            load_rate: LoadKpi;
+            rotations: RotationsKpi;
+            fuel_yield: FuelYieldKpi;
+        };
+        topTrucks: TopTruckRow[];
+        topDrivers: TopDriverRow[];
+    };
+    filter: { from: string; to: string; preset: 'day' | 'week' | 'month' | 'year' | 'custom' };
 }
 
 export default function Dashboard(props: Props) {
@@ -65,6 +102,8 @@ export default function Dashboard(props: Props) {
 
     const tripsChange = calcChange(props.tripsToday, props.tripsYesterday);
     const tonnageChange = calcChange(props.tonnageMonth, props.tonnageLastMonth);
+
+    const k = props.kpi.kpis;
 
     const trackingColumns = [
         { key: 'reference', label: 'Réf' },
@@ -89,7 +128,13 @@ export default function Dashboard(props: Props) {
 
             <AlertBanner count={props.unresolvedAlerts} href="/logistics/dashboard" />
 
-            {/* KPIs */}
+            <PeriodFilter
+                from={props.filter.from}
+                to={props.filter.to}
+                preset={props.filter.preset}
+            />
+
+            {/* Compteurs simples */}
             <KpiGrid>
                 <KpiCard
                     label="Camions"
@@ -121,6 +166,123 @@ export default function Dashboard(props: Props) {
                     color="var(--color-warning)"
                 />
             </KpiGrid>
+
+            {/* KPIs flotte sur la période filtrée */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+                <RatioCard
+                    label="Disponibilité flotte"
+                    ratio={k.availability.rate}
+                    numerator={k.availability.available}
+                    denominator={k.availability.total}
+                    numeratorLabel=" disponibles"
+                    denominatorLabel=" total"
+                    icon={<Truck size={18} />}
+                />
+                <RatioCard
+                    label="Taux de saturation"
+                    ratio={k.saturation.rate}
+                    numerator={k.saturation.active}
+                    denominator={k.saturation.available}
+                    numeratorLabel=" actifs"
+                    denominatorLabel=" disponibles"
+                    icon={<Activity size={18} />}
+                />
+                <RatioCard
+                    label="Objectif de production"
+                    ratio={k.production_target.rate}
+                    numerator={k.production_target.delivered}
+                    denominator={k.production_target.planned}
+                    numeratorLabel=" T livrées"
+                    denominatorLabel=" T planifiées"
+                    icon={<Target size={18} />}
+                />
+                <RatioCard
+                    label="Taux de chargement"
+                    ratio={k.load_rate.rate}
+                    numerator={k.load_rate.delivered}
+                    denominator={k.load_rate.theoretical}
+                    numeratorLabel=" T"
+                    denominatorLabel=" T théorique"
+                    icon={<Gauge size={18} />}
+                />
+                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all duration-300 animate-slide-up">
+                    <div className="flex items-start justify-between mb-3">
+                        <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+                            Nombre de rotations
+                        </p>
+                        <div
+                            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+                            style={{ background: 'var(--color-primary)15', color: 'var(--color-primary)' }}
+                        >
+                            <Route size={18} />
+                        </div>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-bold text-[var(--color-text)]">
+                            {formatNumber(k.rotations.total)}
+                        </span>
+                        <span className="text-sm font-medium text-[var(--color-text-secondary)]">rotations</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
+                        Sur {props.kpi.period.days} jour(s)
+                    </p>
+                </div>
+                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all duration-300 animate-slide-up">
+                    <div className="flex items-start justify-between mb-3">
+                        <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
+                            Rendement carburant
+                        </p>
+                        <div
+                            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
+                            style={{ background: 'var(--color-warning)15', color: 'var(--color-warning)' }}
+                        >
+                            <Fuel size={18} />
+                        </div>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                        <span className="text-3xl font-bold text-[var(--color-text)]">
+                            {formatNumber(k.fuel_yield.litres_per_tonne, 2)}
+                        </span>
+                        <span className="text-sm font-medium text-[var(--color-text-secondary)]">L/T</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
+                        {formatNumber(k.fuel_yield.litres, 0)} L · {formatNumber(k.fuel_yield.tonnage, 1)} T livrées
+                    </p>
+                </div>
+            </div>
+
+            {/* Top Camions / Top Chauffeurs */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+                <Card
+                    header={
+                        <div className="flex items-center gap-2">
+                            <Trophy size={16} className="text-[var(--color-warning)]" />
+                            <span className="text-sm font-semibold">Top 5 Camions</span>
+                        </div>
+                    }
+                >
+                    <TopList
+                        rows={props.kpi.topTrucks as any}
+                        hrefPrefix="/trucks"
+                        extraColumn={{ key: 'fuel_yield', label: 'L/T', format: 'number' }}
+                    />
+                </Card>
+
+                <Card
+                    header={
+                        <div className="flex items-center gap-2">
+                            <UserCheck size={16} className="text-[var(--color-success)]" />
+                            <span className="text-sm font-semibold">Top 5 Chauffeurs</span>
+                        </div>
+                    }
+                >
+                    <TopList
+                        rows={props.kpi.topDrivers as any}
+                        hrefPrefix="/drivers"
+                        extraColumn={{ key: 'discipline_score', label: 'discipline', format: 'percent' }}
+                    />
+                </Card>
+            </div>
 
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
