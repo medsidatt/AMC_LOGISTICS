@@ -55,16 +55,15 @@ class InvitationController extends Controller
     }
 
     /**
-     * Roles the current user can assign:
-     * - Super Admin can assign any role
-     * - Admin can assign Admin, Manager and Driver only
+     * Roles the current user can assign. Only Super Admin can hand out
+     * "Super Admin"; everyone else gets every role currently defined in
+     * the roles table.
      */
     private function assignableRoles()
     {
-        $user = auth()->user();
-        $query = Role::whereIn('name', ['Super Admin', 'Admin', 'Manager', 'Driver']);
+        $query = Role::query();
 
-        if (!$user->hasRole('Super Admin')) {
+        if (! auth()->user()->hasRole('Super Admin')) {
             $query->where('name', '!=', 'Super Admin');
         }
 
