@@ -4,6 +4,7 @@ import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
+import FormCheckbox from '@/components/ui/FormCheckbox';
 import { ArrowLeft } from 'lucide-react';
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export default function TrucksCreate({ transporters }: Props) {
-    const form = useForm({ matricule: '', transporter_id: '' as string | number, km_maintenance_interval: '', capacity_tonnage: '25' });
+    const form = useForm({ matricule: '', transporter_id: '' as string | number, km_maintenance_interval: '', capacity_tonnage: '25', is_available: true });
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,6 +35,7 @@ export default function TrucksCreate({ transporters }: Props) {
                     <FormSelect label="Transporteur" options={transporters} value={form.data.transporter_id} onChange={(v) => form.setData('transporter_id', v ?? '')} error={form.errors.transporter_id} required />
                     <FormInput label="Intervalle maintenance (km)" name="km_maintenance_interval" type="number" value={form.data.km_maintenance_interval} onChange={(e) => form.setData('km_maintenance_interval', e.target.value)} error={form.errors.km_maintenance_interval} />
                     <FormInput label="Capacité (tonnes)" name="capacity_tonnage" type="number" value={form.data.capacity_tonnage} onChange={(e) => form.setData('capacity_tonnage', e.target.value)} error={form.errors.capacity_tonnage} />
+                    <FormCheckbox label="Disponible dès la création" name="is_available" checked={form.data.is_available} onChange={(e) => form.setData('is_available', e.target.checked)} error={form.errors.is_available} />
                     <div className="flex gap-2 pt-4">
                         <Button variant="secondary" onClick={() => window.history.back()}>Annuler</Button>
                         <Button type="submit" loading={form.processing}>Créer</Button>

@@ -8,6 +8,7 @@ use App\Models\Driver;
 use App\Models\DriverDisciplineRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelTracking;
+use App\Models\MonthlyTonnageTarget;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use Carbon\Carbon;
@@ -23,7 +24,7 @@ class FleetKpiService
 
         $settings = FleetSetting::current();
 
-        $trucks = Truck::whereNull('deleted_at')->get();
+        $trucks = Truck::where('is_active', true)->get();
         $trucksTotal = $trucks->count();
         $trucksAvailable = $trucks->filter(fn (Truck $t) => $t->isAvailable())->count();
 
@@ -55,9 +56,8 @@ class FleetKpiService
         $availabilityRate = $trucksTotal > 0 ? $trucksAvailable / $trucksTotal : 0.0;
         $saturationRate = $trucksAvailable > 0 ? $trucksActive / $trucksAvailable : 0.0;
 
-        $periodDays = max(1, $from->diffInDays($to) + 1);
-        $targetMonthly = (float) $settings->monthly_target_tonnage;
-        $plannedTonnage = $targetMonthly > 0 ? ($targetMonthly / 30.0) * $periodDays : 0.0;
+        $periodDays = max(1, (int) ceil($from->diffInDays($to)) + 1);
+        $plannedTonnage = MonthlyTonnageTarget::sumForPeriod($from, $to);
         $productionTarget = $plannedTonnage > 0 ? $totalTonnageDelivered / $plannedTonnage : 0.0;
 
         $theoreticalCapacity = $avgCapacity * $totalRotations;
@@ -86,7 +86,6 @@ class FleetKpiService
                     'rate' => round($productionTarget, 4),
                     'delivered' => round($totalTonnageDelivered, 2),
                     'planned' => round($plannedTonnage, 2),
-                    'monthly_target' => round($targetMonthly, 2),
                 ],
                 'load_rate' => [
                     'rate' => round($loadRate, 4),
@@ -162,7 +161,7 @@ class FleetKpiService
 
     private function topDrivers(Carbon $from, Carbon $to, FleetSetting $settings): array
     {
-        $drivers = Driver::whereNull('deleted_at')->get();
+        $drivers = Driver::where('is_active', true)->get();
 
         $rotationsPerDriver = TransportTracking::query()
             ->select('driver_id', DB::raw('COUNT(*) as rotations'), DB::raw('SUM(client_net_weight) as tonnage'))

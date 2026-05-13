@@ -4,7 +4,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { ThemeProvider } from '@/hooks/useTheme';
 
 createInertiaApp({
-    title: (title) => title ? `${title} - AMC Logistics` : 'AMC Logistics',
+    title: (title) => title ? `${title} - AMC Travaux SN` : 'AMC Travaux SN',
     resolve: (name) =>
         resolvePageComponent(
             `./pages/${name}.tsx`,

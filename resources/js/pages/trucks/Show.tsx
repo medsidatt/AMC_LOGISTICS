@@ -1,10 +1,11 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import DataTable from '@/components/ui/DataTable';
-import { ArrowLeft, Pencil, Truck as TruckIcon, Gauge, Fuel, Wifi, WifiOff, Wrench, Calendar } from 'lucide-react';
+import TruckKpiSection, { type TruckKpi } from '@/components/truck/TruckKpiSection';
+import { ArrowLeft, Pencil, Truck as TruckIcon, Gauge, Fuel, Wifi, WifiOff, Wrench, Calendar, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface Tracking {
@@ -35,6 +36,7 @@ interface Props {
         transporter: string | null;
         maintenance_type: string;
         is_active: boolean;
+        is_available: boolean;
         total_kilometers: number;
         km_maintenance_interval: number | null;
         fleeti_asset_id: string | null;
@@ -48,6 +50,8 @@ interface Props {
     maintenanceInfo: Record<string, any>;
     recentTrackings: Tracking[];
     maintenances: Maintenance[];
+    kpi: TruckKpi;
+    filter: { from: string; to: string; preset: 'day' | 'week' | 'month' | 'year' | 'custom' };
 }
 
 const fmt = (v: number | null | undefined) => (v == null ? '-' : v.toLocaleString('fr-FR', { maximumFractionDigits: 2 }));
@@ -64,7 +68,7 @@ function InfoItem({ label, value, icon }: { label: string; value: React.ReactNod
     );
 }
 
-export default function TrucksShow({ truck, recentTrackings, maintenances }: Props) {
+export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, filter }: Props) {
     const fuelLevel = truck.fleeti_last_fuel_level;
     const fuelColor = fuelLevel == null ? 'muted' : fuelLevel < 30 ? 'danger' : fuelLevel < 80 ? 'warning' : 'success';
 
@@ -76,9 +80,25 @@ export default function TrucksShow({ truck, recentTrackings, maintenances }: Pro
                 <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>
                     Retour
                 </Button>
-                <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/trucks/${truck.id}/edit-page`}>
-                    Modifier
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant={truck.is_available ? 'secondary' : 'primary'}
+                        icon={truck.is_available ? <Wrench size={16} /> : <Play size={16} />}
+                        onClick={() => {
+                            const msg = truck.is_available
+                                ? `Marquer ${truck.matricule} indisponible ?`
+                                : `Marquer ${truck.matricule} disponible ?`;
+                            if (confirm(msg)) {
+                                router.post(`/trucks/${truck.id}/toggle-availability`, {}, { preserveScroll: true });
+                            }
+                        }}
+                    >
+                        {truck.is_available ? 'Marquer indisponible' : 'Marquer disponible'}
+                    </Button>
+                    <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/trucks/${truck.id}/edit-page`}>
+                        Modifier
+                    </Button>
+                </div>
             </div>
 
             {/* Header Card */}
@@ -91,7 +111,10 @@ export default function TrucksShow({ truck, recentTrackings, maintenances }: Pro
                         <h2 className="text-2xl font-bold text-[var(--color-text)]">{truck.matricule}</h2>
                         <p className="text-sm text-[var(--color-text-secondary)] mt-1">{truck.transporter ?? 'Sans transporteur'}</p>
                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-2">
-                            <Badge variant={truck.is_active ? 'success' : 'muted'}>{truck.is_active ? 'Actif' : 'Inactif'}</Badge>
+                            <Badge variant={truck.is_available ? 'success' : 'danger'}>
+                                {truck.is_available ? 'Disponible' : 'Indisponible'}
+                            </Badge>
+                            <Badge variant={truck.is_active ? 'info' : 'muted'}>{truck.is_active ? 'En service' : 'Hors service'}</Badge>
                             {truck.fleeti_asset_id
                                 ? <Badge variant="info"><Wifi size={12} className="inline mr-1" /> GPS connecté</Badge>
                                 : <Badge variant="muted"><WifiOff size={12} className="inline mr-1" /> Sans GPS</Badge>}
@@ -125,6 +148,9 @@ export default function TrucksShow({ truck, recentTrackings, maintenances }: Pro
                 <InfoItem label="Créé le" icon={<Calendar size={12} />} value={truck.created_at ?? '-'} />
                 <InfoItem label="Modifié le" icon={<Calendar size={12} />} value={truck.updated_at ?? '-'} />
             </div>
+
+            {/* KPI section */}
+            <TruckKpiSection truckId={truck.id} kpi={kpi} filter={filter} />
 
             {/* Recent transports */}
             <Card className="mb-6">

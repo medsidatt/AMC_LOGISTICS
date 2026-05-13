@@ -33,6 +33,7 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
 Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
     Route::get('fleet', [App\Http\Controllers\FleetSettingsController::class, 'edit'])->name('settings.fleet.edit');
     Route::put('fleet', [App\Http\Controllers\FleetSettingsController::class, 'update'])->name('settings.fleet.update');
+    Route::post('fleet/monthly-target', [App\Http\Controllers\FleetSettingsController::class, 'updateMonthlyTarget'])->name('settings.fleet.monthly-target');
 });
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'drivers'], function () {

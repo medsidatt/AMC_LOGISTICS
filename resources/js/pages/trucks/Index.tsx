@@ -15,6 +15,7 @@ interface Truck {
     transporter: string | null;
     maintenance_type: string;
     is_active: boolean;
+    is_available: boolean;
     total_kilometers: number;
     fleeti_connected: boolean;
     fleeti_last_fuel_level: number | null;
@@ -81,7 +82,8 @@ export default function TrucksIndex({ trucks, maintenanceDueCount }: Props) {
                             { key: 'level', label: 'État Maintenance', render: (r) => levelBadge(r.level) },
                             { key: 'remaining', label: 'Restant', hideOnMobile: true, render: (r) => `${r.remaining} ${r.unit}` },
                             { key: 'fleeti_last_synced_at', label: 'Dernière sync', hideOnMobile: true, render: (r) => r.fleeti_last_synced_at ?? '-' },
-                            { key: 'is_active', label: 'Actif', render: (r) => <Badge variant={r.is_active ? 'success' : 'muted'}>{r.is_active ? 'Oui' : 'Non'}</Badge> },
+                            { key: 'is_available', label: 'Disponible', render: (r) => <Badge variant={r.is_available ? 'success' : 'danger'}>{r.is_available ? 'Oui' : 'Non'}</Badge> },
+                            { key: 'is_active', label: 'En service', hideOnMobile: true, render: (r) => <Badge variant={r.is_active ? 'success' : 'muted'}>{r.is_active ? 'Oui' : 'Non'}</Badge> },
                             {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
