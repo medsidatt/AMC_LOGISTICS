@@ -34,7 +34,7 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
             ],
             'locale' => app()->getLocale(),
-            'appName' => config('app.name', 'AMC Logistics'),
+            'appName' => config('app.name', 'AMC Travaux SN'),
         ];
     }
 }

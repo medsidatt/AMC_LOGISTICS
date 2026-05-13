@@ -89,6 +89,7 @@ class DriverController extends Controller
     public function index(Request $request)
     {
         $drivers = Driver::query()
+            ->orderByDesc('is_active')
             ->orderBy('name')
             ->paginate(15)
             ->through(fn (Driver $driver) => [
@@ -97,11 +98,18 @@ class DriverController extends Controller
                 'email' => $driver->email,
                 'phone' => $driver->phone,
                 'address' => $driver->address,
+                'is_active' => (bool) $driver->is_active,
                 'created_at' => $driver->created_at?->format('d/m/Y'),
             ]);
 
+        $totals = [
+            'active' => Driver::query()->where('is_active', true)->count(),
+            'total' => Driver::query()->count(),
+        ];
+
         return Inertia::render('drivers/Index', [
             'drivers' => $drivers,
+            'totals' => $totals,
         ]);
     }
 
@@ -123,6 +131,7 @@ class DriverController extends Controller
             'email' => 'nullable|email|unique:drivers,email',
             'phone' => 'nullable|string|max:15',
             'address' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
         ]);
 
         Driver::firstOrCreate([
@@ -130,6 +139,7 @@ class DriverController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'address' => $request->address,
+            'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : true,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur créé avec succès.');
@@ -152,10 +162,22 @@ class DriverController extends Controller
                 'email' => $driver->email,
                 'phone' => $driver->phone,
                 'address' => $driver->address,
+                'is_active' => (bool) $driver->is_active,
                 'created_at' => $driver->created_at?->format('d/m/Y'),
                 'updated_at' => $driver->updated_at?->format('d/m/Y'),
             ],
         ]);
+    }
+
+    public function toggleActive(Driver $driver)
+    {
+        $driver->update([
+            'is_active' => ! $driver->is_active,
+        ]);
+
+        $status = $driver->is_active ? 'activé' : 'désactivé';
+
+        return back()->with('success', "Chauffeur {$driver->name} {$status}.");
     }
 
     /**
@@ -523,6 +545,7 @@ class DriverController extends Controller
             'email' => 'nullable|email|unique:drivers,email,' . $driver->id,
             'phone' => 'nullable|string|max:15',
             'address' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
         ]);
 
         $driver->update([
@@ -530,6 +553,7 @@ class DriverController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'address' => $request->address,
+            'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : (bool) $driver->is_active,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur mis à jour avec succès.');
