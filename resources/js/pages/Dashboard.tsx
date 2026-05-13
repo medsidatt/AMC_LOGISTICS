@@ -24,7 +24,7 @@ interface KpiRatio {
 
 interface AvailabilityKpi extends KpiRatio { available: number; total: number; }
 interface SaturationKpi extends KpiRatio { active: number; available: number; }
-interface ProductionKpi extends KpiRatio { delivered: number; planned: number; monthly_target: number; }
+interface ProductionKpi extends KpiRatio { delivered: number; planned: number; }
 interface LoadKpi extends KpiRatio { delivered: number; theoretical: number; avg_capacity: number; }
 interface RotationsKpi { total: number; }
 interface FuelYieldKpi { litres_per_tonne: number; litres: number; tonnage: number; }
@@ -174,7 +174,7 @@ export default function Dashboard(props: Props) {
                     ratio={k.availability.rate}
                     numerator={k.availability.available}
                     denominator={k.availability.total}
-                    numeratorLabel=" disponibles"
+                    numeratorLabel=" marqués disponibles"
                     denominatorLabel=" total"
                     icon={<Truck size={18} />}
                 />
@@ -183,7 +183,7 @@ export default function Dashboard(props: Props) {
                     ratio={k.saturation.rate}
                     numerator={k.saturation.active}
                     denominator={k.saturation.available}
-                    numeratorLabel=" actifs"
+                    numeratorLabel=" ayant roulé"
                     denominatorLabel=" disponibles"
                     icon={<Activity size={18} />}
                 />

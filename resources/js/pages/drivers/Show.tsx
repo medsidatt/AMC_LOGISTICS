@@ -1,8 +1,9 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import Badge from '@/components/ui/Badge';
+import { ArrowLeft, ShieldCheck, Power, PowerOff } from 'lucide-react';
 
 interface Props {
     driver: {
@@ -11,6 +12,7 @@ interface Props {
         email: string | null;
         phone: string | null;
         address: string | null;
+        is_active: boolean;
         created_at: string | null;
         updated_at: string | null;
     };
@@ -34,17 +36,36 @@ export default function DriversShow({ driver }: Props) {
                 <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>
                     Retour
                 </Button>
-                <Link
-                    href={`/drivers/${driver.id}/discipline`}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text)]"
-                >
-                    <ShieldCheck size={14} />
-                    Discipline
-                </Link>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant={driver.is_active ? 'secondary' : 'primary'}
+                        icon={driver.is_active ? <PowerOff size={14} /> : <Power size={14} />}
+                        onClick={() => {
+                            const msg = driver.is_active
+                                ? `Désactiver ${driver.name} ?`
+                                : `Activer ${driver.name} ?`;
+                            if (confirm(msg)) {
+                                router.post(`/drivers/${driver.id}/toggle-active`, {}, { preserveScroll: true });
+                            }
+                        }}
+                    >
+                        {driver.is_active ? 'Désactiver' : 'Activer'}
+                    </Button>
+                    <Link
+                        href={`/drivers/${driver.id}/discipline`}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-[var(--color-text)]"
+                    >
+                        <ShieldCheck size={14} />
+                        Discipline
+                    </Link>
+                </div>
             </div>
 
             <Card>
-                <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Informations conducteur</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-[var(--color-text)]">Informations conducteur</h3>
+                    <Badge variant={driver.is_active ? 'success' : 'muted'}>{driver.is_active ? 'Actif' : 'Inactif'}</Badge>
+                </div>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {fields.map(([label, value]) => (
                         <div key={label as string}>

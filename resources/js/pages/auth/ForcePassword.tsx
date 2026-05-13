@@ -65,7 +65,7 @@ export default function ForcePassword() {
                 </div>
 
                 <p className="text-center text-xs text-[var(--color-text-muted)] mt-4">
-                    AMC Logistics
+                    AMC Travaux SN
                 </p>
             </div>
         </div>

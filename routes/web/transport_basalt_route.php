@@ -48,6 +48,7 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
     Route::post('/store', [DriverController::class, 'store'])->name('store');
     Route::get('/{driver}/edit', [DriverController::class, 'edit'])->name('edit');
     Route::put('/{driver}/update', [DriverController::class, 'update'])->name('update');
+    Route::post('/{driver}/toggle-active', [DriverController::class, 'toggleActive'])->name('toggle-active');
     Route::delete('/{driver}/destroy', [DriverController::class, 'destroy'])->name('destroy');
 });
 
@@ -76,6 +77,7 @@ Route::group(['prefix' => 'trucks', 'as' => 'trucks.', 'middleware' => ['auth']]
 
     // Toggle truck active status
     Route::post('/{truck}/toggle-active', [TruckController::class, 'toggleActive'])->name('toggle-active');
+    Route::post('/{truck}/toggle-availability', [TruckController::class, 'toggleAvailability'])->name('toggle-availability');
 
     // Bulk maintenance operations
     Route::post('/bulk-update-maintenance-type', [TruckController::class, 'bulkUpdateMaintenanceType'])->name('bulk-update-maintenance-type');

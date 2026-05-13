@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Exports\MaintenanceDueExport;
+use App\Http\Controllers\Concerns\ResolvesPeriod;
 use App\Models\Maintenance;
 use App\Models\LogisticsAlert;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Services\MaintenanceStatusService;
+use App\Services\TruckKpiService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -15,9 +17,12 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class TruckController extends Controller
 {
+    use ResolvesPeriod;
+
     public function __construct(
         private readonly TruckMaintenanceService $truckMaintenanceService,
-        private readonly MaintenanceStatusService $maintenanceStatusService
+        private readonly MaintenanceStatusService $maintenanceStatusService,
+        private readonly TruckKpiService $kpiService,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
@@ -201,6 +206,7 @@ class TruckController extends Controller
                 'transporter' => $t->transporter?->name,
                 'maintenance_type' => $t->maintenance_type,
                 'is_active' => $t->is_active,
+                'is_available' => (bool) $t->is_available,
                 'total_kilometers' => (float) $t->total_kilometers,
                 'fleeti_connected' => !empty($t->fleeti_asset_id),
                 'fleeti_last_fuel_level' => $t->fleeti_last_fuel_level !== null ? (float) $t->fleeti_last_fuel_level : null,
@@ -237,6 +243,7 @@ class TruckController extends Controller
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
             'capacity_tonnage' => 'nullable|numeric|min:0',
+            'is_available' => 'nullable|boolean',
         ]);
 
         $truck = Truck::firstOrCreate([
@@ -245,10 +252,14 @@ class TruckController extends Controller
         ], [
             'km_maintenance_interval' => $request->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE,
             'capacity_tonnage' => $request->capacity_tonnage ?? 25,
+            'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : true,
         ]);
 
         if ($request->filled('capacity_tonnage')) {
             $truck->update(['capacity_tonnage' => $request->capacity_tonnage]);
+        }
+        if ($request->has('is_available')) {
+            $truck->update(['is_available' => (bool) $request->boolean('is_available')]);
         }
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
@@ -265,12 +276,12 @@ class TruckController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Truck $truck)
+    public function show(Truck $truck, Request $request)
     {
-        return $this->showPage($truck);
+        return $this->showPage($truck, $request);
     }
 
-    public function showPage(Truck $truck)
+    public function showPage(Truck $truck, Request $request)
     {
         $this->maintenanceStatusService->recalculateForTruck($truck);
 
@@ -284,6 +295,9 @@ class TruckController extends Controller
         $recentTrackings = $truck->transportTrackings;
         $maintenances = $truck->maintenances;
 
+        [$from, $to, $preset] = $this->resolvePeriod($request);
+        $kpi = $this->kpiService->compute($truck, $from, $to);
+
         return \Inertia\Inertia::render('trucks/Show', [
             'truck' => [
                 'id' => $truck->id,
@@ -291,6 +305,7 @@ class TruckController extends Controller
                 'transporter' => $truck->transporter?->name,
                 'maintenance_type' => $truck->maintenance_type,
                 'is_active' => $truck->is_active,
+                'is_available' => (bool) $truck->is_available,
                 'total_kilometers' => $truck->total_kilometers,
                 'km_maintenance_interval' => $truck->km_maintenance_interval,
                 'fleeti_asset_id' => $truck->fleeti_asset_id,
@@ -321,6 +336,12 @@ class TruckController extends Controller
                 'trigger_km' => $m->trigger_km,
                 'notes' => $m->notes,
             ]),
+            'kpi' => $kpi,
+            'filter' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'preset' => $preset,
+            ],
         ]);
     }
 
@@ -344,6 +365,7 @@ class TruckController extends Controller
                 'km_maintenance_interval' => $truck->km_maintenance_interval,
                 'capacity_tonnage' => $truck->capacity_tonnage,
                 'is_active' => $truck->is_active,
+                'is_available' => (bool) $truck->is_available,
             ],
             'transporters' => $transporters,
         ]);
@@ -359,6 +381,7 @@ class TruckController extends Controller
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
             'capacity_tonnage' => 'nullable|numeric|min:0',
+            'is_available' => 'nullable|boolean',
         ]);
 
         $truck->update([
@@ -366,6 +389,7 @@ class TruckController extends Controller
             'transporter_id' => $request->transporter_id,
             'km_maintenance_interval' => $request->km_maintenance_interval ?? $truck->km_maintenance_interval,
             'capacity_tonnage' => $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 25,
+            'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : (bool) $truck->is_available,
         ]);
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
@@ -375,7 +399,7 @@ class TruckController extends Controller
         );
 
         return redirect()
-            ->route('trucks.index')
+            ->route('trucks.show-page', $truck)
             ->with('success', 'Camion mis à jour avec succès.');
     }
 
@@ -413,6 +437,17 @@ class TruckController extends Controller
     public function exportMaintenancePdf(Request $request)
     {
         return app(MaintenanceController::class)->exportPdf($request);
+    }
+
+    public function toggleAvailability(Truck $truck)
+    {
+        $truck->update([
+            'is_available' => ! $truck->is_available,
+        ]);
+
+        $status = $truck->is_available ? 'marqué disponible' : 'marqué indisponible';
+
+        return back()->with('success', "Camion {$truck->matricule} {$status}.");
     }
 
     public function toggleActive(Truck $truck)

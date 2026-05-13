@@ -65,7 +65,7 @@
     </table>
 
     <div class="meta" style="margin-top: 20px;">
-        AMC Logistics — Rapport généré automatiquement
+        AMC Travaux SN — Rapport généré automatiquement
     </div>
 </body>
 </html>
