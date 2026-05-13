@@ -138,8 +138,8 @@ class TransportTrackingController extends Controller
             'filters' => array_filter($filters ?? []),
             'sort' => ['by' => $sortColumn, 'dir' => $sortDirection],
             'transporters' => Transporter::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
-            'trucks' => Truck::all()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
-            'drivers' => Driver::all()->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
+            'drivers' => Driver::where('is_active', true)->orderBy('name')->get()->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
             'providers' => Provider::all()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
             'products' => [
                 ['id' => '0/3', 'name' => '0/3'],
@@ -172,7 +172,7 @@ class TransportTrackingController extends Controller
             })
             ->pluck('driver_id', 'truck_id');
 
-        $trucks = Truck::get()
+        $trucks = Truck::where('is_active', true)->orderBy('matricule')->get()
             ->map(function ($truck) use ($lastDriverMap) {
                 return [
                     'id' => $truck->id,
@@ -181,7 +181,7 @@ class TransportTrackingController extends Controller
                     'transporter_id' => $truck?->transporter_id,
                 ];
             });
-        $drivers = Driver::all();
+        $drivers = Driver::where('is_active', true)->orderBy('name')->get();
         $providers = Provider::all();
         $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
             return [

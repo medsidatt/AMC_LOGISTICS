@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Http\Traits\TracksActions;
 use App\Models\Auth\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +15,15 @@ class Driver extends Model
     use SoftDeletes, TracksActions;
 
     protected $guarded = [];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    public function scopeActive(Builder $q): Builder
+    {
+        return $q->where('is_active', true);
+    }
 
     public function user(): BelongsTo
     {

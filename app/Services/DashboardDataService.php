@@ -17,8 +17,8 @@ class DashboardDataService
 {
     public function getAdminData(): array
     {
-        $trucksCount = Truck::whereNull('deleted_at')->count();
-        $driversCount = Driver::whereNull('deleted_at')->count();
+        $trucksCount = Truck::where('is_active', true)->count();
+        $driversCount = Driver::where('is_active', true)->count();
         $tripsToday = TransportTracking::whereDate('client_date', today())->count();
         $tripsYesterday = TransportTracking::whereDate('client_date', today()->subDay())->count();
 

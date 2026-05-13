@@ -20,7 +20,7 @@ export default function AcceptInvitation({ email, roleName }: Props) {
             )}
 
             <p className="text-sm text-[var(--color-text-secondary)] mb-2">
-                Vous avez été invité à rejoindre AMC Logistics
+                Vous avez été invité à rejoindre AMC Travaux SN
                 {roleName ? <> en tant que <span className="font-medium">{roleName}</span></> : null}.
             </p>
             <p className="text-sm text-[var(--color-text-secondary)] mb-6">

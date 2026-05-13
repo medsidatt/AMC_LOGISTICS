@@ -35,12 +35,13 @@ class Truck extends Model
         'fleeti_last_signal_strength' => 'integer',
         'fleeti_device_last_seen_at' => 'datetime',
         'is_active' => 'boolean',
+        'is_available' => 'boolean',
     ];
 
     // Maximum rotations before maintenance is required
     public const MAX_ROTATIONS_BEFORE_MAINTENANCE = 12;
     // Maximum kilometers before maintenance is required
-    public const MAX_KM_BEFORE_MAINTENANCE = 10000;
+    public const MAX_KM_BEFORE_MAINTENANCE = 9000;
 
     public function transporter(): BelongsTo
     {
@@ -270,7 +271,7 @@ class Truck extends Model
 
     public function isAvailable(): bool
     {
-        return (bool) $this->is_active && ! $this->isMaintenanceDueByType();
+        return (bool) $this->is_available;
     }
 
     public function maintenanceLevelByType(): string
