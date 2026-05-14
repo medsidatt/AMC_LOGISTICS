@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 
 class AuditLog extends Model
 {
@@ -40,7 +41,7 @@ class AuditLog extends Model
                 'user_agent' => substr((string) ($request?->userAgent() ?? ''), 0, 512) ?: null,
             ]);
         } catch (\Throwable $e) {
-            \Log::warning('AuditLog::record failed', ['error' => $e->getMessage(), 'action' => $action]);
+            Log::warning('AuditLog::record failed', ['error' => $e->getMessage(), 'action' => $action]);
             return null;
         }
     }

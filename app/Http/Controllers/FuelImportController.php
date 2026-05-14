@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -97,7 +98,7 @@ class FuelImportController extends Controller
             $price = (float) ($request->input('price_per_litre') ?: $setting->price_per_litre);
             $preview = $this->edkParser->parse($contents, $price);
         } catch (\Throwable $e) {
-            \Log::error('EDK import preview failed', [
+            Log::error('EDK import preview failed', [
                 'error' => $e->getMessage(),
                 'file' => $request->file('file')?->getClientOriginalName(),
             ]);
@@ -178,7 +179,7 @@ class FuelImportController extends Controller
         try {
             $preview = $this->fleetiParser->parse($request->file('file')->getRealPath());
         } catch (\Throwable $e) {
-            \Log::error('Fleeti import preview failed', [
+            Log::error('Fleeti import preview failed', [
                 'error' => $e->getMessage(),
                 'file' => $request->file('file')?->getClientOriginalName(),
             ]);
