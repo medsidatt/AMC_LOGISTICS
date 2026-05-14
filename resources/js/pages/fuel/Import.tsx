@@ -125,8 +125,19 @@ export default function FuelImportPage({ pricePerLitre, recentEdk, recentFleeti,
                 body: data,
                 headers: { 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' },
             });
-            const json = await res.json();
+            const text = await res.text();
+            let json: any = null;
+            try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+
+            if (!res.ok || !json || !json.totals) {
+                const msg = (json && (json.error || json.message))
+                    || `Erreur ${res.status} — ${text?.slice(0, 200) || 'aucune réponse exploitable'}`;
+                alert('Échec de l\'analyse EDK : ' + msg);
+                return;
+            }
             setEdkPreview(json);
+        } catch (e: any) {
+            alert('Erreur réseau : ' + (e?.message ?? e));
         } finally {
             setEdkLoading(false);
         }
@@ -158,8 +169,19 @@ export default function FuelImportPage({ pricePerLitre, recentEdk, recentFleeti,
                 body: data,
                 headers: { 'X-CSRF-TOKEN': csrfToken, Accept: 'application/json' },
             });
-            const json: FleetiPreview = await res.json();
-            setFleetiPreview(json);
+            const text = await res.text();
+            let json: any = null;
+            try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+
+            if (!res.ok || !json || !json.totals) {
+                const msg = (json && (json.error || json.message))
+                    || `Erreur ${res.status} — ${text?.slice(0, 200) || 'aucune réponse exploitable'}`;
+                alert('Échec de l\'analyse Fleeti : ' + msg);
+                return;
+            }
+            setFleetiPreview(json as FleetiPreview);
+        } catch (e: any) {
+            alert('Erreur réseau : ' + (e?.message ?? e));
         } finally {
             setFleetiLoading(false);
         }
