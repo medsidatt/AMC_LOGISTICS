@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
@@ -73,7 +74,12 @@ class InvitationController extends Controller
     public function sendInvitation(Request $request)
     {
         $request->validate([
-            'email' => 'required|email|unique:users,email|unique:invitations,email',
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users', 'email')->whereNull('deleted_at'),
+                Rule::unique('invitations', 'email')->whereNull('deleted_at'),
+            ],
             'role_name' => 'required|string|exists:roles,name',
         ]);
 
@@ -128,7 +134,12 @@ class InvitationController extends Controller
     public function update(Request $request, $id)
     {
         $request->validate([
-            'email' => 'required|email|unique:users,email,' . $id,
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users', 'email')->whereNull('deleted_at'),
+                Rule::unique('invitations', 'email')->ignore($id)->whereNull('deleted_at'),
+            ],
             'role_name' => 'required|string|exists:roles,name',
         ]);
 

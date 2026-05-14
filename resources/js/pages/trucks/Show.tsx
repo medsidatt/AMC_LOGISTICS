@@ -5,6 +5,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import DataTable from '@/components/ui/DataTable';
 import TruckKpiSection, { type TruckKpi } from '@/components/truck/TruckKpiSection';
+import FuelComparisonSection, { type FuelComparisonRow } from '@/components/truck/FuelComparisonSection';
 import { ArrowLeft, Pencil, Truck as TruckIcon, Gauge, Fuel, Wifi, WifiOff, Wrench, Calendar, Play } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -51,6 +52,7 @@ interface Props {
     recentTrackings: Tracking[];
     maintenances: Maintenance[];
     kpi: TruckKpi;
+    fuelComparison: FuelComparisonRow[];
     filter: { from: string; to: string; preset: 'day' | 'week' | 'month' | 'year' | 'custom' };
 }
 
@@ -68,7 +70,7 @@ function InfoItem({ label, value, icon }: { label: string; value: React.ReactNod
     );
 }
 
-export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, filter }: Props) {
+export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, fuelComparison, filter }: Props) {
     const fuelLevel = truck.fleeti_last_fuel_level;
     const fuelColor = fuelLevel == null ? 'muted' : fuelLevel < 30 ? 'danger' : fuelLevel < 80 ? 'warning' : 'success';
 
@@ -151,6 +153,9 @@ export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, 
 
             {/* KPI section */}
             <TruckKpiSection truckId={truck.id} kpi={kpi} filter={filter} />
+
+            {/* Fuel comparison EDK vs Fleeti */}
+            <FuelComparisonSection rows={fuelComparison} />
 
             {/* Recent transports */}
             <Card className="mb-6">

@@ -1,9 +1,9 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import { ShieldCheck, Edit2 } from 'lucide-react';
+import { ShieldCheck, Edit2, Paperclip, Wrench } from 'lucide-react';
 
 interface Issue {
     id: number;
@@ -13,6 +13,8 @@ interface Issue {
     issue_notes: string | null;
     resolution_notes: string | null;
     resolved_at: string | null;
+    maintenance_id?: number | null;
+    maintenance_date?: string | null;
 }
 
 interface Inspection {
@@ -28,6 +30,8 @@ interface Inspection {
     validated_at: string | null;
     validation_notes: string | null;
     issues: Issue[];
+    attachment_url?: string | null;
+    attachment_filename?: string | null;
     [key: string]: any;
 }
 
@@ -60,7 +64,9 @@ const SEVERITY_VARIANT: Record<string, 'default' | 'warning' | 'danger'> = {
 };
 
 export default function InspectionShow({ inspection, options }: Props) {
-    const editable = inspection.status !== 'validated';
+    const { auth } = usePage().props as any;
+    const can = (perm: string) => Array.isArray(auth?.permissions) && auth.permissions.includes(perm);
+    const editable = inspection.status !== 'validated' && can('inspection-edit');
 
     return (
         <AuthenticatedLayout>
@@ -73,7 +79,7 @@ export default function InspectionShow({ inspection, options }: Props) {
                         <Badge variant={STATUS_VARIANT[inspection.status]}>{inspection.status}</Badge>
                     </div>
                     {editable && (
-                        <Link href={`/hse/inspections/${inspection.id}/edit`}>
+                        <Link href={`/logistics/inspections/${inspection.id}/edit`}>
                             <Button variant="secondary"><Edit2 size={14} className="mr-1" /> Modifier</Button>
                         </Link>
                     )}
@@ -87,6 +93,20 @@ export default function InspectionShow({ inspection, options }: Props) {
                         <div><div className="text-[var(--color-text-muted)]">Catégorie</div><div className="font-medium">{options.categories[inspection.category] ?? inspection.category}</div></div>
                     </div>
                 </Card>
+
+                {inspection.attachment_url && (
+                    <Card>
+                        <a
+                            href={inspection.attachment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-[var(--color-primary)] hover:underline"
+                        >
+                            <Paperclip size={18} />
+                            <span>Ouvrir la fiche scannée{inspection.attachment_filename ? ` (${inspection.attachment_filename})` : ''}</span>
+                        </a>
+                    </Card>
+                )}
 
                 {Object.entries(options.sections).map(([sectionKey, section]) => (
                     <Card key={sectionKey}>
@@ -112,8 +132,11 @@ export default function InspectionShow({ inspection, options }: Props) {
                                         <div className="font-medium">{i.category}</div>
                                         <div className="text-xs text-[var(--color-text-muted)]">{i.issue_notes ?? '—'}</div>
                                         {i.resolved_at && (
-                                            <div className="text-xs text-emerald-500 mt-1">
-                                                Résolu {i.resolved_at}: {i.resolution_notes}
+                                            <div className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
+                                                {i.maintenance_id ? <Wrench size={12} /> : null}
+                                                {i.maintenance_id
+                                                    ? <span>Résolu via maintenance le {i.maintenance_date ?? i.resolved_at}: {i.resolution_notes}</span>
+                                                    : <span>Résolu {i.resolved_at}: {i.resolution_notes}</span>}
                                             </div>
                                         )}
                                     </div>
@@ -144,7 +167,7 @@ export default function InspectionShow({ inspection, options }: Props) {
                 {inspection.validated_at && (
                     <Card>
                         <div className="text-sm">
-                            <div className="font-semibold mb-1">Validation</div>
+                            <div className="font-semibold mb-1">Historique de validation (legacy)</div>
                             <div>Par {inspection.validator} le {inspection.validated_at}</div>
                             {inspection.validation_notes && <div className="mt-1 text-[var(--color-text-muted)]">{inspection.validation_notes}</div>}
                         </div>

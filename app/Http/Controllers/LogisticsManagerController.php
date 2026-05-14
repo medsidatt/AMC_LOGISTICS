@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
-use App\Models\InspectionChecklist;
 use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\TransportTracking;
@@ -22,11 +21,9 @@ class LogisticsManagerController extends Controller
     ) {
         $this->middleware('permission:logistics-dashboard', ['except' => [
             'pendingChecklists', 'validateChecklist',
-            'pendingInspections', 'validateInspection',
             'resolveInspectionIssue',
         ]]);
         $this->middleware('permission:weekly-checklist-validate', ['only' => ['pendingChecklists', 'validateChecklist']]);
-        $this->middleware('permission:inspection-validate', ['only' => ['pendingInspections', 'validateInspection']]);
         $this->middleware('permission:checklist-issue-resolve', ['only' => ['resolveInspectionIssue']]);
     }
 
@@ -227,45 +224,6 @@ class LogisticsManagerController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Checklist hebdomadaire mise à jour.');
-    }
-
-    public function pendingInspections()
-    {
-        $pending = InspectionChecklist::query()
-            ->pendingValidation()
-            ->with(['truck:id,matricule', 'inspector:id,name', 'issues'])
-            ->orderByDesc('inspection_date')
-            ->paginate(25)
-            ->through(fn ($i) => [
-                'id' => $i->id,
-                'inspection_date' => $i->inspection_date?->format('d/m/Y'),
-                'truck' => $i->truck?->matricule,
-                'inspector' => $i->inspector?->name,
-                'category' => $i->category,
-                'issues_count' => $i->issues->count(),
-                'critical_count' => $i->issues->where('severity', 'critical')->count(),
-            ]);
-
-        return \Inertia\Inertia::render('logistics/PendingInspections', [
-            'inspections' => $pending,
-        ]);
-    }
-
-    public function validateInspection(Request $request, InspectionChecklist $inspection)
-    {
-        $data = $request->validate([
-            'decision' => 'required|in:validated,rejected',
-            'validation_notes' => 'nullable|string|max:2000',
-        ]);
-
-        $inspection->update([
-            'status' => $data['decision'],
-            'validated_by' => auth()->id(),
-            'validated_at' => now(),
-            'validation_notes' => $data['validation_notes'] ?? null,
-        ]);
-
-        return redirect()->back()->with('success', 'Inspection mise à jour.');
     }
 
     public function resolveInspectionIssue(Request $request, InspectionChecklistIssue $issue)

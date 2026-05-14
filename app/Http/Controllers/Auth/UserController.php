@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 use Yajra\DataTables\DataTables;
@@ -65,7 +66,7 @@ class UserController extends Controller
     {
         $this->validate($request, [
             'name' => 'required',
-            'email' => ['required', 'unique:users,email'],
+            'email' => ['required', Rule::unique('users', 'email')->whereNull('deleted_at')],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['integer', 'exists:roles,id'],
         ]);
@@ -101,7 +102,7 @@ class UserController extends Controller
     {
         $this->validate($request, [
             'name' => 'required',
-            'email' => ['required', 'unique:users,email,' . $id],
+            'email' => ['required', Rule::unique('users', 'email')->ignore($id)->whereNull('deleted_at')],
             'roles' => ['required', 'array']
         ]);
 
@@ -219,7 +220,7 @@ class UserController extends Controller
     {
         $this->validate($request, [
             'name' => 'required',
-            'email' => ['required', 'unique:users,email,' . auth()->id()],
+            'email' => ['required', Rule::unique('users', 'email')->ignore(auth()->id())->whereNull('deleted_at')],
         ]);
 
         $user = auth()->user();

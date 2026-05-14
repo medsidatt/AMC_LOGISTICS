@@ -2,11 +2,16 @@
 
 namespace App\Providers;
 
+use App\Models\AuditLog;
 use Carbon\Carbon;
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -86,6 +91,19 @@ class AppServiceProvider extends ServiceProvider
         // Rate limiting for API
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+        });
+
+        // Audit auth events
+        Event::listen(Login::class, function (Login $event) {
+            AuditLog::record('login', $event->user instanceof \Illuminate\Database\Eloquent\Model ? $event->user : null);
+        });
+        Event::listen(Logout::class, function (Logout $event) {
+            AuditLog::record('logout', $event->user instanceof \Illuminate\Database\Eloquent\Model ? $event->user : null);
+        });
+        Event::listen(Failed::class, function (Failed $event) {
+            AuditLog::record('login_failed', null, null, [
+                'actor_name' => $event->credentials['email'] ?? 'unknown',
+            ]);
         });
     }
 }

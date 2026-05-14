@@ -3,16 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Exports\MaintenanceDueExport;
+use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\Maintenance;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
 use App\Services\MaintenanceStatusService;
+use App\Services\SharePointStorageService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -20,7 +24,8 @@ class MaintenanceController extends Controller
 {
     public function __construct(
         private readonly TruckMaintenanceService $truckMaintenanceService,
-        private readonly MaintenanceStatusService $maintenanceStatusService
+        private readonly MaintenanceStatusService $maintenanceStatusService,
+        private readonly SharePointStorageService $sharePointStorage
     ) {
         $this->middleware('permission:maintenance-create');
     }
@@ -275,11 +280,36 @@ class MaintenanceController extends Controller
             ->groupBy('daily_checklists.truck_id')
             ->pluck('cnt', 'truck_id');
 
+        // Count open inspection findings per truck
+        $openInspectionIssuesByTruck = InspectionChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->join('inspection_checklists', 'inspection_checklists.id', '=', 'inspection_checklist_issues.inspection_checklist_id')
+            ->selectRaw('inspection_checklists.truck_id, count(*) as cnt')
+            ->groupBy('inspection_checklists.truck_id')
+            ->pluck('cnt', 'truck_id');
+
+        // Pull the actual flagged inspection issues per truck (preview list for the maintenance modal)
+        $inspectionIssuesByTruck = InspectionChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->join('inspection_checklists', 'inspection_checklists.id', '=', 'inspection_checklist_issues.inspection_checklist_id')
+            ->orderByDesc('inspection_checklists.inspection_date')
+            ->get([
+                'inspection_checklist_issues.id',
+                'inspection_checklist_issues.category',
+                'inspection_checklist_issues.severity',
+                'inspection_checklist_issues.issue_notes',
+                'inspection_checklists.truck_id',
+                'inspection_checklists.inspection_date',
+            ])
+            ->groupBy('truck_id');
+
         $trucks = Truck::with(['maintenanceProfiles' => fn ($q) => $q->active()])
             ->where('is_active', true)
             ->orderBy('matricule')
             ->get()
-            ->map(function (Truck $truck) use ($openIssuesByTruck) {
+            ->map(function (Truck $truck) use ($openIssuesByTruck, $openInspectionIssuesByTruck, $inspectionIssuesByTruck) {
                 $profiles = $truck->maintenanceProfiles->keyBy('maintenance_type');
                 $general = $profiles->get('general');
                 return [
@@ -296,6 +326,14 @@ class MaintenanceController extends Controller
                     ])->values(),
                     'overall_status' => $general?->status ?? 'green',
                     'open_issues' => $openIssuesByTruck->get($truck->id, 0),
+                    'open_inspection_issues' => $openInspectionIssuesByTruck->get($truck->id, 0),
+                    'inspection_issues' => $inspectionIssuesByTruck->get($truck->id, collect())->map(fn ($i) => [
+                        'id' => $i->id,
+                        'category' => $i->category,
+                        'severity' => $i->severity,
+                        'issue_notes' => $i->issue_notes,
+                        'inspection_date' => $i->inspection_date,
+                    ])->values(),
                 ];
             });
 
@@ -314,6 +352,7 @@ class MaintenanceController extends Controller
             'trucks' => $trucks,
             'counts' => $counts,
             'maintenanceTypes' => $maintenanceTypes,
+            'oilTypes' => Maintenance::OIL_TYPES,
         ]);
     }
 
@@ -379,32 +418,131 @@ class MaintenanceController extends Controller
 
     public function recordMaintenance(Request $request, Truck $truck)
     {
+        $oilTypeKeys = implode(',', array_keys(Maintenance::OIL_TYPES));
+
         $data = $request->validate([
             'maintenance_date' => 'required|date',
             'notes' => 'nullable|string',
             'kilometers_at_maintenance' => 'nullable|numeric',
+
+            'oil_type' => "nullable|string|in:{$oilTypeKeys}",
+            'oil_change_km' => 'nullable|numeric|min:0',
+            'next_oil_change_km' => 'nullable|numeric|min:0',
+            'gearbox_status' => 'nullable|string|max:64',
+            'differential_status' => 'nullable|string|max:64',
+            'hydraulic_status' => 'nullable|string|max:64',
+            'greasing_status' => 'nullable|string|max:64',
+            'filter_oil_changed' => 'sometimes|boolean',
+            'filter_hydraulic_changed' => 'sometimes|boolean',
+            'filter_air_changed' => 'sometimes|boolean',
+            'filter_fuel_changed' => 'sometimes|boolean',
+
+            'attachment' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
+
+            'linked_inspection_issue_ids' => 'nullable|array',
+            'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
         ]);
 
-        // Manager only records General maintenance (covers oil, tires, filters)
-        $result = $this->maintenanceStatusService->recordMaintenance(
-            $truck,
-            $data['maintenance_date'],
-            $data['notes'] ?? null,
-            Maintenance::TYPE_GENERAL,
-            isset($data['kilometers_at_maintenance']) ? (float) $data['kilometers_at_maintenance'] : null
-        );
+        try {
+            $maintenance = DB::transaction(function () use ($truck, $data, $request) {
+                $maintenance = $this->maintenanceStatusService->recordMaintenance(
+                    $truck,
+                    $data['maintenance_date'],
+                    $data['notes'] ?? null,
+                    Maintenance::TYPE_GENERAL,
+                    isset($data['kilometers_at_maintenance']) ? (float) $data['kilometers_at_maintenance'] : null
+                );
 
-        if ($result === false) {
-            return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
+                if ($maintenance === false) {
+                    return false;
+                }
+
+                $extras = array_intersect_key($data, array_flip([
+                    'oil_type',
+                    'oil_change_km',
+                    'next_oil_change_km',
+                    'gearbox_status',
+                    'differential_status',
+                    'hydraulic_status',
+                    'greasing_status',
+                    'filter_oil_changed',
+                    'filter_hydraulic_changed',
+                    'filter_air_changed',
+                    'filter_fuel_changed',
+                ]));
+
+                foreach (['filter_oil_changed', 'filter_hydraulic_changed', 'filter_air_changed', 'filter_fuel_changed'] as $flag) {
+                    $extras[$flag] = (bool) ($extras[$flag] ?? false);
+                }
+
+                if (!empty($extras)) {
+                    $maintenance->update($extras);
+                }
+
+                $issueIds = $data['linked_inspection_issue_ids'] ?? [];
+                if (!empty($issueIds)) {
+                    InspectionChecklistIssue::query()
+                        ->whereIn('id', $issueIds)
+                        ->whereHas('inspectionChecklist', fn ($q) => $q->where('truck_id', $truck->id))
+                        ->whereNull('resolved_at')
+                        ->update([
+                            'maintenance_id' => $maintenance->id,
+                            'resolved_at' => now(),
+                            'resolved_by' => auth()->id(),
+                            'resolution_notes' => $data['notes'] ?? null,
+                        ]);
+                }
+
+                return $maintenance;
+            });
+
+            if ($maintenance === false) {
+                return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
+            }
+
+            $this->handleMaintenanceAttachment($request, $maintenance);
+
+            LogisticsAlert::where('truck_id', $truck->id)
+                ->where('type', 'due_engine')
+                ->whereNull('resolved_at')
+                ->update(['resolved_at' => now()]);
+
+            return redirect()->back()->with('success', 'Maintenance enregistrée avec succès.');
+        } catch (\Throwable $e) {
+            Log::error('recordMaintenance failed', ['truck_id' => $truck->id, 'error' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function handleMaintenanceAttachment(Request $request, Maintenance $maintenance): void
+    {
+        if (!$request->hasFile('attachment')) {
+            return;
         }
 
-        // General maintenance resolves all engine-related alerts
-        LogisticsAlert::where('truck_id', $truck->id)
-            ->where('type', 'due_engine')
-            ->whereNull('resolved_at')
-            ->update(['resolved_at' => now()]);
+        if (!$this->sharePointStorage->isConfigured()) {
+            Log::warning('SharePoint not configured — skipping maintenance attachment upload', [
+                'maintenance_id' => $maintenance->id,
+            ]);
+            return;
+        }
 
-        return redirect()->back()->with('success', 'Maintenance enregistrée avec succès.');
+        $file = $request->file('attachment');
+        $result = $this->sharePointStorage->upload($file, 'maintenances');
+
+        if (!($result['success'] ?? false)) {
+            Log::warning('Maintenance attachment upload failed', [
+                'maintenance_id' => $maintenance->id,
+                'message' => $result['message'] ?? null,
+            ]);
+            return;
+        }
+
+        $maintenance->update([
+            'attachment_path' => $result['path'],
+            'attachment_url' => $result['url'],
+            'attachment_filename' => $file->getClientOriginalName(),
+        ]);
     }
 
     public function history(Request $request)
@@ -428,6 +566,20 @@ class MaintenanceController extends Controller
             'trigger_km' => $m->trigger_km,
             'interval_km' => $m->profile?->interval_km,
             'notes' => $m->notes,
+            'oil_type' => $m->oil_type,
+            'oil_type_label' => $m->oil_type ? (Maintenance::OIL_TYPES[$m->oil_type] ?? $m->oil_type) : null,
+            'oil_change_km' => $m->oil_change_km,
+            'next_oil_change_km' => $m->next_oil_change_km,
+            'gearbox_status' => $m->gearbox_status,
+            'differential_status' => $m->differential_status,
+            'hydraulic_status' => $m->hydraulic_status,
+            'greasing_status' => $m->greasing_status,
+            'filter_oil_changed' => (bool) $m->filter_oil_changed,
+            'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
+            'filter_air_changed' => (bool) $m->filter_air_changed,
+            'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
+            'attachment_url' => $m->attachment_url,
+            'attachment_filename' => $m->attachment_filename,
         ]);
 
         $trucks = Truck::orderBy('matricule')->get(['id', 'matricule']);

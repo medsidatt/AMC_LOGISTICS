@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -36,21 +36,26 @@ const STATUS_VARIANT: Record<string, 'default' | 'success' | 'warning' | 'danger
 };
 
 export default function InspectionsIndex({ inspections, options }: Props) {
+    const { auth } = usePage().props as any;
+    const canCreate = Array.isArray(auth?.permissions) && auth.permissions.includes('inspection-create');
+
     return (
         <AuthenticatedLayout>
-            <Head title="Inspections HSE" />
+            <Head title="Inspections" />
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <ShieldCheck size={22} className="text-emerald-500" />
-                        <h1 className="text-xl font-semibold">Inspections HSE</h1>
+                        <h1 className="text-xl font-semibold">Inspections</h1>
                     </div>
-                    <Link href="/hse/inspections/create">
-                        <Button>
-                            <Plus size={16} className="mr-1" />
-                            Nouvelle inspection
-                        </Button>
-                    </Link>
+                    {canCreate && (
+                        <Link href="/logistics/inspections/create">
+                            <Button>
+                                <Plus size={16} className="mr-1" />
+                                Nouvelle inspection
+                            </Button>
+                        </Link>
+                    )}
                 </div>
 
                 <Card>

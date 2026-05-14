@@ -324,7 +324,6 @@ class DashboardDataService
     public function getLogisticsResponsibleData(): array
     {
         $pendingChecklists = DailyChecklist::query()->where('status', DailyChecklist::STATUS_PENDING)->count();
-        $pendingInspections = InspectionChecklist::query()->where('status', InspectionChecklist::STATUS_SUBMITTED)->count();
         $unresolvedFlagged = DailyChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
         $unresolvedInspectionFlagged = InspectionChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
 
@@ -379,7 +378,6 @@ class DashboardDataService
         return [
             'kpis' => [
                 'pending_checklists' => $pendingChecklists,
-                'pending_inspections' => $pendingInspections,
                 'unresolved_flagged' => $unresolvedFlagged,
                 'unresolved_inspection_flagged' => $unresolvedInspectionFlagged,
                 'due_engine_trucks' => $dueEngineTrucks,
