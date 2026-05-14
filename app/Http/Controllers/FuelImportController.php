@@ -177,7 +177,12 @@ class FuelImportController extends Controller
         @set_time_limit(180);
 
         try {
-            $preview = $this->fleetiParser->parse($request->file('file')->getRealPath());
+            $uploaded = $request->file('file');
+            $ext = strtolower((string) $uploaded->getClientOriginalExtension());
+            $readerType = $ext === 'xls'
+                ? \Maatwebsite\Excel\Excel::XLS
+                : \Maatwebsite\Excel\Excel::XLSX;
+            $preview = $this->fleetiParser->parse($uploaded->getRealPath(), $readerType);
         } catch (\Throwable $e) {
             Log::error('Fleeti import preview failed', [
                 'error' => $e->getMessage(),
