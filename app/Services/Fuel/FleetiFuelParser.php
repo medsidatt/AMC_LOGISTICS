@@ -22,9 +22,9 @@ class FleetiFuelParser
      *     totals: array{count_rows: int, count_trucks: int, litres_refilled: float, litres_consumed: float, km: float},
      * }
      */
-    public function parse(string $path): array
+    public function parse(string $path, ?string $readerType = null): array
     {
-        $sheets = Excel::toArray([], $path);
+        $sheets = Excel::toArray([], $path, null, $readerType);
 
         $valid = [];
         $invalid = [];
