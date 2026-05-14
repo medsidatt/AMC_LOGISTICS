@@ -85,14 +85,29 @@ class FuelImportController extends Controller
     public function previewEdk(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt|max:5120',
+            'file' => 'required|file|mimes:csv,txt|max:20480',
         ]);
 
-        $contents = file_get_contents($request->file('file')->getRealPath());
-        $setting = FleetSetting::current();
-        $price = (float) ($request->input('price_per_litre') ?: $setting->price_per_litre);
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
 
-        $preview = $this->edkParser->parse($contents, $price);
+        try {
+            $contents = file_get_contents($request->file('file')->getRealPath());
+            $setting = FleetSetting::current();
+            $price = (float) ($request->input('price_per_litre') ?: $setting->price_per_litre);
+            $preview = $this->edkParser->parse($contents, $price);
+        } catch (\Throwable $e) {
+            \Log::error('EDK import preview failed', [
+                'error' => $e->getMessage(),
+                'file' => $request->file('file')?->getClientOriginalName(),
+            ]);
+            return response()->json([
+                'error' => 'Le fichier EDK n\'a pas pu être analysé : ' . $e->getMessage(),
+                'valid' => [],
+                'invalid' => [],
+                'totals' => ['count_rows' => 0, 'litres' => 0, 'amount' => 0],
+            ], 422);
+        }
 
         $token = 'fuel-import:edk:' . auth()->id() . ':' . Str::random(16);
         Cache::put($token, $preview['valid'], now()->addHour());
@@ -153,10 +168,28 @@ class FuelImportController extends Controller
     public function previewFleeti(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls|max:5120',
+            'file' => 'required|file|mimes:xlsx,xls|max:20480',
         ]);
 
-        $preview = $this->fleetiParser->parse($request->file('file')->getRealPath());
+        // Historical Fleeti exports can be large — give the parser breathing room.
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(180);
+
+        try {
+            $preview = $this->fleetiParser->parse($request->file('file')->getRealPath());
+        } catch (\Throwable $e) {
+            \Log::error('Fleeti import preview failed', [
+                'error' => $e->getMessage(),
+                'file' => $request->file('file')?->getClientOriginalName(),
+            ]);
+            return response()->json([
+                'error' => 'Le fichier Fleeti n\'a pas pu être analysé : ' . $e->getMessage(),
+                'valid' => [],
+                'invalid' => [],
+                'period' => ['from' => null, 'to' => null],
+                'totals' => ['count_rows' => 0, 'count_trucks' => 0, 'litres_refilled' => 0, 'litres_consumed' => 0, 'km' => 0],
+            ], 422);
+        }
 
         $token = 'fuel-import:fleeti:' . auth()->id() . ':' . Str::random(16);
         Cache::put($token, $preview['valid'], now()->addHour());
