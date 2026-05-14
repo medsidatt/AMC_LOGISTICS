@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'ajax' => \App\Http\Middleware\AjaxRequestOnly::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'horizontal' => \App\Http\Middleware\MenuType::class,
         ]);
 

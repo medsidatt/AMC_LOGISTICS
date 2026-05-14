@@ -60,6 +60,7 @@ class FleetSettingsController extends Controller
             'setting' => [
                 'monthly_target_tonnage' => (float) $setting->monthly_target_tonnage,
                 'weight_gap_threshold' => (float) $setting->weight_gap_threshold,
+                'price_per_litre' => (float) $setting->price_per_litre,
             ],
             'defaultTarget' => $defaultTarget,
             'monthlyTargets' => $targets,
@@ -71,6 +72,7 @@ class FleetSettingsController extends Controller
         $data = $request->validate([
             'monthly_target_tonnage' => 'required|numeric|min:0',
             'weight_gap_threshold' => 'required|numeric|min:0',
+            'price_per_litre' => 'required|numeric|min:1',
         ]);
 
         $setting = FleetSetting::current();

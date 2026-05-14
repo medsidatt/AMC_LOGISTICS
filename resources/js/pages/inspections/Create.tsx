@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import FormTextarea from '@/components/ui/FormTextarea';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Paperclip } from 'lucide-react';
 
 interface Truck { id: number; matricule: string; }
 
@@ -31,10 +31,10 @@ export default function InspectionCreate({ trucks, options }: Props) {
         category: 'comprehensive',
         findings_summary: '',
         recommendations: '',
-        submit: false,
         issue_flags: [] as string[],
         issue_notes: {} as Record<string, string>,
         issue_severity: {} as Record<string, string>,
+        attachment: null as File | null,
     };
     options.fields.forEach((f) => { initial[f] = 'ok'; });
 
@@ -46,19 +46,18 @@ export default function InspectionCreate({ trucks, options }: Props) {
         form.setData('issue_flags', next);
     };
 
-    const submit = (asSubmit: boolean) => (e: React.FormEvent) => {
+    const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.setData('submit', asSubmit);
-        form.post('/hse/inspections');
+        form.post('/logistics/inspections', { forceFormData: true });
     };
 
     return (
         <AuthenticatedLayout>
-            <Head title="Nouvelle inspection HSE" />
-            <form onSubmit={submit(false)} className="space-y-4 max-w-4xl">
+            <Head title="Nouvelle inspection" />
+            <form onSubmit={submit} className="space-y-4 max-w-4xl">
                 <div className="flex items-center gap-2">
                     <ShieldCheck size={22} className="text-emerald-500" />
-                    <h1 className="text-xl font-semibold">Nouvelle inspection HSE</h1>
+                    <h1 className="text-xl font-semibold">Nouvelle inspection</h1>
                 </div>
 
                 <Card>
@@ -160,12 +159,25 @@ export default function InspectionCreate({ trucks, options }: Props) {
                     />
                 </Card>
 
+                <Card>
+                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <Paperclip size={18} /> Fiche d'inspection scannée (PDF / photo)
+                    </h2>
+                    <input
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png"
+                        onChange={(e) => form.setData('attachment', e.target.files?.[0] ?? null)}
+                        className="block w-full text-sm"
+                    />
+                    {form.errors.attachment && (
+                        <p className="text-xs text-red-500 mt-1">{form.errors.attachment as any}</p>
+                    )}
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">PDF, JPG ou PNG. Max 10 Mo. Sera archivée sur SharePoint pour traçabilité ISO.</p>
+                </Card>
+
                 <div className="flex gap-3 justify-end">
-                    <Button type="submit" variant="secondary" disabled={form.processing}>
-                        Enregistrer brouillon
-                    </Button>
-                    <Button type="button" onClick={submit(true) as any} disabled={form.processing}>
-                        Soumettre pour validation
+                    <Button type="submit" disabled={form.processing}>
+                        Enregistrer
                     </Button>
                 </div>
             </form>

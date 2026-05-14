@@ -38,43 +38,44 @@ class DailyChecklist extends Model
     // ── Standardized options for analytics ──
 
     const TIRE_OPTIONS = [
-        'bon' => 'Bon',
+        'bon' => 'Bon état',
         'acceptable' => 'Acceptable',
-        'use' => 'Use',
-        'a_remplacer' => 'A remplacer',
-        'crevee' => 'Crevee',
+        'use' => 'Usés',
+        'a_remplacer' => 'À remplacer',
+        'crevee' => 'Crevé',
     ];
 
     const BRAKE_OPTIONS = [
-        'bon' => 'Bon',
+        'bon' => 'Bon état',
         'acceptable' => 'Acceptable',
-        'mou' => 'Mou',
+        'mou' => 'Pédale molle',
         'bruit_anormal' => 'Bruit anormal',
-        'defaillant' => 'Defaillant',
+        'defaillant' => 'Défaillants',
     ];
 
     const LIGHT_OPTIONS = [
         'tous_fonctionnels' => 'Tous fonctionnels',
-        'phare_defaillant' => 'Phare defaillant',
-        'clignotant_defaillant' => 'Clignotant defaillant',
-        'feu_arriere_defaillant' => 'Feu arriere defaillant',
-        'plusieurs_defaillants' => 'Plusieurs defaillants',
-        'aucun_fonctionnel' => 'Aucun fonctionnel',
+        'phare_defaillant' => 'Phare défaillant',
+        'clignotant_defaillant' => 'Clignotant défaillant',
+        'feu_arriere_defaillant' => 'Feu arrière défaillant',
+        'plusieurs_defaillants' => 'Plusieurs défaillants',
+        'aucun_fonctionnel' => 'Aucun ne fonctionne',
     ];
 
     const OIL_LEVEL_OPTIONS = [
         'plein' => 'Plein',
-        'correct' => 'Correct',
-        'bas' => 'Bas',
-        'critique' => 'Critique',
+        'correct' => 'Niveau correct',
+        'bas' => 'Niveau bas',
+        'critique' => 'Niveau critique',
     ];
 
+    // Kept for legacy Blade compatibility only; no longer used in the weekly checklist UI.
     const FUEL_LEVEL_OPTIONS = [
         'plein' => 'Plein',
         'trois_quarts' => '3/4',
         'demi' => '1/2',
         'quart' => '1/4',
-        'reserve' => 'Reserve',
+        'reserve' => 'Réserve',
         'vide' => 'Vide',
     ];
 
@@ -84,6 +85,16 @@ class DailyChecklist extends Model
         'acceptable' => 'Acceptable',
         'mauvais' => 'Mauvais',
         'hors_service' => 'Hors service',
+    ];
+
+    const LIGHT_POSITION_OPTIONS = [
+        'phare_avant_gauche' => 'Phare avant gauche',
+        'phare_avant_droit' => 'Phare avant droit',
+        'clignotant_avant' => 'Clignotant avant',
+        'clignotant_arriere' => 'Clignotant arrière',
+        'feu_arriere' => 'Feu arrière',
+        'feu_stop' => 'Feu stop',
+        'feu_recul' => 'Feu de recul',
     ];
 
     public function truck(): BelongsTo

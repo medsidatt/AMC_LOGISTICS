@@ -2,8 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import Button from '@/components/ui/Button';
-import { ShieldCheck, FileEdit, Send, CheckCircle2, XCircle, AlertTriangle, Plus } from 'lucide-react';
+import { ShieldCheck, FileEdit, Send, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 
 interface RecentInspection {
     id: number;
@@ -59,9 +58,6 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                         <ShieldCheck size={22} className="text-emerald-500" />
                         <h1 className="text-xl font-semibold">Tableau de bord HSE</h1>
                     </div>
-                    <Link href={'/hse/inspections/create'}>
-                        <Button><Plus size={16} className="mr-1" /> Nouvelle inspection</Button>
-                    </Link>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -74,7 +70,7 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Card>
-                        <h2 className="text-lg font-semibold mb-3">Mes inspections récentes</h2>
+                        <h2 className="text-lg font-semibold mb-3">Inspections récentes</h2>
                         {recentInspections.length === 0 ? (
                             <p className="text-sm text-[var(--color-text-muted)]">Aucune inspection.</p>
                         ) : (
@@ -115,7 +111,7 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                                 {trucksNeedingInspection.map((t) => (
                                     <li key={t.id} className="flex items-center justify-between border-b border-[var(--color-border)] py-1">
                                         <span className="text-sm font-medium">{t.matricule}</span>
-                                        <Link href={`${'/hse/inspections/create'}?truck=${t.id}`} className="text-xs text-[var(--color-primary)] hover:underline">Inspecter</Link>
+                                        <Link href={`/hse/inspections?truck=${t.id}`} className="text-xs text-[var(--color-primary)] hover:underline">Voir historique</Link>
                                     </li>
                                 ))}
                             </ul>

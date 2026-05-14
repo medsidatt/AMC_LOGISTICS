@@ -8,6 +8,7 @@ use App\Models\Maintenance;
 use App\Models\LogisticsAlert;
 use App\Models\Transporter;
 use App\Models\Truck;
+use App\Services\Fuel\FuelComparisonService;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckKpiService;
 use App\Services\TruckMaintenanceService;
@@ -23,6 +24,7 @@ class TruckController extends Controller
         private readonly TruckMaintenanceService $truckMaintenanceService,
         private readonly MaintenanceStatusService $maintenanceStatusService,
         private readonly TruckKpiService $kpiService,
+        private readonly FuelComparisonService $fuelComparison,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
@@ -297,6 +299,7 @@ class TruckController extends Controller
 
         [$from, $to, $preset] = $this->resolvePeriod($request);
         $kpi = $this->kpiService->compute($truck, $from, $to);
+        $fuelComparison = $this->fuelComparison->forTruck($truck, 12);
 
         return \Inertia\Inertia::render('trucks/Show', [
             'truck' => [
@@ -337,6 +340,7 @@ class TruckController extends Controller
                 'notes' => $m->notes,
             ]),
             'kpi' => $kpi,
+            'fuelComparison' => $fuelComparison,
             'filter' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),

@@ -6,6 +6,7 @@ use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
 use App\Models\DriverDisciplineRecord;
+use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelTracking;
 use App\Models\MonthlyTonnageTarget;
@@ -42,9 +43,9 @@ class FleetKpiService
         $totalRotations = (int) $rotationsPerTruck->sum('rotations');
         $totalTonnageDelivered = (float) $rotationsPerTruck->sum('tonnage');
 
-        $fuelLitres = (float) FuelTracking::query()
-            ->whereBetween('created_at', [$from, $to])
-            ->sum('litres');
+        $fuelLitres = (float) FleetiDailyRecord::query()
+            ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
+            ->sum('consumed');
 
         $availableCapacities = $trucks->filter(fn (Truck $t) => $t->isAvailable())
             ->pluck('capacity_tonnage')
@@ -109,9 +110,9 @@ class FleetKpiService
 
     private function topTrucks(Carbon $from, Carbon $to, Collection $trucks, Collection $rotationsPerTruck): array
     {
-        $fuelPerTruck = FuelTracking::query()
-            ->select('truck_id', DB::raw('SUM(litres) as litres'))
-            ->whereBetween('created_at', [$from, $to])
+        $fuelPerTruck = FleetiDailyRecord::query()
+            ->select('truck_id', DB::raw('SUM(consumed) as litres'))
+            ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
             ->groupBy('truck_id')
             ->get()
             ->keyBy('truck_id');
@@ -207,10 +208,10 @@ class FleetKpiService
             $avgLoadRate = $loadCount > 0 ? $loadSum / $loadCount : 0.0;
             $gapRatio = $rotations > 0 ? $gapPenalty / $rotations : 0.0;
 
-            $fuelLitres = (float) FuelTracking::query()
-                ->whereBetween('created_at', [$from, $to])
+            $fuelLitres = (float) FleetiDailyRecord::query()
+                ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
                 ->whereIn('truck_id', $weighedTrips->pluck('truck_id')->filter()->unique())
-                ->sum('litres');
+                ->sum('consumed');
             $yield = $tonnage > 0 ? $fuelLitres / $tonnage : null;
 
             $weeklyChecklists = DailyChecklist::query()

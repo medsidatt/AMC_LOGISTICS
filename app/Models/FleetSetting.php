@@ -11,6 +11,7 @@ class FleetSetting extends Model
     protected $casts = [
         'monthly_target_tonnage' => 'float',
         'weight_gap_threshold' => 'float',
+        'price_per_litre' => 'float',
         'discipline_weights' => 'array',
     ];
 
@@ -21,6 +22,7 @@ class FleetSetting extends Model
             [
                 'monthly_target_tonnage' => 0,
                 'weight_gap_threshold' => 0.5,
+                'price_per_litre' => 730,
             ],
         );
     }

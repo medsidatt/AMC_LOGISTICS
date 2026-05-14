@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelEvent;
 use App\Models\FuelTracking;
@@ -40,10 +41,10 @@ class TruckKpiService
             ? $tonnageDelivered / ($capacity * $rotationsCount)
             : 0.0;
 
-        $fuelLitres = (float) FuelTracking::query()
+        $fuelLitres = (float) FleetiDailyRecord::query()
             ->where('truck_id', $truck->id)
-            ->whereBetween('created_at', [$from, $to])
-            ->sum('litres');
+            ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
+            ->sum('consumed');
 
         $fuelPerRotation = $rotationsCount > 0 ? $fuelLitres / $rotationsCount : null;
         $fuelYield = $tonnageDelivered > 0 ? $fuelLitres / $tonnageDelivered : null;

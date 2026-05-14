@@ -29,7 +29,6 @@ interface AlertRow {
 interface Props {
     kpis: {
         pending_checklists: number;
-        pending_inspections: number;
         unresolved_flagged: number;
         unresolved_inspection_flagged: number;
         due_engine_trucks: number;
@@ -68,7 +67,7 @@ export default function LogisticsResponsibleDashboard({ kpis, nextChecklists, ne
 
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <Kpi icon={<ClipboardCheck size={18} />} label="Checklists à valider" value={kpis.pending_checklists} href={'/logistics/validation/checklists'} variant="warning" />
-                    <Kpi icon={<ShieldCheck size={18} />} label="Inspections à valider" value={kpis.pending_inspections} href={'/logistics/validation/inspections'} variant="warning" />
+                    <Kpi icon={<ShieldCheck size={18} />} label="Nouvelle inspection" value={0} href={'/logistics/inspections/create'} />
                     <Kpi icon={<AlertTriangle size={18} />} label="Issues hebdo non résolues" value={kpis.unresolved_flagged} variant="danger" />
                     <Kpi icon={<AlertTriangle size={18} />} label="Issues inspection non résolues" value={kpis.unresolved_inspection_flagged} variant="danger" />
                     <Kpi icon={<Wrench size={18} />} label="Maintenance moteur due" value={kpis.due_engine_trucks} variant="warning" />
@@ -99,16 +98,18 @@ export default function LogisticsResponsibleDashboard({ kpis, nextChecklists, ne
 
                     <Card>
                         <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-lg font-semibold">Prochaines inspections HSE</h2>
-                            <Link href={'/logistics/validation/inspections'} className="text-sm text-[var(--color-primary)] hover:underline">Voir tout →</Link>
+                            <h2 className="text-lg font-semibold">Inspections récentes</h2>
+                            <Link href={'/hse/inspections'} className="text-sm text-[var(--color-primary)] hover:underline">Voir tout →</Link>
                         </div>
                         {nextInspections.length === 0 ? (
-                            <p className="text-sm text-[var(--color-text-muted)]">Aucune inspection en attente.</p>
+                            <p className="text-sm text-[var(--color-text-muted)]">Aucune inspection récente.</p>
                         ) : (
                             <ul className="space-y-1 text-sm">
                                 {nextInspections.map((i) => (
                                     <li key={i.id} className="flex justify-between border-b border-[var(--color-border)] py-1">
-                                        <span><strong>{i.truck ?? '—'}</strong> — {i.inspector ?? '—'} ({i.category})</span>
+                                        <Link href={`/hse/inspections/${i.id}`} className="flex-1 hover:underline">
+                                            <strong>{i.truck ?? '—'}</strong> — {i.inspector ?? '—'} ({i.category})
+                                        </Link>
                                         <span className="flex items-center gap-2 text-[var(--color-text-muted)]">
                                             {i.inspection_date}
                                             {i.critical_count > 0 && <Badge variant="danger">{i.critical_count} critique{i.critical_count > 1 ? 's' : ''}</Badge>}
