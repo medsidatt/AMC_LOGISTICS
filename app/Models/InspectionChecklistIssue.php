@@ -27,4 +27,9 @@ class InspectionChecklistIssue extends Model
     {
         return $this->belongsTo(User::class, 'resolved_by');
     }
+
+    public function maintenance(): BelongsTo
+    {
+        return $this->belongsTo(Maintenance::class);
+    }
 }

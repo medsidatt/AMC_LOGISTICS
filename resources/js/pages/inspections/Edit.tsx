@@ -5,7 +5,7 @@ import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import FormTextarea from '@/components/ui/FormTextarea';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Paperclip } from 'lucide-react';
 
 interface Inspection {
     id: number;
@@ -14,6 +14,8 @@ interface Inspection {
     findings_summary: string | null;
     recommendations: string | null;
     status: string;
+    attachment_url?: string | null;
+    attachment_filename?: string | null;
     [key: string]: any;
 }
 
@@ -39,21 +41,21 @@ export default function InspectionEdit({ inspection, options }: Props) {
         category: inspection.category,
         findings_summary: inspection.findings_summary ?? '',
         recommendations: inspection.recommendations ?? '',
-        submit: false,
+        attachment: null as File | null,
+        _method: 'put',
     };
     options.fields.forEach((f) => { initial[f] = inspection[f] ?? 'ok'; });
     const form = useForm(initial);
 
-    const submit = (asSubmit: boolean) => (e: React.FormEvent) => {
+    const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        form.setData('submit', asSubmit);
-        form.put(`/hse/inspections/${inspection.id}`);
+        form.post(`/logistics/inspections/${inspection.id}`, { forceFormData: true });
     };
 
     return (
         <AuthenticatedLayout>
             <Head title={`Inspection #${inspection.id} — édition`} />
-            <form onSubmit={submit(false)} className="space-y-4 max-w-4xl">
+            <form onSubmit={submit} className="space-y-4 max-w-4xl">
                 <div className="flex items-center gap-2">
                     <ShieldCheck size={22} className="text-emerald-500" />
                     <h1 className="text-xl font-semibold">Inspection #{inspection.id}</h1>
@@ -98,11 +100,29 @@ export default function InspectionEdit({ inspection, options }: Props) {
                     <FormTextarea label="Recommandations" value={form.data.recommendations} onChange={(e) => form.setData('recommendations', e.target.value)} rows={3} />
                 </Card>
 
-                <div className="flex gap-3 justify-end">
-                    <Button type="submit" variant="secondary" disabled={form.processing}>Enregistrer brouillon</Button>
-                    {inspection.status === 'draft' && (
-                        <Button type="button" onClick={submit(true) as any} disabled={form.processing}>Soumettre pour validation</Button>
+                <Card>
+                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <Paperclip size={18} /> Fiche d'inspection scannée
+                    </h2>
+                    {inspection.attachment_url && (
+                        <p className="text-sm mb-2">
+                            Fiche actuelle: <a href={inspection.attachment_url} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">{inspection.attachment_filename ?? 'Ouvrir'}</a>
+                        </p>
                     )}
+                    <input
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png"
+                        onChange={(e) => form.setData('attachment', e.target.files?.[0] ?? null)}
+                        className="block w-full text-sm"
+                    />
+                    {form.errors.attachment && (
+                        <p className="text-xs text-red-500 mt-1">{form.errors.attachment as any}</p>
+                    )}
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Téléverser une nouvelle fiche remplace l'existante. PDF / JPG / PNG, max 10 Mo.</p>
+                </Card>
+
+                <div className="flex gap-3 justify-end">
+                    <Button type="submit" disabled={form.processing}>Enregistrer</Button>
                 </div>
             </form>
         </AuthenticatedLayout>

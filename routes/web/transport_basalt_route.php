@@ -39,6 +39,8 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
     Route::get('/my-truck', [DriverController::class, 'myTruck'])->name('my-truck');
     Route::get('/checklist-page', [DriverController::class, 'checklistPage'])->name('checklist-page');
     Route::post('/checklist-submit', [DriverController::class, 'submitChecklist'])->name('checklist-submit');
+    Route::get('/issues', [DriverController::class, 'issuesPage'])->name('issues');
+    Route::post('/issues', [DriverController::class, 'reportIssue'])->name('issues.store');
 
     // Admin management
     Route::get('/', [DriverController::class, 'index'])->name('index');

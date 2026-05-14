@@ -121,9 +121,17 @@ class InspectionChecklist extends Model
         'cabin' => [
             'label' => 'Cabine',
             'fields' => [
+                'cabine_fermee' => 'Cabine entièrement fermée',
                 'mirrors' => 'Rétroviseurs en bon état',
+                'parebrise_vitres' => 'Pare-brise et vitres en bon état',
                 'dashboard_indicators' => 'Tableau de bord fonctionnel',
                 'wipers' => 'Essuie-glaces',
+            ],
+        ],
+        'documents' => [
+            'label' => 'Identification & documents',
+            'fields' => [
+                'immatriculation_visible' => 'Numéro d\'immatriculation visible',
             ],
         ],
     ];
@@ -154,6 +162,7 @@ class InspectionChecklist extends Model
         'beacon_light', 'reverse_alarm',
         'safety_vest', 'wheel_chocks', 'passenger_seatbelt',
         'dashboard_indicators', 'wipers',
+        'cabine_fermee', 'parebrise_vitres', 'immatriculation_visible',
     ];
 
     public function truck(): BelongsTo

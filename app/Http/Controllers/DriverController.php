@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ResolvesPeriod;
 use App\Models\Driver;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\TransportTracking;
 use App\Models\Truck;
+use App\Services\DriverKpiService;
 use App\Services\SharePointDailyChecklistService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,8 +18,11 @@ use Inertia\Inertia;
 
 class DriverController extends Controller
 {
+    use ResolvesPeriod;
+
     public function __construct(
-        private readonly SharePointDailyChecklistService $sharePointDailyChecklistService
+        private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
+        private readonly DriverKpiService $kpiService,
     ) {
         $this->middleware('permission:driver-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:driver-create', ['only' => ['create', 'store']]);
@@ -148,13 +153,16 @@ class DriverController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Driver $driver)
+    public function show(Driver $driver, Request $request)
     {
-        return $this->showPage($driver);
+        return $this->showPage($driver, $request);
     }
 
-    public function showPage(Driver $driver)
+    public function showPage(Driver $driver, Request $request)
     {
+        [$from, $to, $preset] = $this->resolvePeriod($request);
+        $kpi = $this->kpiService->compute($driver, $from, $to);
+
         return Inertia::render('drivers/Show', [
             'driver' => [
                 'id' => $driver->id,
@@ -165,6 +173,12 @@ class DriverController extends Controller
                 'is_active' => (bool) $driver->is_active,
                 'created_at' => $driver->created_at?->format('d/m/Y'),
                 'updated_at' => $driver->updated_at?->format('d/m/Y'),
+            ],
+            'kpi' => $kpi,
+            'filter' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'preset' => $preset,
             ],
         ]);
     }
@@ -305,7 +319,6 @@ class DriverController extends Controller
             ->where('driver_id', $driver->id)
             ->where('truck_id', $truck->id)
             ->whereDate('week_start_date', $weekStart)
-            ->with('issues')
             ->first();
 
         $history = DailyChecklist::query()
@@ -313,7 +326,6 @@ class DriverController extends Controller
             ->where('truck_id', $truck->id)
             ->orderByDesc('week_start_date')
             ->limit(8)
-            ->with('issues')
             ->get();
 
         return Inertia::render('drivers/Checklist', [
@@ -324,6 +336,7 @@ class DriverController extends Controller
             'truck' => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
+                'tire_count' => (int) ($truck->tire_count ?? 26),
                 'total_kilometers' => (float) ($truck->total_kilometers ?? 0),
                 'fleeti_last_kilometers' => $truck->fleeti_last_kilometers !== null ? (float) $truck->fleeti_last_kilometers : null,
                 'fleeti_last_fuel_level' => $truck->fleeti_last_fuel_level !== null ? (float) $truck->fleeti_last_fuel_level : null,
@@ -336,7 +349,6 @@ class DriverController extends Controller
                 'brake' => DailyChecklist::BRAKE_OPTIONS,
                 'light' => DailyChecklist::LIGHT_OPTIONS,
                 'oil' => DailyChecklist::OIL_LEVEL_OPTIONS,
-                'fuel' => DailyChecklist::FUEL_LEVEL_OPTIONS,
                 'general' => DailyChecklist::GENERAL_CONDITION_OPTIONS,
             ],
             'currentWeekStart' => $weekStart,
@@ -349,22 +361,12 @@ class DriverController extends Controller
                     ? $currentChecklist->week_start_date->format('d/m/Y')
                     : $currentChecklist->week_start_date,
                 'status' => $currentChecklist->status,
-                'start_km' => $currentChecklist->start_km,
-                'end_km' => $currentChecklist->end_km,
-                'fuel_filled' => $currentChecklist->fuel_filled,
                 'tire_condition' => $currentChecklist->tire_condition,
-                'fuel_level' => $currentChecklist->fuel_level,
                 'oil_level' => $currentChecklist->oil_level,
                 'brakes' => $currentChecklist->brakes,
                 'lights' => $currentChecklist->lights,
                 'general_condition_notes' => $currentChecklist->general_condition_notes,
                 'notes' => $currentChecklist->notes,
-                'issues' => $currentChecklist->issues->map(fn ($i) => [
-                    'id' => $i->id,
-                    'category' => $i->category,
-                    'flagged' => $i->flagged,
-                    'issue_notes' => $i->issue_notes,
-                ])->toArray(),
             ] : null,
             'history' => $history->map(fn ($c) => [
                 'id' => $c->id,
@@ -375,21 +377,12 @@ class DriverController extends Controller
                     ? $c->week_start_date->format('d/m/Y')
                     : $c->week_start_date,
                 'status' => $c->status,
-                'start_km' => $c->start_km,
-                'end_km' => $c->end_km,
                 'tire_condition' => $c->tire_condition,
-                'fuel_level' => $c->fuel_level,
                 'oil_level' => $c->oil_level,
                 'brakes' => $c->brakes,
                 'lights' => $c->lights,
                 'general_condition_notes' => $c->general_condition_notes,
                 'notes' => $c->notes,
-                'issues' => $c->issues->map(fn ($i) => [
-                    'id' => $i->id,
-                    'category' => $i->category,
-                    'flagged' => $i->flagged,
-                    'issue_notes' => $i->issue_notes,
-                ])->toArray(),
             ])->toArray(),
         ]);
     }
@@ -416,26 +409,16 @@ class DriverController extends Controller
         $brakeKeys = implode(',', array_keys(DailyChecklist::BRAKE_OPTIONS));
         $lightKeys = implode(',', array_keys(DailyChecklist::LIGHT_OPTIONS));
         $oilKeys = implode(',', array_keys(DailyChecklist::OIL_LEVEL_OPTIONS));
-        $fuelKeys = implode(',', array_keys(DailyChecklist::FUEL_LEVEL_OPTIONS));
         $generalKeys = implode(',', array_keys(DailyChecklist::GENERAL_CONDITION_OPTIONS));
 
         $data = $request->validate([
             'checklist_date' => 'required|date',
-            'start_km' => 'nullable|numeric|min:0',
-            'end_km' => 'nullable|numeric|min:0',
-            'fuel_filled' => 'nullable|numeric|min:0',
             'tire_condition' => "required|string|in:{$tireKeys}",
-            'fuel_level' => "required|string|in:{$fuelKeys}",
-            'fuel_refill' => 'sometimes|boolean',
             'oil_level' => "required|string|in:{$oilKeys}",
             'brakes' => "required|string|in:{$brakeKeys}",
             'lights' => "required|string|in:{$lightKeys}",
             'general_condition_notes' => "required|string|in:{$generalKeys}",
             'notes' => 'nullable|string|max:500',
-            'issue_flags' => 'nullable|array',
-            'issue_flags.*' => 'string|in:tires,fuel,oil,brakes,lights,general',
-            'issue_notes' => 'nullable|array',
-            'issue_notes.*' => 'nullable|string|max:500',
         ]);
 
         try {
@@ -459,30 +442,13 @@ class DriverController extends Controller
                 'checklist_date' => $date,
                 'week_start_date' => $weekStart,
                 'status' => DailyChecklist::STATUS_PENDING,
-                'start_km' => $data['start_km'] ?? null,
-                'end_km' => $data['end_km'] ?? null,
-                'fuel_filled' => $data['fuel_filled'] ?? null,
                 'tire_condition' => $data['tire_condition'],
-                'fuel_level' => $data['fuel_level'],
-                'fuel_refill' => ! empty($data['fuel_refill']),
                 'oil_level' => $data['oil_level'],
                 'brakes' => $data['brakes'],
                 'lights' => $data['lights'],
                 'general_condition_notes' => $data['general_condition_notes'],
                 'notes' => $data['notes'] ?? null,
             ]);
-
-            $issueFlags = $data['issue_flags'] ?? [];
-            $issueNotes = $data['issue_notes'] ?? [];
-
-            foreach ($issueFlags as $category) {
-                DailyChecklistIssue::create([
-                    'daily_checklist_id' => $dailyChecklist->id,
-                    'category' => $category,
-                    'flagged' => true,
-                    'issue_notes' => $issueNotes[$category] ?? null,
-                ]);
-            }
 
             $syncResult = $this->sharePointDailyChecklistService->syncDailyChecklist([
                 'Title' => sprintf('Weekly checklist %s - week of %s', $truck->matricule, $weekStart),
@@ -491,16 +457,12 @@ class DriverController extends Controller
                 'TruckMatricule' => $truck->matricule,
                 'ChecklistDate' => $date,
                 'TireCondition' => $data['tire_condition'],
-                'FuelLevel' => (string) $data['fuel_level'],
                 'OilLevel' => (string) $data['oil_level'],
                 'Brakes' => $data['brakes'],
                 'Lights' => $data['lights'],
                 'GeneralConditionNotes' => $data['general_condition_notes'],
-                'IssueFlags' => ! empty($issueFlags) ? implode(',', $issueFlags) : '',
-                'IssueNotes' => collect($issueFlags)
-                    ->map(fn ($c) => $issueNotes[$c] ?? null)
-                    ->filter()
-                    ->implode(' | '),
+                'IssueFlags' => '',
+                'IssueNotes' => '',
 //                'SharepointLocalChecklistId' => (string) $dailyChecklist->id,
             ]);
 
@@ -527,6 +489,130 @@ class DriverController extends Controller
                 ->with('error', $e->getMessage());
         }
     }
+
+    public function issuesPage()
+    {
+        if (! $this->currentUserIsDriver()) {
+            abort(403, 'Access denied. Driver role is required.');
+        }
+
+        $driver = $this->resolveLinkedDriver();
+        if (! $driver) {
+            return redirect()->back()->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+        }
+
+        $truck = $this->resolveAssignedTruck($driver);
+        if (! $truck) {
+            return redirect()->back()->with('error', 'Aucun camion actif assigne a ce conducteur.');
+        }
+
+        $recent = DailyChecklistIssue::query()
+            ->where('truck_id', $truck->id)
+            ->orderByDesc('reported_at')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
+        return Inertia::render('drivers/Issues', [
+            'driver' => ['id' => $driver->id, 'name' => $driver->name],
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'tire_count' => (int) ($truck->tire_count ?? 26),
+            ],
+            'options' => [
+                'severity' => DailyChecklistIssue::SEVERITY_OPTIONS,
+                'light_positions' => DailyChecklist::LIGHT_POSITION_OPTIONS,
+            ],
+            'recent' => $recent->map(fn ($i) => [
+                'id' => $i->id,
+                'category' => $i->category,
+                'severity' => $i->severity,
+                'issue_notes' => $i->issue_notes,
+                'positions' => $i->positions ? explode(',', $i->positions) : [],
+                'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
+                'resolved_at' => $i->resolved_at?->format('d/m/Y H:i'),
+                'resolution_notes' => $i->resolution_notes,
+            ])->values()->toArray(),
+        ]);
+    }
+
+    public function reportIssue(Request $request)
+    {
+        if (! $this->currentUserIsDriver()) {
+            abort(403, 'Access denied. Driver role is required.');
+        }
+
+        $driver = $this->resolveLinkedDriver();
+        if (! $driver) {
+            return redirect()->back()->withInput()->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+        }
+
+        $truck = $this->resolveAssignedTruck($driver);
+        if (! $truck) {
+            return redirect()->back()->withInput()->with('error', 'Aucun camion actif assigne a ce conducteur.');
+        }
+
+        $allowedCategories = ['tires', 'brakes', 'lights', 'oil', 'fuel', 'general'];
+        $severityKeys = array_keys(DailyChecklistIssue::SEVERITY_OPTIONS);
+        $lightPositionKeys = array_keys(DailyChecklist::LIGHT_POSITION_OPTIONS);
+        $tireCount = (int) ($truck->tire_count ?? 26);
+
+        $data = $request->validate([
+            'flagged' => 'required|array|min:1',
+            'flagged.*' => ['string', 'in:' . implode(',', $allowedCategories)],
+            'severity' => 'nullable|array',
+            'severity.*' => ['nullable', 'string', 'in:' . implode(',', $severityKeys)],
+            'notes' => 'nullable|array',
+            'notes.*' => 'nullable|string|max:500',
+            'positions' => 'nullable|array',
+            'positions.tires' => 'nullable|array',
+            'positions.tires.*' => ['string', function ($attr, $value, $fail) use ($tireCount) {
+                if (! is_string($value) || ! preg_match('/^tire_(\d+)$/', $value, $m)) {
+                    $fail('Position de pneu invalide.');
+                    return;
+                }
+                $n = (int) $m[1];
+                if ($n < 1 || $n > $tireCount) {
+                    $fail("Position de pneu hors limites (1-{$tireCount}).");
+                }
+            }],
+            'positions.lights' => 'nullable|array',
+            'positions.lights.*' => ['string', 'in:' . implode(',', $lightPositionKeys)],
+        ]);
+
+        $severityMap = $data['severity'] ?? [];
+        $notesMap = $data['notes'] ?? [];
+        $positionsMap = $data['positions'] ?? [];
+
+        try {
+            DB::beginTransaction();
+            foreach ($data['flagged'] as $category) {
+                $positions = $positionsMap[$category] ?? [];
+                DailyChecklistIssue::create([
+                    'truck_id' => $truck->id,
+                    'driver_id' => $driver->id,
+                    'category' => $category,
+                    'flagged' => true,
+                    'severity' => $severityMap[$category] ?? null,
+                    'issue_notes' => $notesMap[$category] ?? null,
+                    'positions' => ! empty($positions) ? implode(',', $positions) : null,
+                    'reported_at' => now(),
+                ]);
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return redirect()->back()->withInput()->with('error', 'Échec de l\'enregistrement: ' . $e->getMessage());
+        }
+
+        $count = count($data['flagged']);
+        $msg = $count === 1
+            ? '1 problème signalé.'
+            : "{$count} problèmes signalés.";
+        return redirect()->route('drivers.issues')->with('success', $msg);
+    }
+
     /**
      * Show the form for editing the specified resource.
      */
