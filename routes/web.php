@@ -36,6 +36,18 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
     Route::post('fleet/monthly-target', [App\Http\Controllers\FleetSettingsController::class, 'updateMonthlyTarget'])->name('settings.fleet.monthly-target');
 });
 
+Route::get('/admin/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('admin.audit-logs');
+
+Route::group(['middleware' => ['auth'], 'prefix' => 'fuel/import'], function () {
+    Route::get('', [App\Http\Controllers\FuelImportController::class, 'showPage'])->name('fuel.import');
+    Route::post('edk/preview', [App\Http\Controllers\FuelImportController::class, 'previewEdk'])->name('fuel.import.edk.preview');
+    Route::post('edk/commit', [App\Http\Controllers\FuelImportController::class, 'commitEdk'])->name('fuel.import.edk.commit');
+    Route::post('fleeti/preview', [App\Http\Controllers\FuelImportController::class, 'previewFleeti'])->name('fuel.import.fleeti.preview');
+    Route::post('fleeti/commit', [App\Http\Controllers\FuelImportController::class, 'commitFleeti'])->name('fuel.import.fleeti.commit');
+});
+
 Route::group(['middleware' => ['auth'], 'prefix' => 'drivers'], function () {
     Route::get('{driver}/discipline', [App\Http\Controllers\DriverDisciplineController::class, 'index'])->name('drivers.discipline.index');
     Route::post('{driver}/discipline', [App\Http\Controllers\DriverDisciplineController::class, 'store'])->name('drivers.discipline.store');
@@ -44,3 +56,9 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'drivers'], function () {
 
 Route::get('/language/switch/{locale}', [LanguageController::class, 'switchLanguage'])->name('language.switch');
 Route::get('/translations', [LanguageController::class, 'getTranslations'])->name('translations');
+
+Route::group(['middleware' => ['auth'], 'prefix' => 'notifications', 'as' => 'notifications.'], function () {
+    Route::get('/', [App\Http\Controllers\NotificationController::class, 'index'])->name('index');
+    Route::post('/{id}/read', [App\Http\Controllers\NotificationController::class, 'markRead'])->name('read');
+    Route::post('/read-all', [App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('read-all');
+});

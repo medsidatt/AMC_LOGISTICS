@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
 import Pagination from '@/components/ui/Pagination';
-import { History as HistoryIcon } from 'lucide-react';
+import { History as HistoryIcon, Paperclip } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 
 interface MaintenanceRecord {
@@ -15,6 +15,20 @@ interface MaintenanceRecord {
     trigger_km: number | null;
     interval_km: number | null;
     notes: string | null;
+    oil_type?: string | null;
+    oil_type_label?: string | null;
+    oil_change_km?: number | null;
+    next_oil_change_km?: number | null;
+    gearbox_status?: string | null;
+    differential_status?: string | null;
+    hydraulic_status?: string | null;
+    greasing_status?: string | null;
+    filter_oil_changed?: boolean;
+    filter_hydraulic_changed?: boolean;
+    filter_air_changed?: boolean;
+    filter_fuel_changed?: boolean;
+    attachment_url?: string | null;
+    attachment_filename?: string | null;
 }
 
 interface Props {
@@ -22,6 +36,15 @@ interface Props {
     trucks: { id: number; matricule: string }[];
     maintenanceTypes: { value: string; label: string }[];
     filters: Record<string, string>;
+}
+
+function FiltersSummary({ m }: { m: MaintenanceRecord }) {
+    const flags: string[] = [];
+    if (m.filter_oil_changed) flags.push('Huile');
+    if (m.filter_hydraulic_changed) flags.push('Hyd.');
+    if (m.filter_air_changed) flags.push('Air');
+    if (m.filter_fuel_changed) flags.push('Carb.');
+    return <>{flags.length === 0 ? '-' : flags.join(', ')}</>;
 }
 
 export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters }: Props) {
@@ -53,16 +76,18 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                             <tr className="bg-[var(--color-surface-hover)]">
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Date</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Type</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Km</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Seuil prévu</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Intervalle</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Huile</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Vidange à</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Prochaine</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Filtres</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Notes</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Fiche</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
                             {maintenances.data.length === 0 ? (
-                                <tr><td colSpan={7} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
+                                <tr><td colSpan={9} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
                                     <HistoryIcon size={32} className="mx-auto mb-2 opacity-30" />
                                     Aucune maintenance enregistrée
                                 </td></tr>
@@ -70,11 +95,19 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                 <tr key={m.id} className="hover:bg-[var(--color-surface-hover)]">
                                     <td className="px-4 py-3 text-[var(--color-text)]">{m.maintenance_date}</td>
                                     <td className="px-4 py-3 text-[var(--color-text)] font-medium">{m.truck}</td>
-                                    <td className="px-4 py-3 text-[var(--color-text)]">{maintenanceTypes.find((t) => t.value === m.maintenance_type)?.label ?? m.maintenance_type}</td>
                                     <td className="px-4 py-3 text-[var(--color-text)]">{m.kilometers_at_maintenance?.toLocaleString('fr-FR')}</td>
-                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.trigger_km?.toLocaleString('fr-FR') ?? '-'}</td>
-                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.interval_km?.toLocaleString('fr-FR') ?? '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.oil_type_label ?? '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.oil_change_km != null ? Number(m.oil_change_km).toLocaleString('fr-FR') : '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.next_oil_change_km != null ? Number(m.next_oil_change_km).toLocaleString('fr-FR') : '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]"><FiltersSummary m={m} /></td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)] max-w-[200px] truncate">{m.notes ?? '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">
+                                        {m.attachment_url ? (
+                                            <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline flex items-center gap-1">
+                                                <Paperclip size={14} /> Voir
+                                            </a>
+                                        ) : '-'}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

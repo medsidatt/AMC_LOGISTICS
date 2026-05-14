@@ -2,7 +2,8 @@ import { usePage } from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
-    ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings,
+    ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
+    AlertTriangle, Activity,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { clsx } from 'clsx';
@@ -99,15 +100,16 @@ const dataSections: NavSection[] = [
             { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
         ],
     },
-    {
-        header: 'Sécurité',
-        items: [
-            { label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18} />, match: '/logistics/fleet-map' },
-            { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
-            { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
-        ],
-    },
 ];
+
+const securitySection: NavSection = {
+    header: 'Sécurité',
+    items: [
+        { label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18} />, match: '/logistics/fleet-map' },
+        { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
+        { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
+    ],
+};
 
 const accountSection: NavSection = {
     header: 'Compte',
@@ -123,6 +125,8 @@ const adminSection: NavSection = {
         { label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18} />, match: '/auth/invitations' },
         { label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18} /> },
         { label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18} />, match: '/settings/fleet' },
+        { label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18} />, match: '/fuel/import' },
+        { label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18} />, match: '/admin/audit-logs' },
     ],
 };
 
@@ -131,6 +135,7 @@ const driverSections: NavSection[] = [
         header: 'Mon espace',
         items: [
             { label: 'Checklist hebdomadaire', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18} /> },
+            { label: 'Signaler un problème', href: '/drivers/issues', icon: <AlertTriangle size={18} /> },
             { label: 'Mes voyages', href: '/drivers/my-trips', icon: <Route size={18} /> },
             { label: 'Mon camion', href: '/drivers/my-truck', icon: <Truck size={18} /> },
         ],
@@ -141,18 +146,23 @@ const hseSections: NavSection[] = [
     {
         header: 'HSE',
         items: [
-            { label: 'Mes inspections', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
-            { label: 'Nouvelle inspection', href: '/hse/inspections/create', icon: <ClipboardCheck size={18} /> },
+            { label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
         ],
     },
 ];
 
 const logisticsResponsibleSections: NavSection[] = [
     {
+        header: 'Inspections',
+        items: [
+            { label: 'Liste', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
+            { label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18} /> },
+        ],
+    },
+    {
         header: 'Validation',
         items: [
             { label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18} />, match: '/logistics/validation/checklists' },
-            { label: 'Inspections HSE', href: '/logistics/validation/inspections', icon: <ShieldCheck size={18} />, match: '/logistics/validation/inspections' },
         ],
     },
     {
@@ -183,7 +193,7 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
 
     let sections: NavSection[];
     if (isAdmin) {
-        sections = [...dataSections, adminSection, accountSection];
+        sections = [...dataSections, securitySection, adminSection, accountSection];
     } else if (isDriver) {
         sections = [...driverSections, accountSection];
     } else if (isHse) {

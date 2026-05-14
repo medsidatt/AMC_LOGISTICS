@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
+import DriverKpiSection, { type DriverKpi } from '@/components/driver/DriverKpiSection';
 import { ArrowLeft, ShieldCheck, Power, PowerOff } from 'lucide-react';
 
 interface Props {
@@ -16,9 +17,11 @@ interface Props {
         created_at: string | null;
         updated_at: string | null;
     };
+    kpi: DriverKpi;
+    filter: { from: string; to: string; preset: 'day' | 'week' | 'month' | 'year' | 'custom' };
 }
 
-export default function DriversShow({ driver }: Props) {
+export default function DriversShow({ driver, kpi, filter }: Props) {
     const fields = [
         ['Nom', driver.name],
         ['Email', driver.email],
@@ -61,7 +64,7 @@ export default function DriversShow({ driver }: Props) {
                 </div>
             </div>
 
-            <Card>
+            <Card className="mb-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-[var(--color-text)]">Informations conducteur</h3>
                     <Badge variant={driver.is_active ? 'success' : 'muted'}>{driver.is_active ? 'Actif' : 'Inactif'}</Badge>
@@ -75,6 +78,8 @@ export default function DriversShow({ driver }: Props) {
                     ))}
                 </div>
             </Card>
+
+            <DriverKpiSection driverId={driver.id} kpi={kpi} filter={filter} />
         </AuthenticatedLayout>
     );
 }

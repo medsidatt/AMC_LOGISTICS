@@ -21,6 +21,7 @@ interface Props {
     setting: {
         monthly_target_tonnage: number;
         weight_gap_threshold: number;
+        price_per_litre: number;
     };
     defaultTarget: number;
     monthlyTargets: MonthlyTarget[];
@@ -104,6 +105,7 @@ export default function FleetSettingsPage({ setting, defaultTarget, monthlyTarge
     const form = useForm({
         monthly_target_tonnage: String(setting.monthly_target_tonnage ?? 2000),
         weight_gap_threshold: String(setting.weight_gap_threshold ?? 0.5),
+        price_per_litre: String(setting.price_per_litre ?? 730),
     });
 
     const submit = (e: React.FormEvent) => {
@@ -148,6 +150,19 @@ export default function FleetSettingsPage({ setting, defaultTarget, monthlyTarge
                         error={form.errors.weight_gap_threshold}
                         required
                     />
+                    <FormInput
+                        label="Prix du gasoil (FCFA / litre)"
+                        name="price_per_litre"
+                        type="number"
+                        step="0.01"
+                        value={form.data.price_per_litre}
+                        onChange={(e) => form.setData('price_per_litre', e.target.value)}
+                        error={form.errors.price_per_litre}
+                        required
+                    />
+                    <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
+                        Sert à convertir le montant FCFA des transactions EDK en litres lors de l'import.
+                    </p>
                     <div className="flex gap-2 pt-4">
                         <Button type="submit" loading={form.processing}>Enregistrer</Button>
                     </div>
