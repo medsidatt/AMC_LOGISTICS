@@ -17,14 +17,19 @@ trait TracksActions
             AuditLog::record('deleted', $model);
         });
 
-        static::restoring(function ($model) {
-            $model->deleted_by = null;
-            $model->saveQuietly();
-        });
+        // restoring/restored only exist when the model uses SoftDeletes —
+        // wire them only when the trait is present, otherwise the static call
+        // hits an undefined method on plain Eloquent models.
+        if (in_array(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive(static::class), true)) {
+            static::restoring(function ($model) {
+                $model->deleted_by = null;
+                $model->saveQuietly();
+            });
 
-        static::restored(function ($model) {
-            AuditLog::record('restored', $model);
-        });
+            static::restored(function ($model) {
+                AuditLog::record('restored', $model);
+            });
+        }
 
         static::created(function ($model) {
             $model->created_by = auth()->id();

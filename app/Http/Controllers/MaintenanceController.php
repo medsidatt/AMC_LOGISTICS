@@ -10,7 +10,6 @@ use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
 use App\Services\MaintenanceStatusService;
-use App\Services\SharePointStorageService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -25,9 +24,20 @@ class MaintenanceController extends Controller
     public function __construct(
         private readonly TruckMaintenanceService $truckMaintenanceService,
         private readonly MaintenanceStatusService $maintenanceStatusService,
-        private readonly SharePointStorageService $sharePointStorage
     ) {
-        $this->middleware('permission:maintenance-create');
+        // Read-only endpoints
+        $this->middleware('permission:maintenance-list', [
+            'only' => ['index', 'history', 'rules', 'due', 'exportPdf', 'exportExcel'],
+        ]);
+        // Write endpoints (single + bulk)
+        $this->middleware('permission:maintenance-create', [
+            'only' => [
+                'create', 'store', 'recordMaintenance', 'bulkStore',
+                'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
+            ],
+        ]);
+        $this->middleware('permission:maintenance-rule-create', ['only' => ['storeRule']]);
+        $this->middleware('permission:maintenance-rule-deactivate', ['only' => ['deactivateRule']]);
     }
 
     public function create(Truck $truck)
@@ -437,8 +447,6 @@ class MaintenanceController extends Controller
             'filter_air_changed' => 'sometimes|boolean',
             'filter_fuel_changed' => 'sometimes|boolean',
 
-            'attachment' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240',
-
             'linked_inspection_issue_ids' => 'nullable|array',
             'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
         ]);
@@ -500,8 +508,6 @@ class MaintenanceController extends Controller
                 return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
             }
 
-            $this->handleMaintenanceAttachment($request, $maintenance);
-
             LogisticsAlert::where('truck_id', $truck->id)
                 ->where('type', 'due_engine')
                 ->whereNull('resolved_at')
@@ -512,37 +518,6 @@ class MaintenanceController extends Controller
             Log::error('recordMaintenance failed', ['truck_id' => $truck->id, 'error' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-    }
-
-    private function handleMaintenanceAttachment(Request $request, Maintenance $maintenance): void
-    {
-        if (!$request->hasFile('attachment')) {
-            return;
-        }
-
-        if (!$this->sharePointStorage->isConfigured()) {
-            Log::warning('SharePoint not configured — skipping maintenance attachment upload', [
-                'maintenance_id' => $maintenance->id,
-            ]);
-            return;
-        }
-
-        $file = $request->file('attachment');
-        $result = $this->sharePointStorage->upload($file, 'maintenances');
-
-        if (!($result['success'] ?? false)) {
-            Log::warning('Maintenance attachment upload failed', [
-                'maintenance_id' => $maintenance->id,
-                'message' => $result['message'] ?? null,
-            ]);
-            return;
-        }
-
-        $maintenance->update([
-            'attachment_path' => $result['path'],
-            'attachment_url' => $result['url'],
-            'attachment_filename' => $file->getClientOriginalName(),
-        ]);
     }
 
     public function history(Request $request)
@@ -578,8 +553,6 @@ class MaintenanceController extends Controller
             'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
-            'attachment_url' => $m->attachment_url,
-            'attachment_filename' => $m->attachment_filename,
         ]);
 
         $trucks = Truck::orderBy('matricule')->get(['id', 'matricule']);

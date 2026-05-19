@@ -18,6 +18,7 @@ class InspectionChecklist extends Model
     protected $casts = [
         'inspection_date' => 'date',
         'validated_at' => 'datetime',
+        'field_remarks' => 'array',
     ];
 
     const CATEGORY_OPTIONS = [
@@ -39,60 +40,28 @@ class InspectionChecklist extends Model
     const STATUS_VALIDATED = 'validated';
     const STATUS_REJECTED = 'rejected';
 
+    // HSE/compliance scope only. Mechanical health (engine, hydraulics, full dump-body,
+    // suspension, steering, tire pressure) is recorded on the Maintenance model instead
+    // so the Logistics Responsible doesn't fill in the same information twice.
     const SECTIONS = [
         'general' => [
             'label' => 'État général du véhicule',
             'fields' => [
                 'cleanliness' => 'Propreté générale',
                 'visible_damage_check' => 'Absence de dommage visible',
-                'chassis_condition' => 'État du châssis',
-                'dump_body_cracks_check' => 'Absence de fissure sur la benne',
             ],
         ],
-        'engine' => [
-            'label' => 'Moteur et fonctionnement',
-            'fields' => [
-                'oil_level' => 'Niveau d\'huile moteur',
-                'coolant_level' => 'Niveau de liquide de refroidissement',
-                'fuel_level_check' => 'Niveau carburant',
-                'exhaust_emissions' => 'Absence de fumée anormale',
-                'engine_noise' => 'Absence de bruit anormal',
-            ],
-        ],
-        'hydraulics' => [
-            'label' => 'Système hydraulique',
-            'fields' => [
-                'hydraulic_cylinder' => 'Vérin hydraulique en bon état',
-                'hydraulic_oil_leak' => 'Absence de fuite d\'huile hydraulique',
-                'dump_lift_function' => 'Fonctionnement du levage de la benne',
-                'dump_descent_function' => 'Descente correcte de la benne',
-                'hydraulic_hose' => 'Flexible hydraulique en bon état',
-            ],
-        ],
-        'dump_body' => [
-            'label' => 'Benne',
-            'fields' => [
-                'dump_body_condition' => 'État général de la benne',
-                'dump_body_locking' => 'Verrouillage de la benne',
-                'dump_body_tarp' => 'Bâche de protection',
-                'dump_body_ridelle' => 'Ridelle en bon état',
-                'cargo_securing_equipment' => 'Équipement d\'arrimage',
-            ],
-        ],
-        'braking_steering' => [
-            'label' => 'Freinage et direction',
+        'brakes' => [
+            'label' => 'Freinage',
             'fields' => [
                 'brake_test_result' => 'Frein de service',
                 'parking_brake' => 'Frein de stationnement',
-                'steering_play' => 'Direction normale',
-                'suspension' => 'Suspension en bon état',
             ],
         ],
         'tires' => [
             'label' => 'Pneumatique',
             'fields' => [
                 'tire_tread_depth' => 'État des pneus (sculptures)',
-                'tire_pressure' => 'Pression correcte',
                 'tire_cuts' => 'Absence de coupure',
                 'spare_tire' => 'Roue de secours',
             ],
@@ -147,27 +116,39 @@ class InspectionChecklist extends Model
         return $out;
     }
 
+    // Mirror of SECTIONS in flat form, in display order, used by the validator and the
+    // generic Show.tsx renderer. Mechanical fields removed; see SECTIONS comment.
     const INSPECTION_FIELDS = [
-        'seatbelts', 'extinguisher_status', 'first_aid_kit', 'reflective_triangles',
-        'tire_tread_depth', 'brake_test_result', 'lights_full_check', 'mirrors',
-        'horn', 'steering_play', 'suspension', 'exhaust_emissions', 'chassis_condition',
-        'cargo_securing_equipment',
-        'cleanliness', 'visible_damage_check', 'dump_body_cracks_check',
-        'oil_level', 'coolant_level', 'fuel_level_check', 'engine_noise',
-        'hydraulic_cylinder', 'hydraulic_oil_leak', 'dump_lift_function',
-        'dump_descent_function', 'hydraulic_hose',
-        'dump_body_condition', 'dump_body_locking', 'dump_body_tarp', 'dump_body_ridelle',
-        'parking_brake',
-        'tire_pressure', 'tire_cuts', 'spare_tire',
-        'beacon_light', 'reverse_alarm',
-        'safety_vest', 'wheel_chocks', 'passenger_seatbelt',
-        'dashboard_indicators', 'wipers',
-        'cabine_fermee', 'parebrise_vitres', 'immatriculation_visible',
+        // general
+        'cleanliness', 'visible_damage_check',
+        // brakes
+        'brake_test_result', 'parking_brake',
+        // tires
+        'tire_tread_depth', 'tire_cuts', 'spare_tire',
+        // signaling
+        'lights_full_check', 'beacon_light', 'reverse_alarm', 'horn',
+        // safety_equipment
+        'extinguisher_status', 'reflective_triangles', 'safety_vest', 'wheel_chocks',
+        'seatbelts', 'passenger_seatbelt', 'first_aid_kit',
+        // cabin
+        'cabine_fermee', 'mirrors', 'parebrise_vitres', 'dashboard_indicators', 'wipers',
+        // documents
+        'immatriculation_visible',
     ];
 
     public function truck(): BelongsTo
     {
         return $this->belongsTo(Truck::class);
+    }
+
+    public function driver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class);
+    }
+
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
     }
 
     public function inspector(): BelongsTo

@@ -32,7 +32,7 @@ class HomeController extends Controller
         }
 
         if ($user->hasRole('Logistics Responsible') && ! $user->hasRole('Admin') && ! $user->hasRole('Super Admin')) {
-            return Inertia::render('LogisticsResponsibleDashboard', $this->dashboardService->getLogisticsResponsibleData());
+            return Inertia::render('LogisticsResponsibleDashboard', $this->dashboardService->getLogisticsResponsibleData($user));
         }
 
         [$from, $to, $preset] = $this->resolvePeriod($request);

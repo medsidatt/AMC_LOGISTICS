@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 // HSE inspections — read-only viewing for ISO consumers
 Route::group(['prefix' => 'hse/inspections', 'as' => 'hse.inspections.', 'middleware' => ['auth']], function () {
     Route::get('/', [HseController::class, 'index'])->name('index');
+    Route::get('/{inspection}/pdf', [HseController::class, 'exportPdf'])->name('pdf');
     Route::get('/{inspection}', [HseController::class, 'show'])->name('show');
 });
 

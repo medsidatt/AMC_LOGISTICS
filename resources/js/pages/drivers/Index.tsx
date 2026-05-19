@@ -12,6 +12,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus, Power, PowerOff } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Driver {
     id: number;
@@ -32,6 +33,10 @@ export default function DriversIndex({ drivers, totals }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | null>(null);
     const [selected, setSelected] = useState<Driver | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('driver-create');
+    const canEdit = can('driver-edit');
+    const canDelete = can('driver-delete');
 
     const createForm = useForm({ name: '', email: '', phone: '', address: '', is_active: true });
     const editForm = useForm({ name: '', email: '', phone: '', address: '', is_active: true });
@@ -65,9 +70,11 @@ export default function DriversIndex({ drivers, totals }: Props) {
                 <div className="text-sm text-[var(--color-text-muted)]">
                     <span className="font-semibold text-[var(--color-success)]">{totals.active}</span> actifs sur <span className="font-semibold">{totals.total}</span> chauffeurs
                 </div>
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>
-                    Ajouter
-                </Button>
+                {canCreate && (
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>
+                        Ajouter
+                    </Button>
+                )}
             </div>
 
             <Card padding={false}>
@@ -84,18 +91,20 @@ export default function DriversIndex({ drivers, totals }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <div className="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleActive(r)}
-                                            title={r.is_active ? 'Désactiver' : 'Activer'}
-                                            className="p-1.5 rounded hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
-                                        >
-                                            {r.is_active ? <PowerOff size={14} /> : <Power size={14} className="text-[var(--color-success)]" />}
-                                        </button>
+                                        {canEdit && (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleActive(r)}
+                                                title={r.is_active ? 'Désactiver' : 'Activer'}
+                                                className="p-1.5 rounded hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
+                                            >
+                                                {r.is_active ? <PowerOff size={14} /> : <Power size={14} className="text-[var(--color-success)]" />}
+                                            </button>
+                                        )}
                                         <ActionButtons
                                             viewHref={`/drivers/${r.id}/show-page`}
-                                            onEdit={() => openEdit(r)}
-                                            onDelete={() => setDeleteUrl(`/drivers/${r.id}/destroy`)}
+                                            onEdit={canEdit ? () => openEdit(r) : undefined}
+                                            onDelete={canDelete ? () => setDeleteUrl(`/drivers/${r.id}/destroy`) : undefined}
                                         />
                                     </div>
                                 ),

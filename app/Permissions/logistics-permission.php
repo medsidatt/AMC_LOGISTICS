@@ -33,4 +33,22 @@ return [
     'rotation-validate',
 
     'logistics-dashboard',
+
+    'fleet-optimization-view',
+    'fleet-optimization-run',
+
+    'client-demand-list',
+    'client-demand-create',
+    'client-demand-edit',
+    'client-demand-delete',
+
+    'truck-rest-window-list',
+    'truck-rest-window-edit',
+
+    'fleet-roster-plan',
+
+    'daily-dispatch-list',
+    'daily-dispatch-edit',
+
+    'objective-history-list',
 ];

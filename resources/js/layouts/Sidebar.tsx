@@ -3,7 +3,7 @@ import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
-    AlertTriangle, Activity,
+    AlertTriangle, Activity, History,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { clsx } from 'clsx';
@@ -127,6 +127,7 @@ const adminSection: NavSection = {
         { label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18} />, match: '/settings/fleet' },
         { label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18} />, match: '/fuel/import' },
         { label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18} />, match: '/admin/audit-logs' },
+        { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
     ],
 };
 
@@ -149,6 +150,29 @@ const hseSections: NavSection[] = [
             { label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
         ],
     },
+    {
+        header: 'Opérations',
+        items: [
+            { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
+            { label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
+        ],
+    },
+    {
+        header: 'Flotte',
+        items: [
+            { label: 'Camions', href: '/trucks', icon: <Truck size={18} /> },
+            { label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18} /> },
+            { label: 'Transporteurs', href: '/transporters', icon: <Network size={18} /> },
+            { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
+        ],
+    },
+    {
+        header: 'Sécurité',
+        items: [
+            { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
+            { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
+        ],
+    },
 ];
 
 const logisticsResponsibleSections: NavSection[] = [
@@ -163,6 +187,14 @@ const logisticsResponsibleSections: NavSection[] = [
         header: 'Validation',
         items: [
             { label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18} />, match: '/logistics/validation/checklists' },
+        ],
+    },
+    {
+        header: 'Planification',
+        items: [
+            { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
+            { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
+            { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
         ],
     },
     {

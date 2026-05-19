@@ -10,6 +10,7 @@ use App\Models\Transporter;
 use App\Models\Truck;
 use App\Services\Fuel\FuelComparisonService;
 use App\Services\MaintenanceStatusService;
+use App\Services\ObjectiveHistoryService;
 use App\Services\TruckKpiService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -25,6 +26,7 @@ class TruckController extends Controller
         private readonly MaintenanceStatusService $maintenanceStatusService,
         private readonly TruckKpiService $kpiService,
         private readonly FuelComparisonService $fuelComparison,
+        private readonly ObjectiveHistoryService $objectiveHistory,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
@@ -206,13 +208,10 @@ class TruckController extends Controller
                 'id' => $t->id,
                 'matricule' => $t->matricule,
                 'transporter' => $t->transporter?->name,
-                'maintenance_type' => $t->maintenance_type,
-                'is_active' => $t->is_active,
+                'is_active' => (bool) $t->is_active,
                 'is_available' => (bool) $t->is_available,
                 'total_kilometers' => (float) $t->total_kilometers,
-                'fleeti_connected' => !empty($t->fleeti_asset_id),
                 'fleeti_last_fuel_level' => $t->fleeti_last_fuel_level !== null ? (float) $t->fleeti_last_fuel_level : null,
-                'fleeti_last_synced_at' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
                 'level' => $t->maintenanceLevelByType(),
                 'remaining' => $t->maintenanceRemainingByType(),
                 'unit' => $t->maintenanceUnitByType(),
@@ -232,7 +231,11 @@ class TruckController extends Controller
     public function createPage()
     {
         $transporters = Transporter::all()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]);
-        return \Inertia\Inertia::render('trucks/Create', ['transporters' => $transporters]);
+        return \Inertia\Inertia::render('trucks/Create', [
+            'transporters' => $transporters,
+            'defaultTargetRotationsPerWeek' => app(\App\Services\FleetCapacityService::class)->defaultTargetRotationsPerWeek(),
+            'defaultCapacityTonnage' => app(\App\Services\FleetCapacityService::class)->defaultCapacityTonnage(),
+        ]);
     }
 
     /**
@@ -240,28 +243,67 @@ class TruckController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $rules = [
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
             'capacity_tonnage' => 'nullable|numeric|min:0',
+            'target_rotations_per_week' => 'nullable|integer|min:1|max:14',
             'is_available' => 'nullable|boolean',
-        ]);
+        ];
+
+        $objectiveProvided = $request->filled('capacity_tonnage') || $request->filled('target_rotations_per_week');
+        if ($objectiveProvided) {
+            $rules['change_note'] = 'required|string|min:5|max:1000';
+        }
+
+        $request->validate($rules);
 
         $truck = Truck::firstOrCreate([
             'matricule' => $request->matricule,
             'transporter_id' => $request->transporter_id,
         ], [
             'km_maintenance_interval' => $request->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE,
-            'capacity_tonnage' => $request->capacity_tonnage ?? 25,
+            'capacity_tonnage' => $request->capacity_tonnage ?? 45,
+            'target_rotations_per_week' => $request->target_rotations_per_week,
             'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : true,
         ]);
+
+        $oldCapacity = $truck->capacity_tonnage;
+        $oldTargetRotations = $truck->target_rotations_per_week;
 
         if ($request->filled('capacity_tonnage')) {
             $truck->update(['capacity_tonnage' => $request->capacity_tonnage]);
         }
+        if ($request->has('target_rotations_per_week')) {
+            $truck->update(['target_rotations_per_week' => $request->filled('target_rotations_per_week') ? (int) $request->target_rotations_per_week : null]);
+        }
         if ($request->has('is_available')) {
             $truck->update(['is_available' => (bool) $request->boolean('is_available')]);
+        }
+
+        $note = $request->input('change_note');
+        if ($note) {
+            $this->objectiveHistory->record(
+                subject: $truck,
+                subjectLabel: 'Camion ' . $truck->matricule,
+                fieldName: 'capacity_tonnage',
+                fieldLabel: 'Capacité (t)',
+                oldValue: $oldCapacity,
+                newValue: $truck->capacity_tonnage,
+                note: $note,
+                context: ['scope' => 'truck_create'],
+            );
+            $this->objectiveHistory->record(
+                subject: $truck,
+                subjectLabel: 'Camion ' . $truck->matricule,
+                fieldName: 'target_rotations_per_week',
+                fieldLabel: 'Rotations/semaine cible (override)',
+                oldValue: $oldTargetRotations,
+                newValue: $truck->target_rotations_per_week,
+                note: $note,
+                context: ['scope' => 'truck_create'],
+            );
         }
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
@@ -311,13 +353,10 @@ class TruckController extends Controller
                 'is_available' => (bool) $truck->is_available,
                 'total_kilometers' => $truck->total_kilometers,
                 'km_maintenance_interval' => $truck->km_maintenance_interval,
-                'fleeti_asset_id' => $truck->fleeti_asset_id,
-                'fleeti_gateway_id' => $truck->fleeti_gateway_id,
+                'has_gps' => ! empty($truck->fleeti_asset_id),
                 'fleeti_last_kilometers' => $truck->fleeti_last_kilometers,
                 'fleeti_last_fuel_level' => $truck->fleeti_last_fuel_level,
                 'fleeti_last_synced_at' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
-                'created_at' => $truck->created_at?->format('d/m/Y'),
-                'updated_at' => $truck->updated_at?->format('d/m/Y'),
             ],
             'maintenanceInfo' => $maintenanceInfo,
             'recentTrackings' => $recentTrackings->map(fn ($t) => [
@@ -368,10 +407,12 @@ class TruckController extends Controller
                 'maintenance_type' => $truck->maintenance_type,
                 'km_maintenance_interval' => $truck->km_maintenance_interval,
                 'capacity_tonnage' => $truck->capacity_tonnage,
+                'target_rotations_per_week' => $truck->target_rotations_per_week,
                 'is_active' => $truck->is_active,
                 'is_available' => (bool) $truck->is_available,
             ],
             'transporters' => $transporters,
+            'defaultTargetRotationsPerWeek' => app(\App\Services\FleetCapacityService::class)->defaultTargetRotationsPerWeek(),
         ]);
     }
 
@@ -380,21 +421,65 @@ class TruckController extends Controller
      */
     public function update(Request $request, Truck $truck)
     {
-        $request->validate([
+        $oldCapacity = $truck->capacity_tonnage;
+        $oldTargetRotations = $truck->target_rotations_per_week;
+
+        $newCapacity = $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 45;
+        $newTargetRotations = $request->filled('target_rotations_per_week')
+            ? (int) $request->target_rotations_per_week
+            : null;
+
+        $capacityChanged = (string) $newCapacity !== (string) $oldCapacity;
+        $targetRotationsChanged = (string) ($newTargetRotations ?? '') !== (string) ($oldTargetRotations ?? '');
+        $objectiveChanged = $capacityChanged || $targetRotationsChanged;
+
+        $rules = [
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
             'capacity_tonnage' => 'nullable|numeric|min:0',
+            'target_rotations_per_week' => 'nullable|integer|min:1|max:14',
             'is_available' => 'nullable|boolean',
-        ]);
+        ];
+        if ($objectiveChanged) {
+            $rules['change_note'] = 'required|string|min:5|max:1000';
+        }
+        $request->validate($rules);
 
         $truck->update([
             'matricule' => $request->matricule,
             'transporter_id' => $request->transporter_id,
             'km_maintenance_interval' => $request->km_maintenance_interval ?? $truck->km_maintenance_interval,
-            'capacity_tonnage' => $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 25,
+            'capacity_tonnage' => $newCapacity,
+            'target_rotations_per_week' => $newTargetRotations,
             'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : (bool) $truck->is_available,
         ]);
+
+        $note = $request->input('change_note');
+        if ($note && $capacityChanged) {
+            $this->objectiveHistory->record(
+                subject: $truck,
+                subjectLabel: 'Camion ' . $truck->matricule,
+                fieldName: 'capacity_tonnage',
+                fieldLabel: 'Capacité (t)',
+                oldValue: $oldCapacity,
+                newValue: $truck->capacity_tonnage,
+                note: $note,
+                context: ['scope' => 'truck_update'],
+            );
+        }
+        if ($note && $targetRotationsChanged) {
+            $this->objectiveHistory->record(
+                subject: $truck,
+                subjectLabel: 'Camion ' . $truck->matricule,
+                fieldName: 'target_rotations_per_week',
+                fieldLabel: 'Rotations/semaine cible (override)',
+                oldValue: $oldTargetRotations,
+                newValue: $truck->target_rotations_per_week,
+                note: $note,
+                context: ['scope' => 'truck_update'],
+            );
+        }
 
         $this->truckMaintenanceService->replaceMaintenanceProfileInterval(
             $truck->fresh(),
