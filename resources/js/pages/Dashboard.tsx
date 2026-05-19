@@ -5,7 +5,6 @@ import KpiGrid from '@/components/dashboard/KpiGrid';
 import AlertBanner from '@/components/dashboard/AlertBanner';
 import InsightCard from '@/components/dashboard/InsightCard';
 import TonnageChart from '@/components/charts/TonnageChart';
-import VehicleUtilization from '@/components/charts/VehicleUtilization';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import DataTable from '@/components/ui/DataTable';
@@ -15,8 +14,16 @@ import TopList from '@/components/dashboard/TopList';
 import { usePolling } from '@/hooks/usePolling';
 import { generateAdminInsights } from '@/utils/insights';
 import { formatNumber, formatDate, calcChange } from '@/utils/formatters';
-import { Truck, Users, Route, Weight, Wrench, Download, Activity, Target, Gauge, Fuel, Trophy, UserCheck } from 'lucide-react';
+import { Truck, Users, Route, Weight, Wrench, Download, Activity, Target, Gauge, Fuel, Trophy, UserCheck, BarChart3, TrendingDown } from 'lucide-react';
 import { useExport } from '@/hooks/useExport';
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-6 mb-2">
+            {children}
+        </div>
+    );
+}
 
 interface KpiRatio {
     rate: number;
@@ -68,6 +75,41 @@ interface Props {
         total_kilometers: number;
     }>;
     utilization: Array<{ label: string; value: number }>;
+    fleetCapacity: {
+        active_trucks: number;
+        target_source: 'client_demand' | 'mixed' | 'default';
+        target_rotations_per_truck_per_week: number;
+        default_capacity_tonnage: number;
+        avg_capacity_t: number;
+        custom_truck_count: number;
+        target_weekly_capacity_t: number;
+        delivered_this_week_t: number;
+        rotations_this_week: number;
+        target_rotations_this_week: number;
+        utilization_pct: number;
+        top_trucks: Array<{
+            truck_id: number;
+            matricule: string;
+            capacity_tonnage: number;
+            avg_rotations_per_week: number;
+            target_weekly_capacity_t: number;
+            empirical_weekly_capacity_t: number;
+            this_week_rotations: number;
+            this_week_tonnage_t: number;
+            target_rate: number;
+        }>;
+        bottom_trucks: Array<{
+            truck_id: number;
+            matricule: string;
+            capacity_tonnage: number;
+            avg_rotations_per_week: number;
+            target_weekly_capacity_t: number;
+            empirical_weekly_capacity_t: number;
+            this_week_rotations: number;
+            this_week_tonnage_t: number;
+            target_rate: number;
+        }>;
+    };
     kpi: {
         period: { from: string; to: string; days: number };
         kpis: {
@@ -134,7 +176,7 @@ export default function Dashboard(props: Props) {
                 preset={props.filter.preset}
             />
 
-            {/* Compteurs simples */}
+            <SectionLabel>Aperçu général</SectionLabel>
             <KpiGrid>
                 <KpiCard
                     label="Camions"
@@ -167,8 +209,8 @@ export default function Dashboard(props: Props) {
                 />
             </KpiGrid>
 
-            {/* KPIs flotte sur la période filtrée */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+            <SectionLabel>Performance sur la période</SectionLabel>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <RatioCard
                     label="Disponibilité flotte"
                     ratio={k.availability.rate}
@@ -251,8 +293,168 @@ export default function Dashboard(props: Props) {
                 </div>
             </div>
 
-            {/* Top Camions / Top Chauffeurs */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+            {/* ── Capacité de la flotte ── */}
+            <div>
+                <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-6 mb-1 flex items-center gap-2 flex-wrap">
+                    <BarChart3 size={14} className="text-emerald-500" /> Capacité de la flotte (semaine en cours)
+                    {props.fleetCapacity.target_source === 'client_demand' && (
+                        <Badge variant="info">Cible définie par demandes client</Badge>
+                    )}
+                    {props.fleetCapacity.target_source === 'mixed' && (
+                        <Badge variant="warning">
+                            {props.fleetCapacity.custom_truck_count} camion{props.fleetCapacity.custom_truck_count > 1 ? 's' : ''} avec cible personnalisée
+                        </Badge>
+                    )}
+                </div>
+                <div className="text-xs text-[var(--color-text-muted)] normal-case mb-2">
+                    Formule : <strong className="text-[var(--color-text)]">tonnage cible = rotations × capacité</strong> par camion.
+                    {props.fleetCapacity.target_source === 'default' && (
+                        <span> Cible flotte : {props.fleetCapacity.active_trucks} camions × {props.fleetCapacity.target_rotations_per_truck_per_week} rot. × {formatNumber(props.fleetCapacity.avg_capacity_t, 1)} t (moyenne) = {formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)} t / semaine.</span>
+                    )}
+                    {props.fleetCapacity.target_source === 'mixed' && (
+                        <span> Cible flotte = somme des cibles par camion ({props.fleetCapacity.custom_truck_count} avec rotation personnalisée).</span>
+                    )}
+                    {props.fleetCapacity.target_source === 'client_demand' && (
+                        <span> Cible flotte = tonnage demandé par le client = {formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)} t (≈ {props.fleetCapacity.target_rotations_this_week} rotations à {formatNumber(props.fleetCapacity.avg_capacity_t, 1)} t en moyenne).</span>
+                    )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                    <Card>
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                <Truck size={18} />
+                            </div>
+                            <div>
+                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Camions actifs</div>
+                                <div className="text-2xl font-bold leading-tight">{props.fleetCapacity.active_trucks}</div>
+                            </div>
+                        </div>
+                    </Card>
+                    <Card>
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                <Gauge size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Objectif semaine</div>
+                                <div className="text-2xl font-bold leading-tight">{formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)}<span className="text-sm font-normal ml-1">t</span></div>
+                                <div className="text-xs text-[var(--color-text-muted)]">{props.fleetCapacity.target_rotations_this_week} rotations cibles</div>
+                            </div>
+                        </div>
+                    </Card>
+                    <Card>
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                <Weight size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Livré cette semaine</div>
+                                <div className="text-2xl font-bold leading-tight">{formatNumber(props.fleetCapacity.delivered_this_week_t, 1)}<span className="text-sm font-normal ml-1">t</span></div>
+                                <div className="text-xs text-[var(--color-text-muted)]">{props.fleetCapacity.rotations_this_week} rotations</div>
+                            </div>
+                        </div>
+                    </Card>
+                    <Card>
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2.5 rounded-lg ${props.fleetCapacity.utilization_pct >= 85 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : props.fleetCapacity.utilization_pct >= 50 ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                <Activity size={18} />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Atteinte objectif</div>
+                                <div className="text-2xl font-bold leading-tight">{props.fleetCapacity.utilization_pct}<span className="text-sm font-normal">%</span></div>
+                                <div className="text-xs text-[var(--color-text-muted)]">livré / objectif</div>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <Card
+                        header={
+                            <div className="flex items-center gap-2">
+                                <Trophy size={16} className="text-emerald-500" />
+                                <span className="text-sm font-semibold">Top 5 cette semaine</span>
+                            </div>
+                        }
+                    >
+                        {props.fleetCapacity.top_trucks.length === 0 ? (
+                            <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucune donnée.</p>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
+                                        <th className="py-2 pr-2">Camion</th>
+                                        <th className="py-2 pr-2 text-right">Rot. sem.</th>
+                                        <th className="py-2 pr-2 text-right">Livré (t)</th>
+                                        <th className="py-2 pr-2 text-right">Objectif</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {props.fleetCapacity.top_trucks.map((t) => {
+                                        const pct = Math.round(t.target_rate * 100);
+                                        return (
+                                            <tr key={t.truck_id} className="border-b border-[var(--color-border)] last:border-0">
+                                                <td className="py-2 pr-2 font-medium">
+                                                    <a href={`/trucks/${t.truck_id}/show-page`} className="hover:underline text-[var(--color-primary)]">{t.matricule}</a>
+                                                </td>
+                                                <td className="py-2 pr-2 text-right">{t.this_week_rotations}</td>
+                                                <td className="py-2 pr-2 text-right font-semibold">{formatNumber(t.this_week_tonnage_t, 1)}</td>
+                                                <td className="py-2 pr-2 text-right">
+                                                    <Badge variant={pct >= 100 ? 'success' : pct >= 60 ? 'warning' : 'danger'}>{pct}%</Badge>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </Card>
+
+                    <Card
+                        header={
+                            <div className="flex items-center gap-2">
+                                <TrendingDown size={16} className="text-amber-500" />
+                                <span className="text-sm font-semibold">À surveiller (en dessous de l'objectif)</span>
+                            </div>
+                        }
+                    >
+                        {props.fleetCapacity.bottom_trucks.length === 0 ? (
+                            <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucun camion sous-performant.</p>
+                        ) : (
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
+                                        <th className="py-2 pr-2">Camion</th>
+                                        <th className="py-2 pr-2 text-right">Rot. sem.</th>
+                                        <th className="py-2 pr-2 text-right">Livré (t)</th>
+                                        <th className="py-2 pr-2 text-right">Objectif</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {props.fleetCapacity.bottom_trucks.map((t) => {
+                                        const pct = Math.round(t.target_rate * 100);
+                                        return (
+                                            <tr key={t.truck_id} className="border-b border-[var(--color-border)] last:border-0">
+                                                <td className="py-2 pr-2 font-medium">
+                                                    <a href={`/trucks/${t.truck_id}/show-page`} className="hover:underline text-[var(--color-primary)]">{t.matricule}</a>
+                                                </td>
+                                                <td className="py-2 pr-2 text-right">{t.this_week_rotations}</td>
+                                                <td className="py-2 pr-2 text-right font-semibold text-amber-600 dark:text-amber-400">{formatNumber(t.this_week_tonnage_t, 1)}</td>
+                                                <td className="py-2 pr-2 text-right">
+                                                    <Badge variant={pct >= 100 ? 'success' : pct >= 60 ? 'warning' : 'danger'}>{pct}%</Badge>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </Card>
+                </div>
+            </div>
+
+            <SectionLabel>Top performers (période)</SectionLabel>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <Card
                     header={
                         <div className="flex items-center gap-2">
@@ -284,8 +486,8 @@ export default function Dashboard(props: Props) {
                 </Card>
             </div>
 
-            {/* Charts row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+            <SectionLabel>Évolution mensuelle</SectionLabel>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <Card header="Tonnage mensuel" className="lg:col-span-2">
                     <TonnageChart
                         months={props.months}
@@ -293,23 +495,11 @@ export default function Dashboard(props: Props) {
                         clientData={props.monthlyClient}
                     />
                 </Card>
-
-                <div className="space-y-4">
-                    <InsightCard insights={insights} />
-                    {props.utilization.length > 0 && (
-                        <Card header="Utilisation flotte">
-                            <VehicleUtilization
-                                labels={props.utilization.map((u) => u.label)}
-                                values={props.utilization.map((u) => u.value)}
-                                height={220}
-                            />
-                        </Card>
-                    )}
-                </div>
+                <InsightCard insights={insights} />
             </div>
 
-            {/* Maintenance + Recent trackings */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+            <SectionLabel>Suivi opérationnel</SectionLabel>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {props.trucksDueMaintenance.length > 0 && (
                     <Card
                         header={

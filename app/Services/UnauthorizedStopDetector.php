@@ -63,8 +63,8 @@ class UnauthorizedStopDetector
             'latitude' => $stop->latitude,
             'longitude' => $stop->longitude,
             'title' => sprintf(
-                'Arrêt non autorisé de %d min pendant la mission #%s',
-                $durationMinutes,
+                'Arrêt non autorisé de %s pendant la mission #%s',
+                $this->humanDuration($durationMinutes),
                 $segment->transportTracking?->reference ?? $segment->transport_tracking_id
             ),
             'evidence' => [
@@ -79,5 +79,23 @@ class UnauthorizedStopDetector
                 'ended_at' => $stop->ended_at?->toIso8601String(),
             ],
         ]);
+    }
+
+    private function humanDuration(int $minutes): string
+    {
+        if ($minutes <= 0) {
+            return $minutes . ' min';
+        }
+        if ($minutes < 60) {
+            return $minutes . ' min';
+        }
+        $hours = intdiv($minutes, 60);
+        $rest = $minutes % 60;
+        if ($hours < 24) {
+            return $rest > 0 ? "{$hours} h {$rest} min" : "{$hours} h";
+        }
+        $days = intdiv($hours, 24);
+        $restH = $hours % 24;
+        return $restH > 0 ? "{$days} j {$restH} h" : "{$days} j";
     }
 }

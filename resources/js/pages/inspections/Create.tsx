@@ -1,13 +1,17 @@
 import { Head, useForm } from '@inertiajs/react';
+import { useMemo } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import FormTextarea from '@/components/ui/FormTextarea';
-import { ShieldCheck, Paperclip } from 'lucide-react';
+import { ShieldCheck, Camera, ClipboardList, FileText } from 'lucide-react';
+import CameraCapture from '@/components/inspection/CameraCapture';
 
 interface Truck { id: number; matricule: string; }
+interface Driver { id: number; name: string; }
+interface Project { id: number; name: string; code?: string | null; }
 
 interface Section {
     label: string;
@@ -16,6 +20,10 @@ interface Section {
 
 interface Props {
     trucks: Truck[];
+    drivers: Driver[];
+    projects: Project[];
+    defaultProjectId: number | null;
+    truckDrivers: Record<string, number[]>;
     options: {
         categories: Record<string, string>;
         conditions: Record<string, string>;
@@ -24,26 +32,41 @@ interface Props {
     };
 }
 
-export default function InspectionCreate({ trucks, options }: Props) {
+export default function InspectionCreate({ trucks, drivers, projects, defaultProjectId, truckDrivers, options }: Props) {
     const initial: Record<string, any> = {
         truck_id: '',
+        driver_id: '',
+        project_id: defaultProjectId != null ? String(defaultProjectId) : '',
+        activity: 'Livraison de Basalte',
+        client_name: 'AMC Travaux SN',
         inspection_date: new Date().toISOString().split('T')[0],
         category: 'comprehensive',
         findings_summary: '',
         recommendations: '',
-        issue_flags: [] as string[],
-        issue_notes: {} as Record<string, string>,
-        issue_severity: {} as Record<string, string>,
-        attachment: null as File | null,
+        vehicle_photo: null as File | null,
+        field_remarks: {} as Record<string, string>,
     };
     options.fields.forEach((f) => { initial[f] = 'ok'; });
 
     const form = useForm(initial);
 
-    const toggleIssue = (cat: string) => {
-        const flags: string[] = form.data.issue_flags as string[];
-        const next = flags.includes(cat) ? flags.filter((f) => f !== cat) : [...flags, cat];
-        form.setData('issue_flags', next);
+    const visibleDrivers = useMemo(() => {
+        const tid = String(form.data.truck_id ?? '');
+        if (!tid) return drivers;
+        const allowed = truckDrivers[tid];
+        if (!allowed || allowed.length === 0) return drivers;
+        return drivers.filter((d) => allowed.includes(d.id));
+    }, [form.data.truck_id, drivers, truckDrivers]);
+
+    const onTruckChange = (truckId: string) => {
+        const allowedDrivers = truckId ? (truckDrivers[truckId] ?? []) : [];
+        const currentDriver = String(form.data.driver_id ?? '');
+        const keepDriver = !currentDriver || allowedDrivers.length === 0 || allowedDrivers.includes(Number(currentDriver));
+        form.setData({
+            ...form.data,
+            truck_id: truckId,
+            driver_id: keepDriver ? currentDriver : '',
+        });
     };
 
     const submit = (e: React.FormEvent) => {
@@ -60,91 +83,84 @@ export default function InspectionCreate({ trucks, options }: Props) {
                     <h1 className="text-xl font-semibold">Nouvelle inspection</h1>
                 </div>
 
+                {/* Informations générales */}
                 <Card>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+                        <ClipboardList size={16} className="text-emerald-500" /> Informations générales
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <FormSelect
                             label="Camion"
                             value={String(form.data.truck_id)}
-                            onChange={(v) => form.setData('truck_id', v)}
+                            onChange={(v) => onTruckChange(String(v ?? ''))}
                             options={[{ value: '', label: '— sélectionner —' }, ...trucks.map((t) => ({ value: String(t.id), label: t.matricule }))]}
                             error={form.errors.truck_id as any}
-                        />
-                        <FormInput
-                            label="Date d'inspection"
-                            type="date"
-                            value={form.data.inspection_date}
-                            onChange={(e) => form.setData('inspection_date', e.target.value)}
-                            error={form.errors.inspection_date as any}
+                            required
                         />
                         <FormSelect
-                            label="Catégorie"
-                            value={form.data.category}
-                            onChange={(v) => form.setData('category', v)}
-                            options={Object.entries(options.categories).map(([k, l]) => ({ value: k, label: l }))}
-                            error={form.errors.category as any}
+                            label="Conducteur"
+                            value={String(form.data.driver_id ?? '')}
+                            onChange={(v) => form.setData('driver_id', v)}
+                            options={[{ value: '', label: '—' }, ...visibleDrivers.map((d) => ({ value: String(d.id), label: d.name }))]}
+                            error={form.errors.driver_id as any}
+                        />
+                        <FormSelect
+                            label="Projet / Chantier"
+                            value={String(form.data.project_id ?? '')}
+                            onChange={(v) => form.setData('project_id', v)}
+                            options={[{ value: '', label: '—' }, ...projects.map((p) => ({ value: String(p.id), label: p.name }))]}
+                            error={form.errors.project_id as any}
+                        />
+                        <FormInput
+                            label="Activité"
+                            value={form.data.activity}
+                            onChange={(e) => form.setData('activity', e.target.value)}
+                            error={form.errors.activity as any}
                         />
                     </div>
                 </Card>
 
+                {/* Photo véhicule */}
+                <Card>
+                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+                        <Camera size={16} className="text-emerald-500" /> Photo du véhicule (capture en direct)
+                    </h2>
+                    <CameraCapture
+                        onCapture={(file) => form.setData('vehicle_photo', file)}
+                        error={form.errors.vehicle_photo as any}
+                    />
+                </Card>
+
+                {/* Points de contrôle */}
                 {Object.entries(options.sections).map(([sectionKey, section]) => (
                     <Card key={sectionKey}>
-                        <h2 className="text-lg font-semibold mb-3">{section.label}</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <h2 className="text-base font-semibold mb-3">{section.label}</h2>
+                        <div className="space-y-3">
                             {Object.entries(section.fields).map(([field, label]) => (
-                                <FormSelect
-                                    key={field}
-                                    label={label}
-                                    value={form.data[field] as string}
-                                    onChange={(v) => form.setData(field, v)}
-                                    options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
-                                />
+                                <div key={field} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                                    <FormSelect
+                                        label={label}
+                                        value={form.data[field] as string}
+                                        onChange={(v) => form.setData(field, v)}
+                                        options={Object.entries(options.conditions).map(([k, l]) => ({ value: k, label: l }))}
+                                    />
+                                    <FormInput
+                                        label="Remarque"
+                                        placeholder="Ex : fuite côté droit, marque de gouttière…"
+                                        value={(form.data.field_remarks as Record<string, string>)[field] ?? ''}
+                                        onChange={(e) => form.setData('field_remarks', { ...(form.data.field_remarks as Record<string, string>), [field]: e.target.value })}
+                                    />
+                                </div>
                             ))}
                         </div>
                     </Card>
                 ))}
 
+                {/* Notes globales */}
                 <Card>
-                    <h2 className="text-lg font-semibold mb-3">Issues détectées</h2>
-                    <div className="space-y-2">
-                        {Object.entries(options.sections).flatMap(([_, section]) => Object.entries(section.fields)).map(([field, label]) => {
-                            const flagged = (form.data.issue_flags as string[]).includes(field);
-                            return (
-                                <div key={field} className="flex items-start gap-3 p-2 rounded-lg border border-[var(--color-border)]">
-                                    <label className="flex items-center gap-2 min-w-[260px]">
-                                        <input
-                                            type="checkbox"
-                                            checked={flagged}
-                                            onChange={() => toggleIssue(field)}
-                                        />
-                                        <span className="text-sm">{label}</span>
-                                    </label>
-                                    {flagged && (
-                                        <>
-                                            <select
-                                                value={(form.data.issue_severity as any)[field] ?? 'minor'}
-                                                onChange={(e) => form.setData('issue_severity', { ...(form.data.issue_severity as any), [field]: e.target.value })}
-                                                className="border rounded px-2 py-1 text-sm bg-[var(--color-surface)]"
-                                            >
-                                                <option value="minor">Mineure</option>
-                                                <option value="major">Majeure</option>
-                                                <option value="critical">Critique</option>
-                                            </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Notes..."
-                                                value={(form.data.issue_notes as any)[field] ?? ''}
-                                                onChange={(e) => form.setData('issue_notes', { ...(form.data.issue_notes as any), [field]: e.target.value })}
-                                                className="flex-1 border rounded px-2 py-1 text-sm bg-[var(--color-surface)]"
-                                            />
-                                        </>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Card>
-
-                <Card>
+                    <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
+                        <FileText size={16} className="text-emerald-500" /> Notes
+                    </h2>
                     <FormTextarea
                         label="Résumé des constatations"
                         value={form.data.findings_summary}
@@ -157,22 +173,6 @@ export default function InspectionCreate({ trucks, options }: Props) {
                         onChange={(e) => form.setData('recommendations', e.target.value)}
                         rows={3}
                     />
-                </Card>
-
-                <Card>
-                    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                        <Paperclip size={18} /> Fiche d'inspection scannée (PDF / photo)
-                    </h2>
-                    <input
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png"
-                        onChange={(e) => form.setData('attachment', e.target.files?.[0] ?? null)}
-                        className="block w-full text-sm"
-                    />
-                    {form.errors.attachment && (
-                        <p className="text-xs text-red-500 mt-1">{form.errors.attachment as any}</p>
-                    )}
-                    <p className="text-xs text-[var(--color-text-muted)] mt-1">PDF, JPG ou PNG. Max 10 Mo. Sera archivée sur SharePoint pour traçabilité ISO.</p>
                 </Card>
 
                 <div className="flex gap-3 justify-end">

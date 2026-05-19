@@ -10,6 +10,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Entity {
     id: number;
@@ -30,6 +31,10 @@ export default function EntitiesIndex({ entities, filters }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | 'show' | null>(null);
     const [selected, setSelected] = useState<Entity | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('entity-create');
+    const canEdit = can('entity-edit');
+    const canDelete = can('entity-delete');
 
     const createForm = useForm({ name: '', phone: '', email: '', address: '', website: '', logo: null as File | null });
     const editForm = useForm({ name: '', phone: '', email: '', address: '', website: '', logo: null as File | null });
@@ -57,9 +62,11 @@ export default function EntitiesIndex({ entities, filters }: Props) {
         <AuthenticatedLayout title="Entités">
             <Head title="Entités" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -75,8 +82,8 @@ export default function EntitiesIndex({ entities, filters }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         onView={() => openShow(r)}
-                                        onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/entities/destroy/${r.id}`)}
+                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/entities/destroy/${r.id}`) : undefined}
                                     />
                                 ),
                             },

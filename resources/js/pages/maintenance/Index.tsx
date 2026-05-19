@@ -11,8 +11,9 @@ import Modal from '@/components/ui/Modal';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
 import { useForm } from '@inertiajs/react';
-import { Wrench, AlertTriangle, CheckCircle2, Search, Paperclip, ShieldCheck } from 'lucide-react';
+import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
+import { usePermission } from '@/hooks/usePermission';
 import { clsx } from 'clsx';
 
 interface Profile {
@@ -65,6 +66,8 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
     const [filter, setFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
     const [search, setSearch] = useState('');
     const [recordTruck, setRecordTruck] = useState<TruckRow | null>(null);
+    const { can } = usePermission();
+    const canRecord = can('maintenance-create');
 
     const recordForm = useForm<Record<string, any>>({
         maintenance_date: new Date().toISOString().split('T')[0],
@@ -82,7 +85,6 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
         filter_hydraulic_changed: false,
         filter_air_changed: false,
         filter_fuel_changed: false,
-        attachment: null as File | null,
         linked_inspection_issue_ids: [] as number[],
     });
 
@@ -111,7 +113,6 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
             filter_hydraulic_changed: false,
             filter_air_changed: false,
             filter_fuel_changed: false,
-            attachment: null,
             linked_inspection_issue_ids: [],
         });
     };
@@ -211,9 +212,13 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
                                                 {truck.open_inspection_issues > 0 ? <Badge variant="danger">{truck.open_inspection_issues}</Badge> : <span className="text-[var(--color-text-muted)]">0</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                <Button size="sm" onClick={() => openRecord(truck)}>
-                                                    <Wrench size={14} className="mr-1" /> Maintenance
-                                                </Button>
+                                                {canRecord ? (
+                                                    <Button size="sm" onClick={() => openRecord(truck)}>
+                                                        <Wrench size={14} className="mr-1" /> Maintenance
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-[var(--color-text-muted)]">—</span>
+                                                )}
                                             </td>
                                         </tr>
                                     );
@@ -252,9 +257,11 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
                                             </div>
                                         )}
                                     </div>
-                                    <Button size="sm" className="w-full" onClick={() => openRecord(truck)}>
-                                        <Wrench size={14} className="mr-1" /> Enregistrer maintenance
-                                    </Button>
+                                    {canRecord && (
+                                        <Button size="sm" className="w-full" onClick={() => openRecord(truck)}>
+                                            <Wrench size={14} className="mr-1" /> Enregistrer maintenance
+                                        </Button>
+                                    )}
                                 </div>
                             );
                         })}
@@ -372,17 +379,6 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
                         onChange={(e) => recordForm.setData('notes', e.target.value)}
                         rows={2}
                     />
-
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3">
-                        <legend className="text-sm font-semibold px-1 flex items-center gap-2"><Paperclip size={14} /> Fiche maintenance scannée</legend>
-                        <input
-                            type="file"
-                            accept="application/pdf,image/jpeg,image/png"
-                            onChange={(e) => recordForm.setData('attachment', e.target.files?.[0] ?? null)}
-                            className="block w-full text-sm"
-                        />
-                        <p className="text-xs text-[var(--color-text-muted)] mt-1">PDF / JPG / PNG, max 10 Mo. Archivée sur SharePoint.</p>
-                    </fieldset>
 
                     <div className="flex justify-end gap-2 mt-4">
                         <Button variant="secondary" type="button" onClick={() => setRecordTruck(null)}>Annuler</Button>

@@ -113,6 +113,21 @@ class Truck extends Model
         return $this->hasMany(TruckMaintenanceProfile::class);
     }
 
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(TruckAssignment::class);
+    }
+
+    public function restWindows(): HasMany
+    {
+        return $this->hasMany(TruckRestWindow::class);
+    }
+
+    public function dailyDispatches(): HasMany
+    {
+        return $this->hasMany(DailyDispatch::class);
+    }
+
     /**
      * Get the last maintenance record for this truck
      */

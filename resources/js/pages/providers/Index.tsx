@@ -10,6 +10,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Provider {
     id: number;
@@ -29,6 +30,10 @@ export default function ProvidersIndex({ providers, filters }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | 'show' | null>(null);
     const [selected, setSelected] = useState<Provider | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('provider-create');
+    const canEdit = can('provider-edit');
+    const canDelete = can('provider-delete');
 
     const createForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
     const editForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
@@ -56,11 +61,13 @@ export default function ProvidersIndex({ providers, filters }: Props) {
         <AuthenticatedLayout title="Fournisseurs">
             <Head title="Fournisseurs" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>
-                    Ajouter
-                </Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>
+                        Ajouter
+                    </Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -76,8 +83,8 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         onView={() => openShow(r)}
-                                        onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/providers/${r.id}/destroy`)}
+                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/providers/${r.id}/destroy`) : undefined}
                                     />
                                 ),
                             },

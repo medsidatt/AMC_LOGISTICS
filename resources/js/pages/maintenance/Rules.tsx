@@ -12,6 +12,7 @@ import Pagination from '@/components/ui/Pagination';
 import { Plus, Lock, Ban } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 import { clsx } from 'clsx';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Rule {
     id: number;
@@ -35,6 +36,9 @@ interface Props {
 export default function Rules({ profiles, trucks, maintenanceTypes }: Props) {
     const [showCreate, setShowCreate] = useState(false);
     const [deactivateUrl, setDeactivateUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreateRule = can('maintenance-rule-create');
+    const canDeactivateRule = can('maintenance-rule-deactivate');
 
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
 
@@ -56,9 +60,11 @@ export default function Rules({ profiles, trucks, maintenanceTypes }: Props) {
 
             <MaintenanceTabs />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { form.reset(); setShowCreate(true); }}>Nouvelle règle</Button>
-            </div>
+            {canCreateRule && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { form.reset(); setShowCreate(true); }}>Nouvelle règle</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="overflow-x-auto">
@@ -96,11 +102,13 @@ export default function Rules({ profiles, trucks, maintenanceTypes }: Props) {
                                     </td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">{rule.created_at ?? '-'}</td>
                                     <td className="px-4 py-3 text-center">
-                                        {rule.is_active && (
+                                        {rule.is_active && canDeactivateRule ? (
                                             <button onClick={() => setDeactivateUrl(`/maintenance/rules/${rule.id}/deactivate`)}
                                                 className="p-1.5 rounded-lg text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition" title="Désactiver">
                                                 <Ban size={14} />
                                             </button>
+                                        ) : (
+                                            <span className="text-[var(--color-text-muted)]">—</span>
                                         )}
                                     </td>
                                 </tr>

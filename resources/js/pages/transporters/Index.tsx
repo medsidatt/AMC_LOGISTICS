@@ -10,6 +10,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Transporter {
     id: number;
@@ -29,6 +30,10 @@ export default function TransportersIndex({ transporters, filters }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | 'show' | null>(null);
     const [selected, setSelected] = useState<Transporter | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('transporter-create');
+    const canEdit = can('transporter-edit');
+    const canDelete = can('transporter-delete');
 
     const createForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
     const editForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
@@ -56,9 +61,11 @@ export default function TransportersIndex({ transporters, filters }: Props) {
         <AuthenticatedLayout title="Transporteurs">
             <Head title="Transporteurs" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -74,8 +81,8 @@ export default function TransportersIndex({ transporters, filters }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         onView={() => openShow(r)}
-                                        onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/transporters/${r.id}/destroy`)}
+                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/transporters/${r.id}/destroy`) : undefined}
                                     />
                                 ),
                             },
