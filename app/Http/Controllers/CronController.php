@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Cron\CronExpression;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Artisan;
@@ -9,6 +10,26 @@ use Illuminate\Support\Facades\Log;
 
 class CronController extends Controller
 {
+    /**
+     * Inline scheduler. Each entry: cron expression => [[artisan command, args], ...].
+     *
+     * We do NOT use Laravel's schedule:run on Infomaniak: it spawns a PHP CLI
+     * subprocess per task via proc_open, which is disabled on Infomaniak's
+     * shared hosting. Instead we evaluate cron expressions ourselves and call
+     * each due command inline through Artisan::call (no subprocess).
+     *
+     * Keep this in sync with bootstrap/app.php's withSchedule block.
+     */
+    private const SCHEDULE = [
+        '*/30 * * * *' => [['fleeti:sync-kilometers', []]],
+        '*/15 * * * *' => [['logistics:notify-due-engine-maintenance', []]],
+        '0 7 * * 1'    => [['logistics:notify-missing-weekly-checklists', []]],
+        '15 3 1 * *'   => [['telemetry:compact', []]],
+        '30 2 * * *'   => [['places:detect-hubs', []]],
+        '45 2 * * *'   => [['logistics:rebuild-trip-segments', ['--days' => 7]]],
+        '0 * * * *'    => [['logistics:detect-off-hours-movement', ['--window' => 120]]],
+    ];
+
     /**
      * Whitelist of artisan commands that may be triggered via URL.
      * The key is the public slug used in the URL.
@@ -24,20 +45,51 @@ class CronController extends Controller
     ];
 
     /**
-     * Run Laravel's scheduler — equivalent to `php artisan schedule:run`.
-     * Hit this every minute from Infomaniak.
+     * Inline scheduler entry point. Hit this every minute (or every 15 min
+     * on Infomaniak) — it figures out which commands are due and runs them
+     * via Artisan::call in this PHP process. No subprocess, no proc_open.
      */
     public function run(Request $request): Response
     {
         $this->ensureAuthorized($request);
         $this->prepareLongRunning();
 
-        $exit = Artisan::call('schedule:run');
-        $output = Artisan::output();
+        $now = now();
+        $ran = 0;
+        $lines = [];
 
-        Log::info('cron.schedule:run', ['exit' => $exit, 'output' => $output]);
+        foreach (self::SCHEDULE as $expression => $jobs) {
+            if (!(new CronExpression($expression))->isDue($now->toDateTimeString())) {
+                continue;
+            }
 
-        return response("schedule:run exit={$exit}\n\n{$output}", 200)
+            foreach ($jobs as [$command, $params]) {
+                try {
+                    $exit = Artisan::call($command, $params);
+                    $output = trim(Artisan::output());
+                    $lines[] = "OK  {$command} (exit={$exit})";
+                    Log::info('cron.command', [
+                        'command' => $command,
+                        'params' => $params,
+                        'exit' => $exit,
+                        'output' => $output,
+                    ]);
+                    $ran++;
+                } catch (\Throwable $e) {
+                    $lines[] = "ERR {$command}: {$e->getMessage()}";
+                    Log::error('cron.command_failed', [
+                        'command' => $command,
+                        'params' => $params,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        $summary = "ran {$ran} command(s) at {$now->toIso8601String()}";
+        Log::info('cron.run', ['ran' => $ran, 'time' => $now->toIso8601String()]);
+
+        return response("{$summary}\n\n" . implode("\n", $lines), 200)
             ->header('Content-Type', 'text/plain');
     }
 
