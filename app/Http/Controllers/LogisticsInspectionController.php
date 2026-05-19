@@ -302,11 +302,27 @@ class LogisticsInspectionController extends Controller
                 return;
             }
 
-            Notification::send($recipients, new InspectionSubmittedNotification($inspection));
+            // In-app bell (always writes — DB never fails the way SMTP can).
+            Notification::send($recipients, new InspectionSubmittedNotification($inspection, ['database']));
+
+            // Email goes only to recipients with a usable address; failures
+            // don't roll back the database notification above.
+            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
+            if ($mailRecipients->isNotEmpty()) {
+                try {
+                    Notification::send($mailRecipients, new InspectionSubmittedNotification($inspection, ['mail']));
+                } catch (\Throwable $e) {
+                    Log::error('InspectionSubmittedNotification mail failed', [
+                        'inspection_id' => $inspection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             Log::info('HSE notification dispatched', [
                 'inspection_id' => $inspection->id,
                 'recipients_count' => $recipients->count(),
+                'mail_recipients_count' => $mailRecipients->count(),
             ]);
         } catch (\Throwable $e) {
             Log::warning('HSE notification dispatch failed', [

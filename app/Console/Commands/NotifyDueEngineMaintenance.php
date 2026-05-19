@@ -26,7 +26,9 @@ class NotifyDueEngineMaintenance extends Command
                 return (float) $truck->total_kilometers >= (float) $truck->nextMaintenanceAtKm();
             });
 
-        $recipients = User::whereNotNull('email')->get();
+        // In-app bell goes to every user; email is narrowed to HSE Agent users only.
+        $dbRecipients = User::query()->get();
+        $mailRecipients = User::role('HSE Agent')->whereNotNull('email')->get();
         $notifiedCount = 0;
 
         foreach ($dueTrucks as $truck) {
@@ -51,11 +53,13 @@ class NotifyDueEngineMaintenance extends Command
                 ),
             ]);
 
-            if ($recipients->isNotEmpty()) {
-                Notification::send($recipients, new MaintenanceDueNotification($truck, ['database']));
+            if ($dbRecipients->isNotEmpty()) {
+                Notification::send($dbRecipients, new MaintenanceDueNotification($truck, ['database']));
+            }
 
+            if ($mailRecipients->isNotEmpty()) {
                 try {
-                    Notification::send($recipients, new MaintenanceDueNotification($truck, ['mail']));
+                    Notification::send($mailRecipients, new MaintenanceDueNotification($truck, ['mail']));
                     $notifiedCount++;
                 } catch (\Throwable $e) {
                     Log::error('MaintenanceDueNotification mail failed', [
@@ -69,9 +73,10 @@ class NotifyDueEngineMaintenance extends Command
         }
 
         $this->info(sprintf(
-            'Engine maintenance alerts generated. Notifications sent for %d truck(s) to %d user(s).',
+            'Engine maintenance alerts generated. Email sent for %d truck(s) to %d HSE user(s); bell to %d user(s).',
             $notifiedCount,
-            $recipients->count()
+            $mailRecipients->count(),
+            $dbRecipients->count()
         ));
         return self::SUCCESS;
     }
