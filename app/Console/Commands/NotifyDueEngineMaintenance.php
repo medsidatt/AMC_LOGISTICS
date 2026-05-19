@@ -2,9 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Auth\User;
 use App\Models\LogisticsAlert;
 use App\Models\Truck;
+use App\Notifications\MaintenanceDueNotification;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 class NotifyDueEngineMaintenance extends Command
 {
@@ -21,6 +25,9 @@ class NotifyDueEngineMaintenance extends Command
             ->filter(function (Truck $truck) {
                 return (float) $truck->total_kilometers >= (float) $truck->nextMaintenanceAtKm();
             });
+
+        $recipients = User::whereNotNull('email')->get();
+        $notifiedCount = 0;
 
         foreach ($dueTrucks as $truck) {
             $alreadyExists = LogisticsAlert::query()
@@ -43,9 +50,29 @@ class NotifyDueEngineMaintenance extends Command
                     $truck->matricule
                 ),
             ]);
+
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, new MaintenanceDueNotification($truck, ['database']));
+
+                try {
+                    Notification::send($recipients, new MaintenanceDueNotification($truck, ['mail']));
+                    $notifiedCount++;
+                } catch (\Throwable $e) {
+                    Log::error('MaintenanceDueNotification mail failed', [
+                        'truck_id' => $truck->id,
+                        'matricule' => $truck->matricule,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $this->warn("Email failed for truck {$truck->matricule}: {$e->getMessage()}");
+                }
+            }
         }
 
-        $this->info('Engine maintenance alerts generated.');
+        $this->info(sprintf(
+            'Engine maintenance alerts generated. Notifications sent for %d truck(s) to %d user(s).',
+            $notifiedCount,
+            $recipients->count()
+        ));
         return self::SUCCESS;
     }
 }
