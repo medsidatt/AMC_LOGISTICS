@@ -240,13 +240,20 @@ export default function Issues({ driver, truck, recent, options }: Props) {
         <AuthenticatedLayout title="Signaler un problème">
             <Head title="Signaler un problème" />
 
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 mb-4 flex items-center gap-3">
-                <TruckIcon size={20} className="text-[var(--color-primary)]" />
-                <div className="text-sm">
-                    <div className="font-bold text-[var(--color-text)]">{truck.matricule}</div>
-                    <div className="text-xs text-[var(--color-text-muted)]">Conducteur: {driver.name}</div>
+            <Card className="mb-4">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="p-2 rounded-xl bg-[var(--color-primary)]/10 shrink-0">
+                        <TruckIcon size={20} className="text-[var(--color-primary)]" />
+                    </div>
+                    <div className="text-sm flex-1 min-w-0">
+                        <div className="font-bold truncate">{truck.matricule}</div>
+                        <div className="text-xs text-[var(--color-text-muted)]">Conducteur : {driver.name}</div>
+                    </div>
+                    {flaggedCount > 0 && (
+                        <Badge variant="warning">{flaggedCount} catégorie{flaggedCount > 1 ? 's' : ''} marquée{flaggedCount > 1 ? 's' : ''}</Badge>
+                    )}
                 </div>
-            </div>
+            </Card>
 
             <Card className="mb-6">
                 <form onSubmit={submit}>

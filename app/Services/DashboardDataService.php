@@ -8,13 +8,26 @@ use App\Models\Driver;
 use App\Models\InspectionChecklist;
 use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
+use App\Models\Maintenance;
+use App\Models\TheftIncident;
 use App\Models\TransportTracking;
 use App\Models\Truck;
+use App\Services\FleetCapacityService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class DashboardDataService
 {
+    public function __construct(
+        private ?FleetCapacityService $capacityService = null,
+    ) {}
+
+    private function capacity(): FleetCapacityService
+    {
+        return $this->capacityService ??= app(FleetCapacityService::class);
+    }
+
     public function getAdminData(): array
     {
         $trucksCount = Truck::where('is_active', true)->count();
@@ -116,6 +129,70 @@ class DashboardDataService
             'monthlyTrips' => $monthlyTonnage->pluck('trip_count')->toArray(),
             'trucksDueMaintenance' => $trucksDueMaintenance,
             'utilization' => $utilization,
+            'fleetCapacity' => $this->buildFleetCapacitySnapshot(),
+        ];
+    }
+
+    /**
+     * Aggregated fleet capacity snapshot for the dashboard.
+     * Business target: 3 rotations × 45 t = 135 t per truck per week.
+     */
+    private function buildFleetCapacitySnapshot(): array
+    {
+        $service = $this->capacity();
+        $activeTrucks = Truck::query()->where('is_active', true)->orderBy('matricule')->get();
+
+        // Cascade resolver : per-truck > client demand > global default
+        $aggregate = $service->resolveWeeklyTarget(Carbon::now());
+
+        $perTruck = $activeTrucks
+            ->map(function (Truck $t) use ($service) {
+                $info = $service->truckDailyCapacity($t);
+                return [
+                    'truck_id' => $t->id,
+                    'matricule' => $t->matricule,
+                    'capacity_tonnage' => $info['capacity_tonnage'],
+                    'avg_rotations_per_week' => $info['avg_rotations_per_week'],
+                    'target_weekly_capacity_t' => $info['target_weekly_capacity_t'],
+                    'target_rotations_per_week' => $info['target_rotations_per_week'],
+                    'target_is_custom' => $info['target_is_custom'],
+                    'empirical_weekly_capacity_t' => $info['empirical_weekly_capacity_t'],
+                    'this_week_rotations' => $info['this_week_rotations'],
+                    'this_week_tonnage_t' => $info['this_week_tonnage_t'],
+                    'target_rate' => $info['target_weekly_capacity_t'] > 0
+                        ? round(min(1, $info['this_week_tonnage_t'] / $info['target_weekly_capacity_t']), 4)
+                        : 0.0,
+                ];
+            });
+
+        $totalDeliveredThisWeek = round($perTruck->sum('this_week_tonnage_t'), 2);
+        $totalThisWeekRotations = (int) $perTruck->sum('this_week_rotations');
+
+        // Use cascade target for utilization
+        $targetTons = (float) $aggregate['target_tons'];
+        $targetRotations = $aggregate['target_rotations'] ?? (int) $perTruck->sum('target_rotations_per_week');
+
+        $utilizationPct = $targetTons > 0
+            ? round(min(100, ($totalDeliveredThisWeek / $targetTons) * 100), 1)
+            : 0.0;
+
+        $top = $perTruck->sortByDesc('this_week_tonnage_t')->take(5)->values()->all();
+        $bottom = $perTruck->sortBy('this_week_tonnage_t')->take(5)->values()->all();
+
+        return [
+            'active_trucks' => $activeTrucks->count(),
+            'target_source' => $aggregate['source'],
+            'target_rotations_per_truck_per_week' => $service->defaultTargetRotationsPerWeek(),
+            'default_capacity_tonnage' => $service->defaultCapacityTonnage(),
+            'avg_capacity_t' => $aggregate['avg_capacity_t'] ?? $service->defaultCapacityTonnage(),
+            'custom_truck_count' => $aggregate['custom_truck_count'] ?? 0,
+            'target_weekly_capacity_t' => $targetTons,
+            'delivered_this_week_t' => $totalDeliveredThisWeek,
+            'rotations_this_week' => $totalThisWeekRotations,
+            'target_rotations_this_week' => $targetRotations,
+            'utilization_pct' => $utilizationPct,
+            'top_trucks' => $top,
+            'bottom_trucks' => $bottom,
         ];
     }
 
@@ -130,8 +207,10 @@ class DashboardDataService
         }
 
         $truck = null;
-        $todayChecklist = null;
+        $weekChecklistDone = false;
+        $openIssuesCount = 0;
         $myTripsMonth = 0;
+        $myTripsWeek = 0;
         $myTonnageMonth = 0;
         $recentTrips = collect();
         $checklistHistory = collect();
@@ -147,15 +226,26 @@ class DashboardDataService
             }
 
             if ($truck) {
-                $todayChecklist = DailyChecklist::where('driver_id', $driver->id)
+                // Weekly checklist — "is this week done?" via the week_start_date column
+                $weekChecklistDone = DailyChecklist::where('driver_id', $driver->id)
                     ->where('truck_id', $truck->id)
-                    ->whereDate('checklist_date', today())
-                    ->first();
+                    ->whereDate('week_start_date', DailyChecklist::weekStartFor(now())->toDateString())
+                    ->exists();
             }
+
+            $openIssuesCount = DailyChecklistIssue::query()
+                ->whereHas('dailyChecklist', fn ($q) => $q->where('driver_id', $driver->id))
+                ->whereNull('resolved_at')
+                ->where('flagged', true)
+                ->count();
 
             $myTripsMonth = TransportTracking::where('driver_id', $driver->id)
                 ->whereMonth('provider_date', now()->month)
                 ->whereYear('provider_date', now()->year)
+                ->count();
+
+            $myTripsWeek = TransportTracking::where('driver_id', $driver->id)
+                ->whereDate('provider_date', '>=', now()->startOfWeek(\Carbon\Carbon::MONDAY)->toDateString())
                 ->count();
 
             $myTonnageMonth = TransportTracking::where('driver_id', $driver->id)
@@ -202,9 +292,12 @@ class DashboardDataService
                 'speed' => $truck->fleeti_last_speed_kmh !== null ? (float) $truck->fleeti_last_speed_kmh : null,
                 'movement_status' => $truck->fleeti_last_movement_status,
                 'last_sync' => $truck->fleeti_last_synced_at?->format('d/m/Y H:i'),
+                'maintenance_level' => $truck->maintenanceLevelByType(),
             ] : null,
-            'todayChecklistDone' => $todayChecklist !== null,
+            'weekChecklistDone' => $weekChecklistDone,
+            'openIssuesCount' => $openIssuesCount,
             'myTripsMonth' => $myTripsMonth,
+            'myTripsWeek' => $myTripsWeek,
             'myTonnageMonth' => round($myTonnageMonth, 2),
             'recentTrips' => $recentTrips,
             'checklistHistory' => $checklistHistory,
@@ -272,23 +365,51 @@ class DashboardDataService
 
     public function getHseData($user): array
     {
-        $myInspections = InspectionChecklist::query()
-            ->where('inspector_id', $user->id);
+        $weekStart = now()->startOfWeek(Carbon::MONDAY);
+        $monthCutoff = now()->subDays(30);
+        $inspectionCutoff = now()->subDays(30)->toDateString();
+
+        // ---------- KPI ROW (ISO 9001 / 45001 audit-relevant) ----------
+        $inspectionsThisWeek = InspectionChecklist::query()
+            ->where('inspection_date', '>=', $weekStart->toDateString())
+            ->count();
+
+        $inspectionsThisMonth = InspectionChecklist::query()
+            ->where('inspection_date', '>=', $monthCutoff->toDateString())
+            ->count();
+
+        $activeTruckIds = Truck::query()
+            ->where('is_active', true)
+            ->pluck('id');
+
+        $trucksWithRecentInspectionIds = InspectionChecklist::query()
+            ->whereDate('inspection_date', '>=', $inspectionCutoff)
+            ->pluck('truck_id')
+            ->unique();
+
+        $trucksOverdueInspectionCount = $activeTruckIds
+            ->diff($trucksWithRecentInspectionIds)
+            ->count();
+
+        $activeTrucks = Truck::query()->where('is_active', true)->get();
+        $maintenanceOverdueCount = $activeTrucks->filter(fn (Truck $t) => $t->isMaintenanceDueByType())->count();
+
+        $securityIncidentsOpen = TheftIncident::query()
+            ->where('status', TheftIncident::STATUS_PENDING)
+            ->count();
 
         $kpis = [
-            'drafts' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_DRAFT)->count(),
-            'submitted' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_SUBMITTED)->count(),
-            'validated' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_VALIDATED)->count(),
-            'rejected' => (clone $myInspections)->where('status', InspectionChecklist::STATUS_REJECTED)->count(),
-            'open_critical_issues' => InspectionChecklistIssue::query()
-                ->whereHas('inspectionChecklist', fn ($q) => $q->where('inspector_id', $user->id))
-                ->where('severity', 'critical')
-                ->whereNull('resolved_at')
-                ->count(),
+            'inspections_this_week' => $inspectionsThisWeek,
+            'inspections_this_month' => $inspectionsThisMonth,
+            'trucks_overdue_inspection' => $trucksOverdueInspectionCount,
+            'maintenance_overdue' => $maintenanceOverdueCount,
+            'security_incidents_open' => $securityIncidentsOpen,
+            'active_trucks' => $activeTruckIds->count(),
         ];
 
-        $recent = (clone $myInspections)
-            ->with(['truck:id,matricule', 'issues'])
+        // ---------- Recent inspections (whole fleet, not just user's) ----------
+        $recent = InspectionChecklist::query()
+            ->with(['truck:id,matricule', 'inspector:id,name', 'driver:id,name', 'project:id,name'])
             ->orderByDesc('inspection_date')
             ->orderByDesc('id')
             ->limit(8)
@@ -297,47 +418,134 @@ class DashboardDataService
                 'id' => $i->id,
                 'inspection_date' => $i->inspection_date?->format('d/m/Y'),
                 'truck' => $i->truck?->matricule,
-                'category' => $i->category,
-                'status' => $i->status,
-                'issues_count' => $i->issues->count(),
+                'inspector' => $i->inspector?->name,
+                'driver' => $i->driver?->name,
+                'project' => $i->project?->name,
+                'vehicle_photo_url' => $i->vehicle_photo_path
+                    ? Storage::disk('public')->url($i->vehicle_photo_path)
+                    : null,
             ])->values();
 
-        $cutoff = now()->subDays(30)->toDateString();
+        // ---------- Trucks needing inspection (>30 days since last) ----------
         $trucksNeedingInspection = Truck::query()
             ->where('is_active', true)
             ->whereNull('deleted_at')
-            ->whereDoesntHave('inspectionChecklists', function ($q) use ($cutoff) {
-                $q->whereDate('inspection_date', '>=', $cutoff);
+            ->whereDoesntHave('inspectionChecklists', function ($q) use ($inspectionCutoff) {
+                $q->whereDate('inspection_date', '>=', $inspectionCutoff);
             })
             ->orderBy('matricule')
             ->limit(10)
             ->get(['id', 'matricule'])
-            ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule]);
+            ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])
+            ->values();
+
+        // ---------- Maintenance overdue trucks ----------
+        $maintenanceOverdue = $activeTrucks
+            ->filter(fn (Truck $t) => $t->isMaintenanceDueByType())
+            ->take(10)
+            ->map(fn (Truck $t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'counter' => $t->maintenanceCounterByType(),
+                'unit' => $t->maintenanceUnitByType(),
+                'level' => $t->maintenanceLevelByType(),
+            ])
+            ->values();
+
+        // ---------- Recent security incidents (pending or confirmed) ----------
+        $securityIncidents = TheftIncident::query()
+            ->with(['truck:id,matricule'])
+            ->whereIn('status', [TheftIncident::STATUS_PENDING, TheftIncident::STATUS_CONFIRMED])
+            ->orderByDesc('detected_at')
+            ->limit(8)
+            ->get()
+            ->map(fn (TheftIncident $inc) => [
+                'id' => $inc->id,
+                'truck' => $inc->truck?->matricule,
+                'type' => $inc->type,
+                'severity' => $inc->severity,
+                'status' => $inc->status,
+                'detected_at' => $inc->detected_at?->format('d/m/Y H:i'),
+            ])
+            ->values();
 
         return [
             'kpis' => $kpis,
             'recentInspections' => $recent,
             'trucksNeedingInspection' => $trucksNeedingInspection,
+            'maintenanceOverdue' => $maintenanceOverdue,
+            'securityIncidents' => $securityIncidents,
         ];
     }
 
-    public function getLogisticsResponsibleData(): array
+    public function getLogisticsResponsibleData($user = null): array
     {
-        $pendingChecklists = DailyChecklist::query()->where('status', DailyChecklist::STATUS_PENDING)->count();
-        $unresolvedFlagged = DailyChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
-        $unresolvedInspectionFlagged = InspectionChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
+        $weekStart = now()->startOfWeek(\Carbon\Carbon::MONDAY);
+        $monthCutoff = now()->subDays(30);
+        $inspectionCutoff = now()->subDays(30)->toDateString();
 
-        $dueEngineTrucks = Truck::query()
-            ->where('is_active', true)
-            ->get()
-            ->filter(fn (Truck $t) => (float) $t->total_kilometers >= (float) $t->nextMaintenanceAtKm())
+        // ---------- KPI: Activité ----------
+        $myInspectionsWeek = InspectionChecklist::query()
+            ->when($user, fn ($q) => $q->where('inspector_id', $user->id))
+            ->where('inspection_date', '>=', $weekStart->toDateString())
             ->count();
 
+        $inspectionsThisMonth = InspectionChecklist::query()
+            ->where('inspection_date', '>=', $monthCutoff->toDateString())
+            ->count();
+
+        $tripsToday = TransportTracking::query()
+            ->whereDate('client_date', today())
+            ->count();
+
+        $activeTrucks = Truck::query()->where('is_active', true)->count();
+
+        // ---------- KPI: Alertes ----------
+        $pendingChecklists = DailyChecklist::query()
+            ->where('status', DailyChecklist::STATUS_PENDING)
+            ->count();
+
+        $unresolvedFlagged = DailyChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->count();
+
+        $driverFlaggedIssues = DailyChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->with(['truck:id,matricule', 'driver:id,name', 'dailyChecklist.truck:id,matricule', 'dailyChecklist.driver:id,name'])
+            ->orderByDesc('reported_at')
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get()
+            ->map(fn (DailyChecklistIssue $i) => [
+                'id' => $i->id,
+                'category' => $i->category,
+                'severity' => $i->severity,
+                'notes' => $i->issue_notes,
+                'positions' => $i->positions,
+                'truck' => $i->truck?->matricule ?? $i->dailyChecklist?->truck?->matricule,
+                'driver' => $i->driver?->name ?? $i->dailyChecklist?->driver?->name,
+                'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
+            ])
+            ->values();
+
+        $activeTruckIds = Truck::query()->where('is_active', true)->pluck('id');
+        $trucksWithRecentInspectionIds = InspectionChecklist::query()
+            ->whereDate('inspection_date', '>=', $inspectionCutoff)
+            ->pluck('truck_id')
+            ->unique();
+        $trucksOverdueInspection = $activeTruckIds->diff($trucksWithRecentInspectionIds)->count();
+
+        $activeTrucksCollection = Truck::query()->where('is_active', true)->get();
+        $maintenanceOverdueCount = $activeTrucksCollection->filter(fn (Truck $t) => $t->isMaintenanceDueByType())->count();
+
+        // ---------- Lists ----------
         $nextChecklists = DailyChecklist::query()
             ->where('status', DailyChecklist::STATUS_PENDING)
             ->with(['truck:id,matricule', 'driver:id,name', 'issues'])
             ->orderByDesc('week_start_date')
-            ->limit(5)
+            ->limit(8)
             ->get()
             ->map(fn (DailyChecklist $c) => [
                 'id' => $c->id,
@@ -347,43 +555,74 @@ class DashboardDataService
                 'issues_count' => $c->issues->count(),
             ])->values();
 
-        $nextInspections = InspectionChecklist::query()
-            ->where('status', InspectionChecklist::STATUS_SUBMITTED)
-            ->with(['truck:id,matricule', 'inspector:id,name', 'issues'])
+        $recentInspections = InspectionChecklist::query()
+            ->with(['truck:id,matricule', 'inspector:id,name', 'driver:id,name'])
             ->orderByDesc('inspection_date')
-            ->limit(5)
+            ->orderByDesc('id')
+            ->limit(8)
             ->get()
             ->map(fn (InspectionChecklist $i) => [
                 'id' => $i->id,
                 'inspection_date' => $i->inspection_date?->format('d/m/Y'),
                 'truck' => $i->truck?->matricule,
                 'inspector' => $i->inspector?->name,
-                'category' => $i->category,
-                'critical_count' => $i->issues->where('severity', 'critical')->count(),
+                'driver' => $i->driver?->name,
             ])->values();
+
+        $trucksNeedingInspection = Truck::query()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->whereDoesntHave('inspectionChecklists', function ($q) use ($inspectionCutoff) {
+                $q->whereDate('inspection_date', '>=', $inspectionCutoff);
+            })
+            ->orderBy('matricule')
+            ->limit(10)
+            ->get(['id', 'matricule'])
+            ->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])
+            ->values();
+
+        $maintenanceOverdue = $activeTrucksCollection
+            ->filter(fn (Truck $t) => $t->isMaintenanceDueByType())
+            ->take(10)
+            ->map(fn (Truck $t) => [
+                'id' => $t->id,
+                'matricule' => $t->matricule,
+                'counter' => $t->maintenanceCounterByType(),
+                'unit' => $t->maintenanceUnitByType(),
+                'level' => $t->maintenanceLevelByType(),
+            ])
+            ->values();
 
         $alerts = LogisticsAlert::query()
             ->whereNull('read_at')
             ->whereNull('resolved_at')
             ->orderByDesc('created_at')
-            ->limit(10)
+            ->limit(8)
             ->get()
             ->map(fn ($a) => [
                 'id' => $a->id,
                 'type' => $a->type,
                 'message' => $a->message,
                 'created_at' => $a->created_at->format('d/m/Y H:i'),
-            ]);
+            ])
+            ->values();
 
         return [
             'kpis' => [
+                'my_inspections_week' => $myInspectionsWeek,
+                'inspections_this_month' => $inspectionsThisMonth,
+                'trips_today' => $tripsToday,
+                'active_trucks' => $activeTrucks,
                 'pending_checklists' => $pendingChecklists,
                 'unresolved_flagged' => $unresolvedFlagged,
-                'unresolved_inspection_flagged' => $unresolvedInspectionFlagged,
-                'due_engine_trucks' => $dueEngineTrucks,
+                'trucks_overdue_inspection' => $trucksOverdueInspection,
+                'maintenance_overdue' => $maintenanceOverdueCount,
             ],
-            'nextChecklists' => $nextChecklists,
-            'nextInspections' => $nextInspections,
+            'pendingChecklists' => $nextChecklists,
+            'driverFlaggedIssues' => $driverFlaggedIssues,
+            'recentInspections' => $recentInspections,
+            'trucksNeedingInspection' => $trucksNeedingInspection,
+            'maintenanceOverdue' => $maintenanceOverdue,
             'alerts' => $alerts,
         ];
     }

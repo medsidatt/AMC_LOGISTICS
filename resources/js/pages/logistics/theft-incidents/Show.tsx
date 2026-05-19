@@ -5,6 +5,9 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import LeafletMap from '@/components/map/LeafletMap';
 import { ArrowLeft, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
+import EvidencePanel from '@/components/theft/EvidencePanel';
+import { displayIncidentTitle } from '@/utils/theft-incident';
 
 interface Incident {
     id: number;
@@ -53,6 +56,7 @@ const SEVERITY_COLOR: Record<string, string> = {
 };
 
 export default function TheftIncidentShow({ incident }: Props) {
+    const { isAdmin } = usePermission();
     const form = useForm<{ action: 'review' | 'dismiss' | 'confirm'; notes: string }>({
         action: 'review',
         notes: '',
@@ -98,7 +102,7 @@ export default function TheftIncidentShow({ incident }: Props) {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h2 className="text-xl font-bold text-[var(--color-text)] mb-2">
-                            {incident.title}
+                            {displayIncidentTitle(incident.type, incident.title, incident.evidence)}
                         </h2>
                         <div className="flex flex-wrap gap-2 items-center">
                             <span className="text-sm text-[var(--color-text-muted)]">
@@ -197,7 +201,7 @@ export default function TheftIncidentShow({ incident }: Props) {
                                     color: SEVERITY_COLOR[incident.severity] ?? '#3b82f6',
                                     popup: (
                                         <div>
-                                            <strong>{incident.title}</strong>
+                                            <strong>{displayIncidentTitle(incident.type, incident.title, incident.evidence)}</strong>
                                             <br />
                                             <span style={{ fontSize: 12 }}>{incident.detected_at}</span>
                                         </div>
@@ -210,13 +214,7 @@ export default function TheftIncidentShow({ incident }: Props) {
             )}
 
             <Card header="Évidence détaillée" className="mb-5">
-                {incident.evidence ? (
-                    <pre className="text-xs font-mono bg-[var(--color-surface-hover)] p-4 rounded-lg overflow-x-auto text-[var(--color-text)]">
-                        {JSON.stringify(incident.evidence, null, 2)}
-                    </pre>
-                ) : (
-                    <p className="text-sm text-[var(--color-text-muted)]">Pas de données d'évidence.</p>
-                )}
+                <EvidencePanel type={incident.type} evidence={incident.evidence} />
             </Card>
 
             {incident.status !== 'pending' && (
@@ -240,7 +238,7 @@ export default function TheftIncidentShow({ incident }: Props) {
                 </Card>
             )}
 
-            {incident.status === 'pending' && (
+            {incident.status === 'pending' && isAdmin && (
                 <Card header="Actions">
                     <textarea
                         value={form.data.notes}

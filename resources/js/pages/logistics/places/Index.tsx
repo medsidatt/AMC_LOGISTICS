@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import LeafletMap from '@/components/map/LeafletMap';
 import { Plus, MapPin, Edit, Trash2 } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Place {
     id: number;
@@ -46,6 +47,7 @@ const TYPE_COLOR: Record<string, string> = {
 
 export default function PlacesIndex({ places }: Props) {
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const { isAdmin } = usePermission();
 
     const circles = places
         .filter((p) => p.is_active)
@@ -80,9 +82,11 @@ export default function PlacesIndex({ places }: Props) {
                 <p className="text-sm text-[var(--color-text-muted)]">
                     {places.length} lieu(x). Les bases auto-détectées sont rafraîchies chaque nuit depuis la télémétrie.
                 </p>
-                <Button icon={<Plus size={16} />} onClick={() => router.visit('/logistics/places/create')}>
-                    Nouveau lieu
-                </Button>
+                {isAdmin && (
+                    <Button icon={<Plus size={16} />} onClick={() => router.visit('/logistics/places/create')}>
+                        Nouveau lieu
+                    </Button>
+                )}
             </div>
 
             {places.length > 0 && (
@@ -129,11 +133,11 @@ export default function PlacesIndex({ places }: Props) {
                                 label: 'Actif',
                                 render: (p) => <Badge variant={p.is_active ? 'success' : 'muted'}>{p.is_active ? 'Oui' : 'Non'}</Badge>,
                             },
-                            {
+                            ...(isAdmin ? [{
                                 key: 'actions',
                                 label: 'Actions',
                                 sortable: false,
-                                render: (p) => (
+                                render: (p: Place) => (
                                     <div className="flex items-center gap-2">
                                         <a
                                             href={`/logistics/places/${p.id}/edit`}
@@ -151,7 +155,7 @@ export default function PlacesIndex({ places }: Props) {
                                         </button>
                                     </div>
                                 ),
-                            },
+                            }] : []),
                         ]}
                         searchable
                         searchKeys={['name', 'code', 'type']}

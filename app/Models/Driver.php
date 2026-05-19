@@ -44,4 +44,9 @@ class Driver extends Model
     {
         return $this->hasMany(DriverDisciplineRecord::class);
     }
+
+    public function dailyDispatches(): HasMany
+    {
+        return $this->hasMany(DailyDispatch::class);
+    }
 }

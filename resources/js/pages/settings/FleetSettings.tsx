@@ -22,6 +22,8 @@ interface Props {
         monthly_target_tonnage: number;
         weight_gap_threshold: number;
         price_per_litre: number;
+        target_rotations_per_week: number;
+        default_capacity_tonnage: number;
     };
     defaultTarget: number;
     monthlyTargets: MonthlyTarget[];
@@ -106,7 +108,15 @@ export default function FleetSettingsPage({ setting, defaultTarget, monthlyTarge
         monthly_target_tonnage: String(setting.monthly_target_tonnage ?? 2000),
         weight_gap_threshold: String(setting.weight_gap_threshold ?? 0.5),
         price_per_litre: String(setting.price_per_litre ?? 730),
+        target_rotations_per_week: String(setting.target_rotations_per_week ?? 3),
+        default_capacity_tonnage: String(setting.default_capacity_tonnage ?? 45),
+        change_note: '',
     });
+
+    const objectiveChanged =
+        Number(form.data.monthly_target_tonnage) !== Number(setting.monthly_target_tonnage) ||
+        Number(form.data.target_rotations_per_week) !== Number(setting.target_rotations_per_week) ||
+        Number(form.data.default_capacity_tonnage) !== Number(setting.default_capacity_tonnage);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -163,6 +173,65 @@ export default function FleetSettingsPage({ setting, defaultTarget, monthlyTarge
                     <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
                         Sert à convertir le montant FCFA des transactions EDK en litres lors de l'import.
                     </p>
+
+                    <div className="border-t border-[var(--color-border)] mt-4 pt-4">
+                        <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-3">
+                            Objectif de capacité par camion
+                        </p>
+                        <FormInput
+                            label="Rotations cibles par semaine"
+                            name="target_rotations_per_week"
+                            type="number"
+                            step="1"
+                            min="1"
+                            max="14"
+                            value={form.data.target_rotations_per_week}
+                            onChange={(e) => form.setData('target_rotations_per_week', e.target.value)}
+                            error={form.errors.target_rotations_per_week}
+                            required
+                        />
+                        <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
+                            Cible par défaut appliquée à chaque camion (modifiable individuellement sur la fiche camion).
+                        </p>
+                        <FormInput
+                            label="Capacité par défaut d'un camion (tonnes)"
+                            name="default_capacity_tonnage"
+                            type="number"
+                            step="0.1"
+                            min="1"
+                            max="200"
+                            value={form.data.default_capacity_tonnage}
+                            onChange={(e) => form.setData('default_capacity_tonnage', e.target.value)}
+                            error={form.errors.default_capacity_tonnage}
+                            required
+                        />
+                        <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
+                            Utilisée si la fiche d'un camion n'a pas de capacité spécifique renseignée.
+                        </p>
+                    </div>
+
+                    {objectiveChanged && (
+                        <div className="border-t border-[var(--color-border)] mt-4 pt-4">
+                            <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-2">
+                                Justification du changement d'objectif
+                            </p>
+                            <textarea
+                                className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
+                                rows={3}
+                                placeholder="Ex : demande Pont Rosso revue à la hausse suite à réunion client du 17/05/2026."
+                                value={form.data.change_note}
+                                onChange={(e) => form.setData('change_note', e.target.value)}
+                                required
+                            />
+                            {form.errors.change_note && (
+                                <p className="text-xs text-red-500 mt-1">{form.errors.change_note}</p>
+                            )}
+                            <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                                Cette note est archivée dans l'historique des objectifs (preuve d'audit).
+                            </p>
+                        </div>
+                    )}
+
                     <div className="flex gap-2 pt-4">
                         <Button type="submit" loading={form.processing}>Enregistrer</Button>
                     </div>

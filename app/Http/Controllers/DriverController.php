@@ -256,6 +256,8 @@ class DriverController extends Controller
 
         $myTripsCount = TransportTracking::where('driver_id', $driver->id)
             ->where('truck_id', $truck->id)
+            ->whereMonth('provider_date', now()->month)
+            ->whereYear('provider_date', now()->year)
             ->count();
 
         return Inertia::render('drivers/MyTruck', [

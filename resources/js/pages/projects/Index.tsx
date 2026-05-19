@@ -11,6 +11,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Project {
     id: number;
@@ -32,6 +33,10 @@ export default function ProjectsIndex({ projects, entities }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | null>(null);
     const [selected, setSelected] = useState<Project | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('project-create');
+    const canEdit = can('project-edit');
+    const canDelete = can('project-delete');
 
     const entityOpts = entities.map((e) => ({ value: e.id, label: e.name }));
 
@@ -59,9 +64,11 @@ export default function ProjectsIndex({ projects, entities }: Props) {
         <AuthenticatedLayout title="Projets">
             <Head title="Projets" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -78,8 +85,8 @@ export default function ProjectsIndex({ projects, entities }: Props) {
                                 render: (r) => (
                                     <ActionButtons
                                         viewHref={`/projects/${r.id}`}
-                                        onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/projects/${r.id}`)}
+                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/projects/${r.id}`) : undefined}
                                     />
                                 ),
                             },

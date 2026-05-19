@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
 import Pagination from '@/components/ui/Pagination';
-import { History as HistoryIcon, Paperclip } from 'lucide-react';
+import { History as HistoryIcon } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 
 interface MaintenanceRecord {
@@ -27,8 +27,6 @@ interface MaintenanceRecord {
     filter_hydraulic_changed?: boolean;
     filter_air_changed?: boolean;
     filter_fuel_changed?: boolean;
-    attachment_url?: string | null;
-    attachment_filename?: string | null;
 }
 
 interface Props {
@@ -82,12 +80,11 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Prochaine</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Filtres</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Notes</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Fiche</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
                             {maintenances.data.length === 0 ? (
-                                <tr><td colSpan={9} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
+                                <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
                                     <HistoryIcon size={32} className="mx-auto mb-2 opacity-30" />
                                     Aucune maintenance enregistrée
                                 </td></tr>
@@ -101,13 +98,6 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.next_oil_change_km != null ? Number(m.next_oil_change_km).toLocaleString('fr-FR') : '-'}</td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]"><FiltersSummary m={m} /></td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)] max-w-[200px] truncate">{m.notes ?? '-'}</td>
-                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">
-                                        {m.attachment_url ? (
-                                            <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline flex items-center gap-1">
-                                                <Paperclip size={14} /> Voir
-                                            </a>
-                                        ) : '-'}
-                                    </td>
                                 </tr>
                             ))}
                         </tbody>

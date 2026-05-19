@@ -11,6 +11,7 @@ import {
     Fuel, Scale, StopCircle, Navigation, Clock, Eye, MapPin,
     Filter, ChevronDown, ChevronUp, Truck as TruckIcon, Siren,
 } from 'lucide-react';
+import { displayIncidentTitle } from '@/utils/theft-incident';
 
 /* ─────────────────────────── Types ─────────────────────────── */
 
@@ -147,7 +148,7 @@ export default function TheftIncidentsIndex({ incidents, filters, stats, trucks 
                 color: INCIDENT_MAP_COLOR[i.type] ?? '#ef4444',
                 popup: (
                     <div style={{ minWidth: 200 }}>
-                        <strong>{i.title}</strong>
+                        <strong>{displayIncidentTitle(i.type, i.title)}</strong>
                         <div style={{ fontSize: 12, marginTop: 4, color: '#6b7280' }}>
                             {i.truck?.matricule ?? '-'} &mdash; {i.detected_at}
                         </div>
@@ -442,11 +443,14 @@ export default function TheftIncidentsIndex({ incidents, filters, stats, trucks 
                                     key: 'title',
                                     label: 'Description',
                                     hideOnMobile: true,
-                                    render: (r) => (
-                                        <span className="text-[var(--color-text)] text-sm line-clamp-1" title={r.title}>
-                                            {r.title}
-                                        </span>
-                                    ),
+                                    render: (r) => {
+                                        const display = displayIncidentTitle(r.type, r.title);
+                                        return (
+                                            <span className="text-[var(--color-text)] text-sm line-clamp-1" title={display}>
+                                                {display}
+                                            </span>
+                                        );
+                                    },
                                 },
                                 {
                                     key: 'transport_tracking',

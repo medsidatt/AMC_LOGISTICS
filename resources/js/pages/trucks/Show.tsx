@@ -8,6 +8,7 @@ import TruckKpiSection, { type TruckKpi } from '@/components/truck/TruckKpiSecti
 import FuelComparisonSection, { type FuelComparisonRow } from '@/components/truck/FuelComparisonSection';
 import { ArrowLeft, Pencil, Truck as TruckIcon, Gauge, Fuel, Wifi, WifiOff, Wrench, Calendar, Play } from 'lucide-react';
 import { clsx } from 'clsx';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Tracking {
     id: number;
@@ -40,13 +41,10 @@ interface Props {
         is_available: boolean;
         total_kilometers: number;
         km_maintenance_interval: number | null;
-        fleeti_asset_id: string | null;
-        fleeti_gateway_id: string | null;
+        has_gps: boolean;
         fleeti_last_kilometers: number | null;
         fleeti_last_fuel_level: number | null;
         fleeti_last_synced_at: string | null;
-        created_at: string | null;
-        updated_at: string | null;
     };
     maintenanceInfo: Record<string, any>;
     recentTrackings: Tracking[];
@@ -73,6 +71,7 @@ function InfoItem({ label, value, icon }: { label: string; value: React.ReactNod
 export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, fuelComparison, filter }: Props) {
     const fuelLevel = truck.fleeti_last_fuel_level;
     const fuelColor = fuelLevel == null ? 'muted' : fuelLevel < 30 ? 'danger' : fuelLevel < 80 ? 'warning' : 'success';
+    const { isAdmin } = usePermission();
 
     return (
         <AuthenticatedLayout title={truck.matricule}>
@@ -117,7 +116,7 @@ export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, 
                                 {truck.is_available ? 'Disponible' : 'Indisponible'}
                             </Badge>
                             <Badge variant={truck.is_active ? 'info' : 'muted'}>{truck.is_active ? 'En service' : 'Hors service'}</Badge>
-                            {truck.fleeti_asset_id
+                            {truck.has_gps
                                 ? <Badge variant="info"><Wifi size={12} className="inline mr-1" /> GPS connecté</Badge>
                                 : <Badge variant="muted"><WifiOff size={12} className="inline mr-1" /> Sans GPS</Badge>}
                             <Badge variant="primary">{truck.maintenance_type}</Badge>
@@ -140,15 +139,15 @@ export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, 
             </Card>
 
             {/* Info Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className={`grid sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-3 mb-6`}>
                 <InfoItem label="Compteur total" icon={<Gauge size={12} />} value={`${fmt(truck.total_kilometers)} km`} />
-                <InfoItem label="Intervalle maintenance" icon={<Wrench size={12} />} value={truck.km_maintenance_interval ? `${fmt(truck.km_maintenance_interval)} km` : '-'} />
-                <InfoItem label="Fleeti km" icon={<Gauge size={12} />} value={truck.fleeti_last_kilometers ? `${fmt(truck.fleeti_last_kilometers)} km` : '-'} />
-                <InfoItem label="Dernière sync Fleeti" icon={<Calendar size={12} />} value={truck.fleeti_last_synced_at ?? '-'} />
-                <InfoItem label="Asset ID Fleeti" value={truck.fleeti_asset_id ?? '-'} />
-                <InfoItem label="Gateway ID" value={truck.fleeti_gateway_id ?? '-'} />
-                <InfoItem label="Créé le" icon={<Calendar size={12} />} value={truck.created_at ?? '-'} />
-                <InfoItem label="Modifié le" icon={<Calendar size={12} />} value={truck.updated_at ?? '-'} />
+                <InfoItem label="Intervalle maintenance" icon={<Wrench size={12} />} value={truck.km_maintenance_interval ? `${fmt(truck.km_maintenance_interval)} km` : '—'} />
+                {isAdmin && (
+                    <>
+                        <InfoItem label="Compteur GPS" icon={<Gauge size={12} />} value={truck.fleeti_last_kilometers ? `${fmt(truck.fleeti_last_kilometers)} km` : '—'} />
+                        <InfoItem label="Dernière sync" icon={<Calendar size={12} />} value={truck.fleeti_last_synced_at ?? '—'} />
+                    </>
+                )}
             </div>
 
             {/* KPI section */}

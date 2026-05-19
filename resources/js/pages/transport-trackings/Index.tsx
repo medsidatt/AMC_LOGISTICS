@@ -11,6 +11,7 @@ import Pagination from '@/components/ui/Pagination';
 import { Plus, FileText, Image, Filter, ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Download } from 'lucide-react';
 import { exportToCsv } from '@/utils/csv-export';
 import { clsx } from 'clsx';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Document {
     id: number;
@@ -60,6 +61,10 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const [showFilters, setShowFilters] = useState(Object.keys(filters).length > 0);
     const [search, setSearch] = useState('');
+    const { can } = usePermission();
+    const canCreate = can('transport-tracking-create');
+    const canEdit = can('transport-tracking-edit');
+    const canDelete = can('transport-tracking-delete');
 
     const hasActiveFilters = Object.keys(filters).length > 0;
 
@@ -150,8 +155,8 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
         { key: 'actions', label: 'Actions', sortable: false, render: (r) => (
             <ActionButtons
                 viewHref={`/transport_tracking/${r.id}/show-page`}
-                editHref={`/transport_tracking/${r.id}/edit-page`}
-                onDelete={() => setDeleteUrl(`/transport_tracking/${r.id}/destroy`)}
+                editHref={canEdit ? `/transport_tracking/${r.id}/edit-page` : undefined}
+                onDelete={canDelete ? () => setDeleteUrl(`/transport_tracking/${r.id}/destroy`) : undefined}
             />
         )},
     ];
@@ -165,9 +170,11 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
                     Filtres
                     {hasActiveFilters && <Badge variant="primary" className="ml-1">{Object.keys(filters).length}</Badge>}
                 </Button>
-                <Button icon={<Plus size={16} />} onClick={() => router.visit('/transport_tracking/create-page')}>
-                    Ajouter
-                </Button>
+                {canCreate && (
+                    <Button icon={<Plus size={16} />} onClick={() => router.visit('/transport_tracking/create-page')}>
+                        Ajouter
+                    </Button>
+                )}
             </div>
 
             {showFilters && (

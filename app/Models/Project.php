@@ -6,6 +6,7 @@ use App\Http\Traits\TracksActions;
 use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Auth;
 
@@ -63,6 +64,16 @@ class Project extends Model
         return $this->belongsToMany(User::class)
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    public function demandPlans(): HasMany
+    {
+        return $this->hasMany(ClientDemandPlan::class);
+    }
+
+    public function truckAssignments(): HasMany
+    {
+        return $this->hasMany(TruckAssignment::class);
     }
 
     public function scopeForCurrentUser($query)

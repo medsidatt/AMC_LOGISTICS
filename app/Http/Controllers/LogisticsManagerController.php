@@ -40,7 +40,8 @@ class LogisticsManagerController extends Controller
         $unresolvedIssues = DailyChecklistIssue::query()
             ->where('flagged', true)
             ->whereNull('resolved_at')
-            ->with(['dailyChecklist.truck', 'dailyChecklist.driver'])
+            ->with(['truck:id,matricule', 'driver:id,name', 'dailyChecklist.truck:id,matricule', 'dailyChecklist.driver:id,name'])
+            ->orderByDesc('reported_at')
             ->orderByDesc('created_at')
             ->limit(50)
             ->get();
@@ -67,11 +68,13 @@ class LogisticsManagerController extends Controller
             ])->values(),
             'unresolvedIssues' => $unresolvedIssues->map(fn ($i) => [
                 'id' => $i->id,
-                'description' => $i->issue_notes ?? $i->category ?? $i->description ?? '',
+                'description' => $i->issue_notes ?? $i->category ?? '',
                 'category' => $i->category,
+                'severity' => $i->severity,
+                'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
                 'checklist_date' => $i->dailyChecklist?->checklist_date,
-                'truck' => $i->dailyChecklist?->truck?->matricule,
-                'driver' => $i->dailyChecklist?->driver?->name,
+                'truck' => $i->truck?->matricule ?? $i->dailyChecklist?->truck?->matricule,
+                'driver' => $i->driver?->name ?? $i->dailyChecklist?->driver?->name,
             ]),
             'lastChecklists' => $lastDailyChecklists->map(fn ($c) => [
                 'id' => $c->id,
