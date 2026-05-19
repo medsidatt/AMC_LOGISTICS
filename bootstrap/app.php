@@ -53,47 +53,40 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->command('fleeti:sync-kilometers')
             ->everyThirtyMinutes()
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         $schedule->command('logistics:notify-due-engine-maintenance')
             ->everyFifteenMinutes()
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         $schedule->command('logistics:notify-missing-weekly-checklists')
             ->mondays()
             ->at('07:00')
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         // Monthly telemetry snapshot compaction:
         // keeps 1/hour per truck after 90 days, 1/day per truck after 365 days.
         // Tracking rows (km/fuel/engine-hours) are preserved — only raw snapshots are pruned.
         $schedule->command('telemetry:compact')
             ->monthlyOn(1, '03:15')
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         // Theft-detection layer (Phase A)
         // ---------------------------------------------------------------
         // Nightly: cluster long parked sessions into auto-detected "base" places.
         $schedule->command('places:detect-hubs')
             ->dailyAt('02:30')
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         // Nightly: rebuild trip segments for the last 7 days of transports
         // (catches transports created/validated after the related telemetry).
         $schedule->command('logistics:rebuild-trip-segments --days=7')
             ->dailyAt('02:45')
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
 
         // Hourly: scan recent telemetry for off-hours movement.
         $schedule->command('logistics:detect-off-hours-movement --window=120')
             ->hourly()
-            ->withoutOverlapping()
-            ->runInBackground();
+            ->withoutOverlapping();
     })
     ->create();
