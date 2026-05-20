@@ -110,17 +110,30 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
     const openRecord = (truck: TruckRow) => {
         setRecordTruck(truck);
         recordForm.reset();
+        const currentKm = truck.total_kilometers ?? 0;
+        const general = truck.profiles.find((p) => p.type === 'general') ?? truck.profiles[0];
+        const interval = general?.interval_km ?? 9000;
         recordForm.setData({
             ...blankForm,
-            kilometers_at_maintenance: String(truck.total_kilometers ?? ''),
-            oil_change_km: String(truck.total_kilometers ?? ''),
+            kilometers_at_maintenance: String(currentKm),
+            oil_change_km: String(currentKm),
+            next_oil_change_km: currentKm > 0 ? String(Math.round(currentKm + interval)) : '',
         });
+    };
+
+    // Truck-specific interval comes from truck_maintenance_profiles.interval_km
+    // (immutable per profile, defined per truck — typically 9000 km).
+    // Fall back to the oil-type table only when the truck has no profile.
+    const truckInterval = (truck: TruckRow | null): number | null => {
+        if (!truck) return null;
+        const general = truck.profiles.find((p) => p.type === 'general') ?? truck.profiles[0];
+        return general?.interval_km ?? null;
     };
 
     const computeNextOilKm = (oilType: string, baseKm: string | number): string => {
         const base = Number(baseKm);
-        if (!oilType || !Number.isFinite(base) || base <= 0) return '';
-        const interval = oilIntervals?.[oilType] ?? 10000;
+        if (!Number.isFinite(base) || base <= 0) return '';
+        const interval = truckInterval(recordTruck) ?? oilIntervals?.[oilType] ?? 9000;
         return String(Math.round(base + interval));
     };
 
@@ -323,13 +336,22 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 required
                             />
                             <FormInput
-                                label="Compteur tableau de bord (Km)"
+                                label="Distance actuelle (Km au compteur)"
                                 type="number"
                                 name="kilometers_at_maintenance"
                                 value={recordForm.data.kilometers_at_maintenance}
                                 onChange={(e) => onKmChange(e.target.value)}
+                                required
                             />
                         </div>
+                        {truckInterval(recordTruck) !== null && (
+                            <p className="text-xs text-[var(--color-text-muted)] -mt-2">
+                                Intervalle de maintenance enregistré pour ce camion :
+                                <b> {truckInterval(recordTruck)!.toLocaleString('fr-FR')} km</b>.
+                                La prochaine vidange est calculée automatiquement comme
+                                <i> distance actuelle + intervalle</i>.
+                            </p>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1 flex items-center gap-1">
                                 <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
@@ -369,12 +391,15 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 onChange={(e) => recordForm.setData('next_oil_change_km', e.target.value)}
                             />
                         </div>
-                        {recordForm.data.oil_type && oilIntervals?.[recordForm.data.oil_type] && (
-                            <p className="text-xs text-[var(--color-text-muted)]">
-                                Intervalle standard pour {oilTypes[recordForm.data.oil_type]} : {oilIntervals[recordForm.data.oil_type].toLocaleString('fr-FR')} km.
-                                Vous pouvez ajuster manuellement si nécessaire.
-                            </p>
-                        )}
+                        <p className="text-xs text-[var(--color-text-muted)]">
+                            {truckInterval(recordTruck) !== null ? (
+                                <>Prochaine vidange = distance actuelle + <b>{truckInterval(recordTruck)!.toLocaleString('fr-FR')} km</b> (intervalle du camion en base).</>
+                            ) : recordForm.data.oil_type && oilIntervals?.[recordForm.data.oil_type] ? (
+                                <>Aucun intervalle enregistré pour ce camion — calcul basé sur l'huile : <b>{oilIntervals[recordForm.data.oil_type].toLocaleString('fr-FR')} km</b>.</>
+                            ) : (
+                                <>Vous pouvez saisir la prochaine vidange manuellement.</>
+                            )}
+                        </p>
                     </fieldset>
 
                     <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
