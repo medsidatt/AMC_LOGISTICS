@@ -9,7 +9,7 @@ use App\Models\Maintenance;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
-use App\Models\User;
+use App\Models\Auth\User;
 use App\Notifications\MaintenanceAssignedNotification;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
