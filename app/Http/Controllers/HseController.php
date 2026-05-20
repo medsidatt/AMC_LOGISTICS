@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Auth\User;
 use App\Models\InspectionChecklist;
 use App\Models\Maintenance;
+use App\Notifications\InspectionValidatedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
@@ -14,6 +18,7 @@ class HseController extends Controller
     public function __construct()
     {
         $this->middleware('permission:inspection-list', ['only' => ['index', 'show']]);
+        $this->middleware('permission:inspection-validate', ['only' => ['sign']]);
     }
 
     public function index(Request $request)
@@ -101,6 +106,8 @@ class HseController extends Controller
     {
         $inspection->load(['truck:id,matricule', 'inspector:id,name', 'validator:id,name', 'driver:id,name', 'project:id,name,code', 'issues.maintenance']);
 
+        $user = auth()->user();
+
         return Inertia::render('inspections/Show', [
             'inspection' => $this->serialize($inspection),
             'options' => [
@@ -109,7 +116,88 @@ class HseController extends Controller
                 'fields' => InspectionChecklist::INSPECTION_FIELDS,
                 'sections' => InspectionChecklist::SECTIONS,
             ],
+            'canSign' => $user?->can('inspection-validate') ?? false,
+            'currentUserName' => $user?->name ?? '',
         ]);
+    }
+
+    /**
+     * Sign (validate) an inspection electronically. Captures the
+     * preferred signature name and stamps the validator/timestamp,
+     * mirrors the maintenance signing flow.
+     */
+    public function sign(Request $request, InspectionChecklist $inspection)
+    {
+        if ($inspection->isLocked()) {
+            return back()->with('error', 'Cette inspection est déjà signée électroniquement.');
+        }
+
+        $data = $request->validate([
+            'signature_name' => 'required|string|max:120',
+        ]);
+
+        $user = auth()->user();
+
+        $inspection->update([
+            'validated_by'              => $user->id,
+            'validated_at'              => now(),
+            'electronic_signature_name' => trim($data['signature_name']),
+            'status'                    => InspectionChecklist::STATUS_VALIDATED,
+        ]);
+
+        $this->notifyInspectionSigned($inspection);
+
+        return back()->with('success', 'Inspection signée électroniquement.');
+    }
+
+    /**
+     * Notify HSE Agents, admins and the original inspector when an
+     * inspection is signed. The signer is excluded.
+     */
+    private function notifyInspectionSigned(InspectionChecklist $inspection): void
+    {
+        try {
+            $recipients = User::query()
+                ->where('id', '!=', $inspection->validated_by)
+                ->where(function ($q) use ($inspection) {
+                    $q->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
+                      ->orWhere('id', $inspection->inspector_id);
+                })
+                ->get()
+                ->unique('id');
+
+            if ($recipients->isEmpty()) {
+                Log::info('No recipients for inspection signed notification', [
+                    'inspection_id' => $inspection->id,
+                ]);
+                return;
+            }
+
+            Notification::send($recipients, new InspectionValidatedNotification($inspection, ['database']));
+
+            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
+            if ($mailRecipients->isNotEmpty()) {
+                try {
+                    Notification::send($mailRecipients, new InspectionValidatedNotification($inspection, ['mail']));
+                } catch (\Throwable $e) {
+                    Log::error('InspectionValidatedNotification mail failed', [
+                        'inspection_id' => $inspection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            Log::info('Inspection signed notification dispatched', [
+                'inspection_id' => $inspection->id,
+                'recipients_count' => $recipients->count(),
+                'mail_recipients_count' => $mailRecipients->count(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Inspection signed notification failed', [
+                'inspection_id' => $inspection->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function exportPdf(InspectionChecklist $inspection)
@@ -262,6 +350,7 @@ class HseController extends Controller
             'validator' => $inspection->validator?->name,
             'validated_at' => $inspection->validated_at?->format('d/m/Y H:i'),
             'validation_notes' => $inspection->validation_notes,
+            'electronic_signature_name' => $inspection->electronic_signature_name,
             'attachment_url' => $inspection->attachment_url,
             'attachment_filename' => $inspection->attachment_filename,
             'vehicle_photo_url' => $vehiclePhotoUrl,

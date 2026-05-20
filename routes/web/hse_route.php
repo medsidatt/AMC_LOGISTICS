@@ -10,6 +10,7 @@ Route::group(['prefix' => 'hse/inspections', 'as' => 'hse.inspections.', 'middle
     Route::get('/', [HseController::class, 'index'])->name('index');
     Route::get('/{inspection}/pdf', [HseController::class, 'exportPdf'])->name('pdf');
     Route::get('/{inspection}', [HseController::class, 'show'])->name('show');
+    Route::post('/{inspection}/sign', [HseController::class, 'sign'])->name('sign');
 });
 
 // Logistics Responsible inspection authoring
