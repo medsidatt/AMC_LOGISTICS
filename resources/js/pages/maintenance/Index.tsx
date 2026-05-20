@@ -11,8 +11,9 @@ import Modal from '@/components/ui/Modal';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
 import { useForm } from '@inertiajs/react';
-import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck } from 'lucide-react';
+import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck, Camera } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
+import CameraCapture from '@/components/inspection/CameraCapture';
 import { usePermission } from '@/hooks/usePermission';
 import { clsx } from 'clsx';
 
@@ -54,6 +55,8 @@ interface Props {
     counts: { overdue: number; warning: number; ok: number };
     maintenanceTypes: MaintenanceType[];
     oilTypes: Record<string, string>;
+    oilIntervals: Record<string, number>;
+    componentStatuses: Record<string, string>;
 }
 
 const SEVERITY_VARIANT: Record<string, 'default' | 'warning' | 'danger'> = {
@@ -62,14 +65,17 @@ const SEVERITY_VARIANT: Record<string, 'default' | 'warning' | 'danger'> = {
     critical: 'danger',
 };
 
-export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
+export default function MaintenanceIndex({ trucks, counts, oilTypes, oilIntervals, componentStatuses }: Props) {
     const [filter, setFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
     const [search, setSearch] = useState('');
     const [recordTruck, setRecordTruck] = useState<TruckRow | null>(null);
     const { can } = usePermission();
     const canRecord = can('maintenance-create');
 
-    const recordForm = useForm<Record<string, any>>({
+    const statusOpts = Object.entries(componentStatuses ?? {}).map(([k, l]) => ({ value: k, label: l }));
+    const oilTypeOpts = [{ value: '', label: '—' }, ...Object.entries(oilTypes).map(([k, l]) => ({ value: k, label: l }))];
+
+    const blankForm = {
         maintenance_date: new Date().toISOString().split('T')[0],
         maintenance_type: 'general',
         notes: '',
@@ -77,16 +83,23 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
         oil_type: '',
         oil_change_km: '',
         next_oil_change_km: '',
+        oil_quantity_liters: '',
         gearbox_status: 'NORMAL',
         differential_status: 'NORMAL',
         hydraulic_status: 'NORMAL',
         greasing_status: 'NORMAL',
+        brake_status: 'NORMAL',
+        coolant_status: 'NORMAL',
+        battery_status: 'NORMAL',
         filter_oil_changed: false,
         filter_hydraulic_changed: false,
         filter_air_changed: false,
         filter_fuel_changed: false,
+        dashboard_photo: null as File | null,
         linked_inspection_issue_ids: [] as number[],
-    });
+    };
+
+    const recordForm = useForm<Record<string, any>>(blankForm);
 
     const filtered = trucks.filter((t) => {
         if (filter !== 'all' && t.overall_status !== filter) return false;
@@ -98,23 +111,50 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
         setRecordTruck(truck);
         recordForm.reset();
         recordForm.setData({
-            maintenance_date: new Date().toISOString().split('T')[0],
-            maintenance_type: 'general',
-            notes: '',
+            ...blankForm,
             kilometers_at_maintenance: String(truck.total_kilometers ?? ''),
-            oil_type: '',
-            oil_change_km: '',
-            next_oil_change_km: '',
-            gearbox_status: 'NORMAL',
-            differential_status: 'NORMAL',
-            hydraulic_status: 'NORMAL',
-            greasing_status: 'NORMAL',
-            filter_oil_changed: false,
-            filter_hydraulic_changed: false,
-            filter_air_changed: false,
-            filter_fuel_changed: false,
-            linked_inspection_issue_ids: [],
+            oil_change_km: String(truck.total_kilometers ?? ''),
         });
+    };
+
+    const computeNextOilKm = (oilType: string, baseKm: string | number): string => {
+        const base = Number(baseKm);
+        if (!oilType || !Number.isFinite(base) || base <= 0) return '';
+        const interval = oilIntervals?.[oilType] ?? 10000;
+        return String(Math.round(base + interval));
+    };
+
+    const onKmChange = (val: string) => {
+        recordForm.setData((data) => {
+            const next: Record<string, any> = { ...data, kilometers_at_maintenance: val };
+            // Mirror the maintenance km into oil_change_km when the user hasn't customised it.
+            if (!data.oil_change_km || data.oil_change_km === data.kilometers_at_maintenance) {
+                next.oil_change_km = val;
+                next.next_oil_change_km = computeNextOilKm(data.oil_type, val);
+            }
+            return next;
+        });
+    };
+
+    const onOilTypeChange = (val: string | number | null) => {
+        const v = (val as string) ?? '';
+        recordForm.setData((data) => ({
+            ...data,
+            oil_type: v,
+            next_oil_change_km: computeNextOilKm(v, data.oil_change_km || data.kilometers_at_maintenance),
+        }));
+    };
+
+    const onOilChangeKmChange = (val: string) => {
+        recordForm.setData((data) => ({
+            ...data,
+            oil_change_km: val,
+            next_oil_change_km: computeNextOilKm(data.oil_type, val),
+        }));
+    };
+
+    const onDashboardCapture = (file: File) => {
+        recordForm.setData('dashboard_photo', file);
     };
 
     const toggleIssueLink = (issueId: number) => {
@@ -269,73 +309,84 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes }: Props) {
                 </div>
             </Card>
 
-            <Modal open={!!recordTruck} onClose={() => setRecordTruck(null)} title={`Maintenance — ${recordTruck?.matricule}`}>
-                <form onSubmit={submitRecord} className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <FormInput
-                            label="Date"
-                            type="date"
-                            name="maintenance_date"
-                            value={recordForm.data.maintenance_date}
-                            onChange={(e) => recordForm.setData('maintenance_date', e.target.value)}
-                            required
-                        />
-                        <FormInput
-                            label="Compteur au moment de la maintenance (Km)"
-                            type="number"
-                            name="kilometers_at_maintenance"
-                            value={recordForm.data.kilometers_at_maintenance}
-                            onChange={(e) => recordForm.setData('kilometers_at_maintenance', e.target.value)}
-                        />
-                    </div>
-
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-2">
-                        <legend className="text-sm font-semibold px-1">Huile moteur</legend>
-                        <FormSelect
-                            label="Type d'huile"
-                            value={recordForm.data.oil_type}
-                            onChange={(v) => recordForm.setData('oil_type', v)}
-                            options={[{ value: '', label: '—' }, ...Object.entries(oilTypes).map(([k, l]) => ({ value: k, label: l }))]}
-                        />
+            <Modal open={!!recordTruck} onClose={() => setRecordTruck(null)} title={`Maintenance — ${recordTruck?.matricule}`} size="xl">
+                <form onSubmit={submitRecord} className="space-y-4">
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">Informations générales</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <FormInput
-                                label="Vidange moteur à (Km)"
-                                type="number"
-                                value={recordForm.data.oil_change_km}
-                                onChange={(e) => recordForm.setData('oil_change_km', e.target.value)}
+                                label="Date"
+                                type="date"
+                                name="maintenance_date"
+                                value={recordForm.data.maintenance_date}
+                                onChange={(e) => recordForm.setData('maintenance_date', e.target.value)}
+                                required
                             />
                             <FormInput
-                                label="Prochaine vidange à (Km)"
+                                label="Compteur tableau de bord (Km)"
+                                type="number"
+                                name="kilometers_at_maintenance"
+                                value={recordForm.data.kilometers_at_maintenance}
+                                onChange={(e) => onKmChange(e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1 flex items-center gap-1">
+                                <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
+                            </label>
+                            <CameraCapture onCapture={onDashboardCapture} error={(recordForm.errors as any)?.dashboard_photo} />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">Huile moteur</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormSelect
+                                label="Type d'huile"
+                                value={recordForm.data.oil_type}
+                                onChange={onOilTypeChange}
+                                options={oilTypeOpts}
+                            />
+                            <FormInput
+                                label="Quantité (litres)"
+                                type="number"
+                                step="0.1"
+                                value={recordForm.data.oil_quantity_liters}
+                                onChange={(e) => recordForm.setData('oil_quantity_liters', e.target.value)}
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormInput
+                                label="Vidange effectuée à (Km)"
+                                type="number"
+                                value={recordForm.data.oil_change_km}
+                                onChange={(e) => onOilChangeKmChange(e.target.value)}
+                            />
+                            <FormInput
+                                label="Prochaine vidange à (Km) — calculée"
                                 type="number"
                                 value={recordForm.data.next_oil_change_km}
                                 onChange={(e) => recordForm.setData('next_oil_change_km', e.target.value)}
                             />
                         </div>
+                        {recordForm.data.oil_type && oilIntervals?.[recordForm.data.oil_type] && (
+                            <p className="text-xs text-[var(--color-text-muted)]">
+                                Intervalle standard pour {oilTypes[recordForm.data.oil_type]} : {oilIntervals[recordForm.data.oil_type].toLocaleString('fr-FR')} km.
+                                Vous pouvez ajuster manuellement si nécessaire.
+                            </p>
+                        )}
                     </fieldset>
 
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-2">
-                        <legend className="text-sm font-semibold px-1">Opérations</legend>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <FormInput
-                                label="Boîte"
-                                value={recordForm.data.gearbox_status}
-                                onChange={(e) => recordForm.setData('gearbox_status', e.target.value)}
-                            />
-                            <FormInput
-                                label="Pont"
-                                value={recordForm.data.differential_status}
-                                onChange={(e) => recordForm.setData('differential_status', e.target.value)}
-                            />
-                            <FormInput
-                                label="Hydraulique"
-                                value={recordForm.data.hydraulic_status}
-                                onChange={(e) => recordForm.setData('hydraulic_status', e.target.value)}
-                            />
-                            <FormInput
-                                label="Graissage"
-                                value={recordForm.data.greasing_status}
-                                onChange={(e) => recordForm.setData('greasing_status', e.target.value)}
-                            />
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">État des organes mécaniques</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <FormSelect label="Boîte de vitesse" value={recordForm.data.gearbox_status} onChange={(v) => recordForm.setData('gearbox_status', v)} options={statusOpts} />
+                            <FormSelect label="Différentiel (pont)" value={recordForm.data.differential_status} onChange={(v) => recordForm.setData('differential_status', v)} options={statusOpts} />
+                            <FormSelect label="Circuit hydraulique" value={recordForm.data.hydraulic_status} onChange={(v) => recordForm.setData('hydraulic_status', v)} options={statusOpts} />
+                            <FormSelect label="Graissage" value={recordForm.data.greasing_status} onChange={(v) => recordForm.setData('greasing_status', v)} options={statusOpts} />
+                            <FormSelect label="Freins" value={recordForm.data.brake_status} onChange={(v) => recordForm.setData('brake_status', v)} options={statusOpts} />
+                            <FormSelect label="Liquide de refroidissement" value={recordForm.data.coolant_status} onChange={(v) => recordForm.setData('coolant_status', v)} options={statusOpts} />
+                            <FormSelect label="Batterie" value={recordForm.data.battery_status} onChange={(v) => recordForm.setData('battery_status', v)} options={statusOpts} />
                         </div>
                     </fieldset>
 
