@@ -36,7 +36,7 @@ class MaintenanceController extends Controller
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
             'only' => [
-                'create', 'store', 'recordMaintenance', 'bulkStore',
+                'create', 'store', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
             ],
         ]);
@@ -433,20 +433,24 @@ class MaintenanceController extends Controller
         return redirect()->back()->with('success', 'Règle désactivée avec succès.');
     }
 
-    public function recordMaintenance(Request $request, Truck $truck)
+    /**
+     * Shared validation rules for record + update.
+     */
+    private function maintenanceFieldRules(): array
     {
         $oilTypeKeys = implode(',', array_keys(Maintenance::OIL_TYPES));
         $statusKeys = implode(',', array_keys(Maintenance::COMPONENT_STATUSES));
 
-        $data = $request->validate([
+        return [
             'maintenance_date' => 'required|date',
-            'notes' => 'nullable|string',
-            'kilometers_at_maintenance' => 'nullable|numeric',
+            'kilometers_at_maintenance' => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:5000',
 
             'oil_type' => "nullable|string|in:{$oilTypeKeys}",
-            'oil_change_km' => 'nullable|numeric|min:0',
-            'next_oil_change_km' => 'nullable|numeric|min:0',
-            'oil_quantity_liters' => 'nullable|numeric|min:0|max:200',
+            'oil_change_km' => 'nullable|required_with:oil_type|numeric|min:0',
+            'next_oil_change_km' => 'nullable|required_with:oil_type|numeric|min:0|gt:oil_change_km',
+            'oil_quantity_liters' => 'nullable|required_with:oil_type|numeric|min:0|max:200',
+
             'gearbox_status' => "nullable|string|in:{$statusKeys}",
             'differential_status' => "nullable|string|in:{$statusKeys}",
             'hydraulic_status' => "nullable|string|in:{$statusKeys}",
@@ -454,6 +458,7 @@ class MaintenanceController extends Controller
             'brake_status' => "nullable|string|in:{$statusKeys}",
             'coolant_status' => "nullable|string|in:{$statusKeys}",
             'battery_status' => "nullable|string|in:{$statusKeys}",
+
             'filter_oil_changed' => 'sometimes|boolean',
             'filter_hydraulic_changed' => 'sometimes|boolean',
             'filter_air_changed' => 'sometimes|boolean',
@@ -463,7 +468,12 @@ class MaintenanceController extends Controller
 
             'linked_inspection_issue_ids' => 'nullable|array',
             'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
-        ]);
+        ];
+    }
+
+    public function recordMaintenance(Request $request, Truck $truck)
+    {
+        $data = $request->validate($this->maintenanceFieldRules());
 
         try {
             $maintenance = DB::transaction(function () use ($truck, $data, $request) {
@@ -540,6 +550,73 @@ class MaintenanceController extends Controller
         }
     }
 
+    /**
+     * Update an existing maintenance record. Only allowed while the
+     * record is unsigned (status !== approved). The model layer also
+     * enforces this — this controller check just yields a friendly
+     * flash message instead of a 500.
+     */
+    public function updateMaintenance(Request $request, Maintenance $maintenance)
+    {
+        if ($maintenance->isLocked()) {
+            return back()->with('error', 'Cette maintenance est déjà signée et ne peut plus être modifiée.');
+        }
+
+        $data = $request->validate($this->maintenanceFieldRules());
+
+        try {
+            DB::transaction(function () use ($maintenance, $data, $request) {
+                $editable = array_intersect_key($data, array_flip([
+                    'maintenance_date',
+                    'kilometers_at_maintenance',
+                    'notes',
+                    'oil_type',
+                    'oil_change_km',
+                    'next_oil_change_km',
+                    'oil_quantity_liters',
+                    'gearbox_status',
+                    'differential_status',
+                    'hydraulic_status',
+                    'greasing_status',
+                    'brake_status',
+                    'coolant_status',
+                    'battery_status',
+                    'filter_oil_changed',
+                    'filter_hydraulic_changed',
+                    'filter_air_changed',
+                    'filter_fuel_changed',
+                ]));
+
+                foreach (['filter_oil_changed', 'filter_hydraulic_changed', 'filter_air_changed', 'filter_fuel_changed'] as $flag) {
+                    $editable[$flag] = (bool) ($editable[$flag] ?? false);
+                }
+
+                $maintenance->update($editable);
+
+                $issueIds = $data['linked_inspection_issue_ids'] ?? [];
+                if (!empty($issueIds)) {
+                    InspectionChecklistIssue::query()
+                        ->whereIn('id', $issueIds)
+                        ->whereHas('inspectionChecklist', fn ($q) => $q->where('truck_id', $maintenance->truck_id))
+                        ->whereNull('resolved_at')
+                        ->update([
+                            'maintenance_id' => $maintenance->id,
+                            'resolved_at' => now(),
+                            'resolved_by' => auth()->id(),
+                            'resolution_notes' => $data['notes'] ?? null,
+                        ]);
+                }
+            });
+
+            $this->storeDashboardPhoto($request, $maintenance);
+
+            return back()->with('success', 'Maintenance mise à jour avec succès.');
+        } catch (\Throwable $e) {
+            Log::error('updateMaintenance failed', ['maintenance_id' => $maintenance->id, 'error' => $e->getMessage()]);
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
     private function storeDashboardPhoto(Request $request, Maintenance $maintenance): void
     {
         if (!$request->hasFile('dashboard_photo')) {
@@ -564,7 +641,7 @@ class MaintenanceController extends Controller
 
     public function history(Request $request)
     {
-        $query = Maintenance::with(['truck', 'profile', 'approvedBy:id,name'])
+        $query = Maintenance::with(['truck.maintenanceProfiles' => fn ($q) => $q->active()->where('maintenance_type', 'general'), 'profile', 'approvedBy:id,name'])
             ->orderByDesc('maintenance_date');
 
         if ($request->truck_id) {
@@ -602,6 +679,8 @@ class MaintenanceController extends Controller
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
             'status' => $m->status ?? Maintenance::STATUS_PENDING,
             'signed_by' => $m->electronic_signature_name ?? $m->approvedBy?->name,
+            'truck_interval_km' => $m->truck?->maintenanceProfiles?->firstWhere('maintenance_type', 'general')?->interval_km
+                ?? $m->profile?->interval_km,
             'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
         ]);
 
@@ -613,6 +692,7 @@ class MaintenanceController extends Controller
 
         $user = auth()->user();
         $canApprove = $user?->can('maintenance-approve') ?? false;
+        $canEdit = $user?->can('maintenance-create') ?? false;
 
         return Inertia::render('maintenance/History', [
             'maintenances' => $maintenances,
@@ -620,7 +700,11 @@ class MaintenanceController extends Controller
             'maintenanceTypes' => $maintenanceTypes,
             'filters' => $request->only(['truck_id', 'maintenance_type']),
             'canApprove' => $canApprove,
+            'canEdit' => $canEdit,
             'currentUserName' => $user?->name ?? '',
+            'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
         ]);
     }
 

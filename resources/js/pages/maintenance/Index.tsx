@@ -333,6 +333,7 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 name="maintenance_date"
                                 value={recordForm.data.maintenance_date}
                                 onChange={(e) => recordForm.setData('maintenance_date', e.target.value)}
+                                error={recordForm.errors.maintenance_date as string | undefined}
                                 required
                             />
                             <FormInput
@@ -341,6 +342,7 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 name="kilometers_at_maintenance"
                                 value={recordForm.data.kilometers_at_maintenance}
                                 onChange={(e) => onKmChange(e.target.value)}
+                                error={recordForm.errors.kilometers_at_maintenance as string | undefined}
                                 required
                             />
                         </div>
@@ -370,25 +372,28 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 options={oilTypeOpts}
                             />
                             <FormInput
-                                label="Quantité (litres)"
+                                label={`Quantité (litres)${recordForm.data.oil_type ? ' *' : ''}`}
                                 type="number"
                                 step="0.1"
                                 value={recordForm.data.oil_quantity_liters}
                                 onChange={(e) => recordForm.setData('oil_quantity_liters', e.target.value)}
+                                error={recordForm.errors.oil_quantity_liters as string | undefined}
                             />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <FormInput
-                                label="Vidange effectuée à (Km)"
+                                label={`Vidange effectuée à (Km)${recordForm.data.oil_type ? ' *' : ''}`}
                                 type="number"
                                 value={recordForm.data.oil_change_km}
                                 onChange={(e) => onOilChangeKmChange(e.target.value)}
+                                error={recordForm.errors.oil_change_km as string | undefined}
                             />
                             <FormInput
-                                label="Prochaine vidange à (Km) — calculée"
+                                label={`Prochaine vidange à (Km) — calculée${recordForm.data.oil_type ? ' *' : ''}`}
                                 type="number"
                                 value={recordForm.data.next_oil_change_km}
                                 onChange={(e) => recordForm.setData('next_oil_change_km', e.target.value)}
+                                error={recordForm.errors.next_oil_change_km as string | undefined}
                             />
                         </div>
                         <p className="text-xs text-[var(--color-text-muted)]">

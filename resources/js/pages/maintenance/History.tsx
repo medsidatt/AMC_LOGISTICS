@@ -1,21 +1,24 @@
-import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { useState, useMemo } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
 import FormInput from '@/components/ui/FormInput';
+import FormTextarea from '@/components/ui/FormTextarea';
 import Pagination from '@/components/ui/Pagination';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import CameraCapture from '@/components/inspection/CameraCapture';
 import {
     History as HistoryIcon,
     FileText,
     PenLine,
+    Pencil,
     Truck as TruckIcon,
     Droplet,
     CheckCircle2,
     Clock,
-    Filter as FilterIcon,
+    Camera,
 } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 
@@ -34,17 +37,23 @@ interface MaintenanceRecord {
     oil_type_label?: string | null;
     oil_change_km?: number | null;
     next_oil_change_km?: number | null;
+    oil_quantity_liters?: number | null;
     gearbox_status?: string | null;
     differential_status?: string | null;
     hydraulic_status?: string | null;
     greasing_status?: string | null;
+    brake_status?: string | null;
+    coolant_status?: string | null;
+    battery_status?: string | null;
     filter_oil_changed?: boolean;
     filter_hydraulic_changed?: boolean;
     filter_air_changed?: boolean;
     filter_fuel_changed?: boolean;
+    dashboard_photo_url?: string | null;
     status: MaintenanceStatus;
     signed_by: string | null;
     approved_at: string | null;
+    truck_interval_km?: number | null;
 }
 
 interface Props {
@@ -53,7 +62,11 @@ interface Props {
     maintenanceTypes: { value: string; label: string }[];
     filters: Record<string, string>;
     canApprove: boolean;
+    canEdit: boolean;
     currentUserName: string;
+    oilTypes: Record<string, string>;
+    oilIntervals: Record<string, number>;
+    componentStatuses: Record<string, string>;
 }
 
 const STATUS_META: Record<MaintenanceStatus, { label: string; pill: string; Icon: typeof Clock }> = {
@@ -97,8 +110,14 @@ function formatKm(value: number | null | undefined): string {
     return Number(value).toLocaleString('fr-FR') + ' km';
 }
 
-export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canApprove, currentUserName }: Props) {
+export default function MaintenanceHistory({
+    maintenances, trucks, maintenanceTypes, filters,
+    canApprove, canEdit, currentUserName,
+    oilTypes, oilIntervals, componentStatuses,
+}: Props) {
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
+    const statusOpts = Object.entries(componentStatuses ?? {}).map(([k, l]) => ({ value: k, label: l }));
+    const oilTypeOpts = useMemo(() => [{ value: '', label: '—' }, ...Object.entries(oilTypes ?? {}).map(([k, l]) => ({ value: k, label: l }))], [oilTypes]);
 
     const applyFilter = (key: string, value: string | number | null) => {
         const newFilters = { ...filters, [key]: value ? String(value) : '' };
@@ -106,33 +125,103 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
         router.get('/maintenance/history', newFilters, { preserveState: true, preserveScroll: true });
     };
 
+    /* ─── Sign modal ───────────────────────────────────────── */
     const [signTarget, setSignTarget] = useState<MaintenanceRecord | null>(null);
     const [signatureName, setSignatureName] = useState('');
-    const [submitting, setSubmitting] = useState(false);
+    const [signing, setSigning] = useState(false);
 
     const openSign = (m: MaintenanceRecord) => {
         setSignTarget(m);
         setSignatureName(currentUserName);
     };
-
-    const closeSign = () => {
-        setSignTarget(null);
-        setSignatureName('');
-    };
-
+    const closeSign = () => { setSignTarget(null); setSignatureName(''); };
     const submitSign = () => {
         if (!signTarget || !signatureName.trim()) return;
-        setSubmitting(true);
+        setSigning(true);
         router.post(`/maintenance/${signTarget.id}/approve`, { signature_name: signatureName.trim() }, {
             preserveScroll: true,
-            onFinish: () => {
-                setSubmitting(false);
-                closeSign();
-            },
+            onFinish: () => { setSigning(false); closeSign(); },
+        });
+    };
+
+    /* ─── Edit modal ───────────────────────────────────────── */
+    const [editTarget, setEditTarget] = useState<MaintenanceRecord | null>(null);
+    const editForm = useForm<Record<string, any>>({});
+
+    const openEdit = (m: MaintenanceRecord) => {
+        setEditTarget(m);
+        editForm.setData({
+            maintenance_date: m.maintenance_date.split('/').reverse().join('-'), // d/m/Y -> Y-m-d for <input type="date">
+            kilometers_at_maintenance: m.kilometers_at_maintenance != null ? String(m.kilometers_at_maintenance) : '',
+            notes: m.notes ?? '',
+            oil_type: m.oil_type ?? '',
+            oil_change_km: m.oil_change_km != null ? String(m.oil_change_km) : '',
+            next_oil_change_km: m.next_oil_change_km != null ? String(m.next_oil_change_km) : '',
+            oil_quantity_liters: m.oil_quantity_liters != null ? String(m.oil_quantity_liters) : '',
+            gearbox_status: m.gearbox_status ?? 'NORMAL',
+            differential_status: m.differential_status ?? 'NORMAL',
+            hydraulic_status: m.hydraulic_status ?? 'NORMAL',
+            greasing_status: m.greasing_status ?? 'NORMAL',
+            brake_status: m.brake_status ?? 'NORMAL',
+            coolant_status: m.coolant_status ?? 'NORMAL',
+            battery_status: m.battery_status ?? 'NORMAL',
+            filter_oil_changed: !!m.filter_oil_changed,
+            filter_hydraulic_changed: !!m.filter_hydraulic_changed,
+            filter_air_changed: !!m.filter_air_changed,
+            filter_fuel_changed: !!m.filter_fuel_changed,
+            dashboard_photo: null as File | null,
+            _truck_interval_km: m.truck_interval_km ?? null,
+        });
+    };
+
+    const closeEdit = () => { setEditTarget(null); editForm.reset(); editForm.clearErrors(); };
+
+    const computeNextOilKm = (oilType: string, baseKm: string | number, truckInterval?: number | null): string => {
+        const base = Number(baseKm);
+        if (!Number.isFinite(base) || base <= 0) return '';
+        const interval = truckInterval ?? oilIntervals?.[oilType] ?? 9000;
+        return String(Math.round(base + interval));
+    };
+
+    const onEditKmChange = (val: string) => {
+        editForm.setData((d) => {
+            const next: Record<string, any> = { ...d, kilometers_at_maintenance: val };
+            if (!d.oil_change_km || d.oil_change_km === d.kilometers_at_maintenance) {
+                next.oil_change_km = val;
+                next.next_oil_change_km = computeNextOilKm(d.oil_type, val, d._truck_interval_km);
+            }
+            return next;
+        });
+    };
+    const onEditOilTypeChange = (val: string | number | null) => {
+        const v = (val as string) ?? '';
+        editForm.setData((d) => ({
+            ...d,
+            oil_type: v,
+            next_oil_change_km: computeNextOilKm(v, d.oil_change_km || d.kilometers_at_maintenance, d._truck_interval_km),
+        }));
+    };
+    const onEditOilChangeKmChange = (val: string) => {
+        editForm.setData((d) => ({
+            ...d,
+            oil_change_km: val,
+            next_oil_change_km: computeNextOilKm(d.oil_type, val, d._truck_interval_km),
+        }));
+    };
+    const onEditDashboardCapture = (file: File) => { editForm.setData('dashboard_photo', file); };
+
+    const submitEdit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editTarget) return;
+        editForm.post(`/maintenance/${editTarget.id}/update`, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => closeEdit(),
         });
     };
 
     const rows = maintenances.data;
+    const oilFieldsRequired = !!editForm.data.oil_type;
 
     return (
         <AuthenticatedLayout title="Historique maintenance">
@@ -219,6 +308,11 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                             >
                                                 <FileText size={14} /> PDF
                                             </a>
+                                            {canEdit && m.status !== 'approved' && (
+                                                <Button size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={() => openEdit(m)}>
+                                                    Modifier
+                                                </Button>
+                                            )}
                                             {canApprove && m.status !== 'approved' && (
                                                 <Button size="sm" variant="primary" icon={<PenLine size={14} />} onClick={() => openSign(m)}>
                                                     Signer
@@ -266,7 +360,7 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                     </div>
                                 )}
                                 <div className="col-span-2">
-                                    <div className="text-xs text-[var(--color-text-muted)] flex items-center gap-1"><FilterIcon size={11} /> Filtres</div>
+                                    <div className="text-xs text-[var(--color-text-muted)]">Filtres</div>
                                     <div className="mt-1"><FiltersChips m={m} /></div>
                                 </div>
                                 {m.signed_by && (
@@ -286,6 +380,11 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                 >
                                     <FileText size={14} /> PDF
                                 </a>
+                                {canEdit && m.status !== 'approved' && (
+                                    <Button size="sm" variant="secondary" icon={<Pencil size={14} />} onClick={() => openEdit(m)}>
+                                        Modifier
+                                    </Button>
+                                )}
                                 {canApprove && m.status !== 'approved' && (
                                     <Button size="sm" variant="primary" icon={<PenLine size={14} />} onClick={() => openSign(m)}>
                                         Signer
@@ -301,6 +400,7 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                 </div>
             </Card>
 
+            {/* Sign modal */}
             <Modal open={signTarget !== null} onClose={closeSign} title="Signer la maintenance" size="md">
                 <div className="space-y-4">
                     <div className="rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border)] p-3 text-sm">
@@ -331,12 +431,130 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                         </div>
                     )}
                     <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button variant="ghost" onClick={closeSign} disabled={submitting}>Annuler</Button>
-                        <Button variant="primary" onClick={submitSign} loading={submitting} disabled={!signatureName.trim()} icon={<PenLine size={14} />}>
+                        <Button variant="ghost" onClick={closeSign} disabled={signing}>Annuler</Button>
+                        <Button variant="primary" onClick={submitSign} loading={signing} disabled={!signatureName.trim()} icon={<PenLine size={14} />}>
                             Signer électroniquement
                         </Button>
                     </div>
                 </div>
+            </Modal>
+
+            {/* Edit modal */}
+            <Modal open={editTarget !== null} onClose={closeEdit} title={`Modifier la maintenance — ${editTarget?.truck}`} size="xl">
+                <form onSubmit={submitEdit} className="space-y-4">
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">Informations générales</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormInput
+                                label="Date"
+                                type="date"
+                                value={editForm.data.maintenance_date}
+                                onChange={(e) => editForm.setData('maintenance_date', e.target.value)}
+                                error={editForm.errors.maintenance_date as string}
+                                required
+                            />
+                            <FormInput
+                                label="Distance actuelle (Km au compteur)"
+                                type="number"
+                                value={editForm.data.kilometers_at_maintenance}
+                                onChange={(e) => onEditKmChange(e.target.value)}
+                                error={editForm.errors.kilometers_at_maintenance as string}
+                                required
+                            />
+                        </div>
+                        {editForm.data._truck_interval_km != null && (
+                            <p className="text-xs text-[var(--color-text-muted)] -mt-2">
+                                Intervalle du camion (BDD) :
+                                <b> {Number(editForm.data._truck_interval_km).toLocaleString('fr-FR')} km</b>.
+                                Prochaine vidange = distance actuelle + intervalle.
+                            </p>
+                        )}
+                        <div>
+                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1 flex items-center gap-1">
+                                <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
+                            </label>
+                            <CameraCapture
+                                onCapture={onEditDashboardCapture}
+                                existingPhotoUrl={editTarget?.dashboard_photo_url ?? null}
+                                error={editForm.errors.dashboard_photo as string | null | undefined}
+                            />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">Huile moteur</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormSelect
+                                label="Type d'huile"
+                                value={editForm.data.oil_type}
+                                onChange={onEditOilTypeChange}
+                                options={oilTypeOpts}
+                            />
+                            <FormInput
+                                label={`Quantité (litres)${oilFieldsRequired ? ' *' : ''}`}
+                                type="number"
+                                step="0.1"
+                                value={editForm.data.oil_quantity_liters}
+                                onChange={(e) => editForm.setData('oil_quantity_liters', e.target.value)}
+                                error={editForm.errors.oil_quantity_liters as string}
+                            />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <FormInput
+                                label={`Vidange effectuée à (Km)${oilFieldsRequired ? ' *' : ''}`}
+                                type="number"
+                                value={editForm.data.oil_change_km}
+                                onChange={(e) => onEditOilChangeKmChange(e.target.value)}
+                                error={editForm.errors.oil_change_km as string}
+                            />
+                            <FormInput
+                                label={`Prochaine vidange à (Km) — calculée${oilFieldsRequired ? ' *' : ''}`}
+                                type="number"
+                                value={editForm.data.next_oil_change_km}
+                                onChange={(e) => editForm.setData('next_oil_change_km', e.target.value)}
+                                error={editForm.errors.next_oil_change_km as string}
+                            />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
+                        <legend className="text-sm font-semibold px-1">État des organes mécaniques</legend>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <FormSelect label="Boîte de vitesse" value={editForm.data.gearbox_status} onChange={(v) => editForm.setData('gearbox_status', v)} options={statusOpts} />
+                            <FormSelect label="Différentiel (pont)" value={editForm.data.differential_status} onChange={(v) => editForm.setData('differential_status', v)} options={statusOpts} />
+                            <FormSelect label="Circuit hydraulique" value={editForm.data.hydraulic_status} onChange={(v) => editForm.setData('hydraulic_status', v)} options={statusOpts} />
+                            <FormSelect label="Graissage" value={editForm.data.greasing_status} onChange={(v) => editForm.setData('greasing_status', v)} options={statusOpts} />
+                            <FormSelect label="Freins" value={editForm.data.brake_status} onChange={(v) => editForm.setData('brake_status', v)} options={statusOpts} />
+                            <FormSelect label="Liquide de refroidissement" value={editForm.data.coolant_status} onChange={(v) => editForm.setData('coolant_status', v)} options={statusOpts} />
+                            <FormSelect label="Batterie" value={editForm.data.battery_status} onChange={(v) => editForm.setData('battery_status', v)} options={statusOpts} />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3">
+                        <legend className="text-sm font-semibold px-1">Filtres changés</legend>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_oil_changed} onChange={(e) => editForm.setData('filter_oil_changed', e.target.checked)} /> Huile</label>
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_hydraulic_changed} onChange={(e) => editForm.setData('filter_hydraulic_changed', e.target.checked)} /> Hydraulique</label>
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_air_changed} onChange={(e) => editForm.setData('filter_air_changed', e.target.checked)} /> Air</label>
+                            <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_fuel_changed} onChange={(e) => editForm.setData('filter_fuel_changed', e.target.checked)} /> Carburant</label>
+                        </div>
+                    </fieldset>
+
+                    <FormTextarea
+                        label="Notes / Observations"
+                        value={editForm.data.notes ?? ''}
+                        onChange={(e) => editForm.setData('notes', e.target.value)}
+                        error={editForm.errors.notes as string}
+                        rows={2}
+                    />
+
+                    <div className="flex justify-end gap-2 mt-2">
+                        <Button variant="secondary" type="button" onClick={closeEdit}>Annuler</Button>
+                        <Button type="submit" loading={editForm.processing} icon={<Pencil size={14} />}>
+                            Enregistrer les modifications
+                        </Button>
+                    </div>
+                </form>
             </Modal>
         </AuthenticatedLayout>
     );
