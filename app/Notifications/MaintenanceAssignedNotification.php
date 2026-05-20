@@ -26,7 +26,7 @@ class MaintenanceAssignedNotification extends Notification
     {
         $m = $this->maintenance->loadMissing(['truck:id,matricule', 'assignedTo:id,name', 'assignedBy:id,name']);
         $matricule = $m->truck?->matricule ?? '—';
-        $assignee = $m->assignedTo?->name ?? '—';
+        $assignee = $m->assigned_to_name ?? $m->assignedTo?->name ?? '—';
         $assigner = $m->assignedBy?->name ?? '—';
         $date = $m->maintenance_date?->format('d/m/Y') ?? '—';
 
@@ -50,7 +50,7 @@ class MaintenanceAssignedNotification extends Notification
             'truck_id'         => $m->truck_id,
             'truck_matricule'  => $m->truck?->matricule,
             'assignee_id'      => $m->assigned_to_id,
-            'assignee_name'    => $m->assignedTo?->name,
+            'assignee_name'    => $m->assigned_to_name ?? $m->assignedTo?->name,
             'assigner_id'      => $m->assigned_by_id,
             'assigner_name'    => $m->assignedBy?->name,
             'maintenance_date' => $m->maintenance_date?->format('Y-m-d'),
