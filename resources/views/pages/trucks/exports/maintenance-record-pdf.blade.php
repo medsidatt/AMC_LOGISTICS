@@ -75,10 +75,12 @@
         .signature-name { font-family: 'Dancing Script', cursive; font-size: 32px; color: #111827; line-height: 1; }
         .signature-meta { margin-top: 6px; font-size: 9px; color: #6b7280; }
 
+        /* Body e-sign line (flows with content, not fixed) */
+        .body-esign { margin-top: 14px; padding-top: 8px; border-top: 1px dashed #b91c1c; text-align: center; font-style: italic; font-size: 9px; color: #4b5563; }
+
         /* Footer */
         .footer { position: fixed; bottom: 6mm; left: 12mm; right: 12mm; font-size: 8px; color: #6b7280; }
         .footer .accent { height: 1px; background: #b91c1c; margin-bottom: 4px; }
-        .footer .esign { text-align: center; font-style: italic; font-size: 8px; color: #6b7280; margin-bottom: 3px; }
         .footer table { width: 100%; }
         .footer td { vertical-align: top; padding: 0 4px; }
         .footer .col1 { width: 34%; }
@@ -247,18 +249,20 @@
     </div>
 @endif
 
-{{-- Footer --}}
+{{-- E-signature line at the bottom of the body (flowing content, not the fixed footer) --}}
+@if ($isApproved)
+    <div class="body-esign">
+        Ce document est signé électroniquement par
+        <b>{{ $signerName }}</b>
+        le <b>{{ $signedAt }}</b>.
+    </div>
+@else
+    <div class="body-esign">Ce document est signé électroniquement lorsqu'il est approuvé.</div>
+@endif
+
+{{-- Footer (company info only) --}}
 <div class="footer">
     <div class="accent"></div>
-    @if ($isApproved)
-        <div class="esign">
-            Ce document est signé électroniquement par
-            <b>{{ $signerName }}</b>
-            le <b>{{ $signedAt }}</b>.
-        </div>
-    @else
-        <div class="esign">Ce document est signé électroniquement lorsqu'il est approuvé.</div>
-    @endif
     <table>
         <tr>
             <td class="col1"><b style="color:#b91c1c;">AMC Travaux SARL</b><br>BP 7495 — NQT 304</td>
