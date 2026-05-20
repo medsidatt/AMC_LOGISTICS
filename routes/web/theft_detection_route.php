@@ -41,6 +41,9 @@ Route::middleware(['auth', 'role:Admin|Super Admin'])->group(function () {
     Route::post('/logistics/theft-incidents/{theftIncident}/status', [TheftIncidentController::class, 'update'])
         ->name('theft-incidents.update');
 
+    Route::post('/logistics/theft-incidents/{theftIncident}/create-ticket', [TheftIncidentController::class, 'createTicket'])
+        ->name('theft-incidents.create-ticket');
+
     Route::prefix('logistics/places')->name('places.')->group(function () {
         Route::get('/create', [PlaceController::class, 'create'])->name('create');
         Route::post('/', [PlaceController::class, 'store'])->name('store');
