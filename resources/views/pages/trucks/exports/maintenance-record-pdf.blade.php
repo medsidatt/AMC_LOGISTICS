@@ -124,9 +124,19 @@
     <tr>
         <td class="label">Huile utilisée</td>
         <td>{{ $maintenance->oil_type ? (\App\Models\Maintenance::OIL_TYPES[$maintenance->oil_type] ?? $maintenance->oil_type) : '—' }}</td>
-        <td class="label">Prochain changement (km)</td>
+        <td class="label">Quantité (L)</td>
+        <td>{{ $maintenance->oil_quantity_liters ? number_format((float) $maintenance->oil_quantity_liters, 2, ',', ' ') . ' L' : '—' }}</td>
+    </tr>
+    <tr>
+        <td class="label">Vidange effectuée à</td>
+        <td>{{ $maintenance->oil_change_km ? number_format((float) $maintenance->oil_change_km, 0, ',', ' ') . ' km' : '—' }}</td>
+        <td class="label">Prochaine vidange à</td>
         <td>{{ $maintenance->next_oil_change_km ? number_format((float) $maintenance->next_oil_change_km, 0, ',', ' ') . ' km' : '—' }}</td>
     </tr>
+</table>
+
+<div class="section-title">État des organes mécaniques</div>
+<table class="info">
     <tr>
         <td class="label">Boîte de vitesse</td>
         <td>{{ $maintenance->gearbox_status ?: '—' }}</td>
@@ -139,6 +149,16 @@
         <td class="label">Graissage</td>
         <td>{{ $maintenance->greasing_status ?: '—' }}</td>
     </tr>
+    <tr>
+        <td class="label">Freins</td>
+        <td>{{ $maintenance->brake_status ?: '—' }}</td>
+        <td class="label">Liquide de refroidissement</td>
+        <td>{{ $maintenance->coolant_status ?: '—' }}</td>
+    </tr>
+    <tr>
+        <td class="label">Batterie</td>
+        <td colspan="3">{{ $maintenance->battery_status ?: '—' }}</td>
+    </tr>
 </table>
 
 <div class="section-title">Filtres remplacés</div>
@@ -150,6 +170,20 @@
         <td>Carburant : <span class="{{ $maintenance->filter_fuel_changed ? 'check-ok' : 'check-no' }}">{{ $maintenance->filter_fuel_changed ? '✓ Oui' : '— Non' }}</span></td>
     </tr>
 </table>
+
+@php
+    $dashboardPhotoPath = $maintenance->dashboard_photo_path
+        ? storage_path('app/public/' . $maintenance->dashboard_photo_path)
+        : null;
+    $dashboardPhotoExists = $dashboardPhotoPath && file_exists($dashboardPhotoPath);
+@endphp
+
+@if ($dashboardPhotoExists)
+    <div class="section-title">Photo du tableau de bord (preuve du kilométrage)</div>
+    <div style="text-align:center; padding:6px;">
+        <img src="{{ $dashboardPhotoPath }}" alt="Tableau de bord" style="max-width:60%; max-height:180px; border:1px solid #ccc;">
+    </div>
+@endif
 
 <div class="section-title">Notes</div>
 <div class="notes-block">{{ $maintenance->notes ?: '—' }}</div>

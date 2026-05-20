@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -366,6 +367,8 @@ class MaintenanceController extends Controller
             'counts' => $counts,
             'maintenanceTypes' => $maintenanceTypes,
             'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
         ]);
     }
 
@@ -432,6 +435,7 @@ class MaintenanceController extends Controller
     public function recordMaintenance(Request $request, Truck $truck)
     {
         $oilTypeKeys = implode(',', array_keys(Maintenance::OIL_TYPES));
+        $statusKeys = implode(',', array_keys(Maintenance::COMPONENT_STATUSES));
 
         $data = $request->validate([
             'maintenance_date' => 'required|date',
@@ -441,14 +445,20 @@ class MaintenanceController extends Controller
             'oil_type' => "nullable|string|in:{$oilTypeKeys}",
             'oil_change_km' => 'nullable|numeric|min:0',
             'next_oil_change_km' => 'nullable|numeric|min:0',
-            'gearbox_status' => 'nullable|string|max:64',
-            'differential_status' => 'nullable|string|max:64',
-            'hydraulic_status' => 'nullable|string|max:64',
-            'greasing_status' => 'nullable|string|max:64',
+            'oil_quantity_liters' => 'nullable|numeric|min:0|max:200',
+            'gearbox_status' => "nullable|string|in:{$statusKeys}",
+            'differential_status' => "nullable|string|in:{$statusKeys}",
+            'hydraulic_status' => "nullable|string|in:{$statusKeys}",
+            'greasing_status' => "nullable|string|in:{$statusKeys}",
+            'brake_status' => "nullable|string|in:{$statusKeys}",
+            'coolant_status' => "nullable|string|in:{$statusKeys}",
+            'battery_status' => "nullable|string|in:{$statusKeys}",
             'filter_oil_changed' => 'sometimes|boolean',
             'filter_hydraulic_changed' => 'sometimes|boolean',
             'filter_air_changed' => 'sometimes|boolean',
             'filter_fuel_changed' => 'sometimes|boolean',
+
+            'dashboard_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
 
             'linked_inspection_issue_ids' => 'nullable|array',
             'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
@@ -472,10 +482,14 @@ class MaintenanceController extends Controller
                     'oil_type',
                     'oil_change_km',
                     'next_oil_change_km',
+                    'oil_quantity_liters',
                     'gearbox_status',
                     'differential_status',
                     'hydraulic_status',
                     'greasing_status',
+                    'brake_status',
+                    'coolant_status',
+                    'battery_status',
                     'filter_oil_changed',
                     'filter_hydraulic_changed',
                     'filter_air_changed',
@@ -511,6 +525,8 @@ class MaintenanceController extends Controller
                 return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
             }
 
+            $this->storeDashboardPhoto($request, $maintenance);
+
             LogisticsAlert::where('truck_id', $truck->id)
                 ->where('type', 'due_engine')
                 ->whereNull('resolved_at')
@@ -521,6 +537,28 @@ class MaintenanceController extends Controller
             Log::error('recordMaintenance failed', ['truck_id' => $truck->id, 'error' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
+    }
+
+    private function storeDashboardPhoto(Request $request, Maintenance $maintenance): void
+    {
+        if (!$request->hasFile('dashboard_photo')) {
+            return;
+        }
+
+        $file = $request->file('dashboard_photo');
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $name = sprintf('%d-%s.%s', $maintenance->id, now()->format('YmdHis'), $ext);
+
+        if ($maintenance->dashboard_photo_path && Storage::disk('public')->exists($maintenance->dashboard_photo_path)) {
+            Storage::disk('public')->delete($maintenance->dashboard_photo_path);
+        }
+
+        $path = $file->storeAs('maintenance-dashboards', $name, 'public');
+
+        $maintenance->update([
+            'dashboard_photo_path' => $path,
+            'dashboard_photo_filename' => $file->getClientOriginalName(),
+        ]);
     }
 
     public function history(Request $request)
@@ -552,6 +590,11 @@ class MaintenanceController extends Controller
             'differential_status' => $m->differential_status,
             'hydraulic_status' => $m->hydraulic_status,
             'greasing_status' => $m->greasing_status,
+            'brake_status' => $m->brake_status,
+            'coolant_status' => $m->coolant_status,
+            'battery_status' => $m->battery_status,
+            'oil_quantity_liters' => $m->oil_quantity_liters,
+            'dashboard_photo_url' => $m->dashboard_photo_path ? Storage::disk('public')->url($m->dashboard_photo_path) : null,
             'filter_oil_changed' => (bool) $m->filter_oil_changed,
             'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
             'filter_air_changed' => (bool) $m->filter_air_changed,
