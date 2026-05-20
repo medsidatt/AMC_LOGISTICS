@@ -134,8 +134,8 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
     Route::post('/rules', [MaintenanceController::class, 'storeRule'])->name('rules.store');
     Route::post('/rules/{profile}/deactivate', [MaintenanceController::class, 'deactivateRule'])->name('rules.deactivate');
     Route::post('/{truck}/record', [MaintenanceController::class, 'recordMaintenance'])->name('record');
+    Route::post('/{maintenance}/update', [MaintenanceController::class, 'updateMaintenance'])->name('update');
     Route::get('/history', [MaintenanceController::class, 'history'])->name('history');
-    Route::post('/{maintenance}/assign', [MaintenanceController::class, 'assign'])->name('assign');
     Route::post('/{maintenance}/approve', [MaintenanceController::class, 'approve'])->name('approve');
     Route::get('/{maintenance}/pdf', [MaintenanceController::class, 'exportRecordPdf'])->name('record-pdf');
 });

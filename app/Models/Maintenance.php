@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\User;
+use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +22,7 @@ class Maintenance extends Model
         'filter_fuel_changed' => 'boolean',
         'oil_change_km' => 'decimal:2',
         'next_oil_change_km' => 'decimal:2',
+        'oil_quantity_liters' => 'decimal:2',
         'kilometers_at_maintenance' => 'decimal:2',
         'trigger_km' => 'decimal:2',
         'assigned_at' => 'datetime',
@@ -46,6 +47,55 @@ class Maintenance extends Model
         'shell_rimula_r1_50' => 'Shell Rimula R1-50',
         'other' => 'Autre',
     ];
+
+    public const OIL_INTERVAL_KM = [
+        'shell_rimula_r4_15w40' => 20000,
+        'shell_rimula_r3_15w40' => 15000,
+        'shell_rimula_r2_extra_15w40' => 12000,
+        'shell_rimula_r2_50' => 10000,
+        'shell_rimula_r1_50' => 8000,
+        'other' => 10000,
+    ];
+
+    public const COMPONENT_STATUSES = [
+        'NORMAL' => 'Normal',
+        'À VÉRIFIER' => 'À vérifier',
+        'À CHANGER' => 'À changer',
+        'NETTOYÉ' => 'Nettoyé',
+        'GRAISSÉ' => 'Graissé',
+        'COMPLÉTÉ' => 'Complété',
+        'REMPLACÉ' => 'Remplacé',
+    ];
+
+    /**
+     * Once a maintenance is signed (status = approved) the record is sealed:
+     * no further updates or deletes are allowed via Eloquent. The transition
+     * INTO approved (signing) is permitted because the original status at
+     * that moment is still pending/assigned/completed.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $maintenance) {
+            if ($maintenance->getOriginal('status') === self::STATUS_APPROVED) {
+                throw new \DomainException(
+                    'Cette maintenance est déjà signée électroniquement et ne peut plus être modifiée.'
+                );
+            }
+        });
+
+        static::deleting(function (self $maintenance) {
+            if ($maintenance->status === self::STATUS_APPROVED) {
+                throw new \DomainException(
+                    'Cette maintenance est déjà signée électroniquement et ne peut plus être supprimée.'
+                );
+            }
+        });
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
+    }
 
     public function truck(): BelongsTo
     {

@@ -9,7 +9,8 @@ use App\Models\Maintenance;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
-use App\Models\User;
+use App\Models\Auth\User;
+use App\Notifications\MaintenanceSignedNotification;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -17,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -33,11 +36,10 @@ class MaintenanceController extends Controller
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
             'only' => [
-                'create', 'store', 'recordMaintenance', 'bulkStore',
+                'create', 'store', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
             ],
         ]);
-        $this->middleware('permission:maintenance-assign', ['only' => ['assign']]);
         $this->middleware('permission:maintenance-approve', ['only' => ['approve']]);
         $this->middleware('permission:maintenance-rule-create', ['only' => ['storeRule']]);
         $this->middleware('permission:maintenance-rule-deactivate', ['only' => ['deactivateRule']]);
@@ -366,6 +368,8 @@ class MaintenanceController extends Controller
             'counts' => $counts,
             'maintenanceTypes' => $maintenanceTypes,
             'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
         ]);
     }
 
@@ -429,30 +433,47 @@ class MaintenanceController extends Controller
         return redirect()->back()->with('success', 'Règle désactivée avec succès.');
     }
 
-    public function recordMaintenance(Request $request, Truck $truck)
+    /**
+     * Shared validation rules for record + update.
+     */
+    private function maintenanceFieldRules(): array
     {
         $oilTypeKeys = implode(',', array_keys(Maintenance::OIL_TYPES));
+        $statusKeys = implode(',', array_keys(Maintenance::COMPONENT_STATUSES));
 
-        $data = $request->validate([
+        return [
             'maintenance_date' => 'required|date',
-            'notes' => 'nullable|string',
-            'kilometers_at_maintenance' => 'nullable|numeric',
+            'kilometers_at_maintenance' => 'required|numeric|min:0',
+            'notes' => 'nullable|string|max:5000',
 
             'oil_type' => "nullable|string|in:{$oilTypeKeys}",
-            'oil_change_km' => 'nullable|numeric|min:0',
-            'next_oil_change_km' => 'nullable|numeric|min:0',
-            'gearbox_status' => 'nullable|string|max:64',
-            'differential_status' => 'nullable|string|max:64',
-            'hydraulic_status' => 'nullable|string|max:64',
-            'greasing_status' => 'nullable|string|max:64',
+            'oil_change_km' => 'nullable|required_with:oil_type|numeric|min:0',
+            'next_oil_change_km' => 'nullable|required_with:oil_type|numeric|min:0|gt:oil_change_km',
+            'oil_quantity_liters' => 'nullable|required_with:oil_type|numeric|min:0|max:200',
+
+            'gearbox_status' => "nullable|string|in:{$statusKeys}",
+            'differential_status' => "nullable|string|in:{$statusKeys}",
+            'hydraulic_status' => "nullable|string|in:{$statusKeys}",
+            'greasing_status' => "nullable|string|in:{$statusKeys}",
+            'brake_status' => "nullable|string|in:{$statusKeys}",
+            'coolant_status' => "nullable|string|in:{$statusKeys}",
+            'battery_status' => "nullable|string|in:{$statusKeys}",
+
             'filter_oil_changed' => 'sometimes|boolean',
             'filter_hydraulic_changed' => 'sometimes|boolean',
             'filter_air_changed' => 'sometimes|boolean',
             'filter_fuel_changed' => 'sometimes|boolean',
 
+            'dashboard_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+
             'linked_inspection_issue_ids' => 'nullable|array',
             'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
-        ]);
+        ];
+    }
+
+    public function recordMaintenance(Request $request, Truck $truck)
+    {
+        $data = $request->validate($this->maintenanceFieldRules());
 
         try {
             $maintenance = DB::transaction(function () use ($truck, $data, $request) {
@@ -472,10 +493,14 @@ class MaintenanceController extends Controller
                     'oil_type',
                     'oil_change_km',
                     'next_oil_change_km',
+                    'oil_quantity_liters',
                     'gearbox_status',
                     'differential_status',
                     'hydraulic_status',
                     'greasing_status',
+                    'brake_status',
+                    'coolant_status',
+                    'battery_status',
                     'filter_oil_changed',
                     'filter_hydraulic_changed',
                     'filter_air_changed',
@@ -511,6 +536,8 @@ class MaintenanceController extends Controller
                 return redirect()->back()->with('error', 'Une maintenance existe déjà pour cette date et ce type.');
             }
 
+            $this->storeDashboardPhoto($request, $maintenance);
+
             LogisticsAlert::where('truck_id', $truck->id)
                 ->where('type', 'due_engine')
                 ->whereNull('resolved_at')
@@ -523,9 +550,98 @@ class MaintenanceController extends Controller
         }
     }
 
+    /**
+     * Update an existing maintenance record. Only allowed while the
+     * record is unsigned (status !== approved). The model layer also
+     * enforces this — this controller check just yields a friendly
+     * flash message instead of a 500.
+     */
+    public function updateMaintenance(Request $request, Maintenance $maintenance)
+    {
+        if ($maintenance->isLocked()) {
+            return back()->with('error', 'Cette maintenance est déjà signée et ne peut plus être modifiée.');
+        }
+
+        $data = $request->validate($this->maintenanceFieldRules());
+
+        try {
+            DB::transaction(function () use ($maintenance, $data, $request) {
+                $editable = array_intersect_key($data, array_flip([
+                    'maintenance_date',
+                    'kilometers_at_maintenance',
+                    'notes',
+                    'oil_type',
+                    'oil_change_km',
+                    'next_oil_change_km',
+                    'oil_quantity_liters',
+                    'gearbox_status',
+                    'differential_status',
+                    'hydraulic_status',
+                    'greasing_status',
+                    'brake_status',
+                    'coolant_status',
+                    'battery_status',
+                    'filter_oil_changed',
+                    'filter_hydraulic_changed',
+                    'filter_air_changed',
+                    'filter_fuel_changed',
+                ]));
+
+                foreach (['filter_oil_changed', 'filter_hydraulic_changed', 'filter_air_changed', 'filter_fuel_changed'] as $flag) {
+                    $editable[$flag] = (bool) ($editable[$flag] ?? false);
+                }
+
+                $maintenance->update($editable);
+
+                $issueIds = $data['linked_inspection_issue_ids'] ?? [];
+                if (!empty($issueIds)) {
+                    InspectionChecklistIssue::query()
+                        ->whereIn('id', $issueIds)
+                        ->whereHas('inspectionChecklist', fn ($q) => $q->where('truck_id', $maintenance->truck_id))
+                        ->whereNull('resolved_at')
+                        ->update([
+                            'maintenance_id' => $maintenance->id,
+                            'resolved_at' => now(),
+                            'resolved_by' => auth()->id(),
+                            'resolution_notes' => $data['notes'] ?? null,
+                        ]);
+                }
+            });
+
+            $this->storeDashboardPhoto($request, $maintenance);
+
+            return back()->with('success', 'Maintenance mise à jour avec succès.');
+        } catch (\Throwable $e) {
+            Log::error('updateMaintenance failed', ['maintenance_id' => $maintenance->id, 'error' => $e->getMessage()]);
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeDashboardPhoto(Request $request, Maintenance $maintenance): void
+    {
+        if (!$request->hasFile('dashboard_photo')) {
+            return;
+        }
+
+        $file = $request->file('dashboard_photo');
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $name = sprintf('%d-%s.%s', $maintenance->id, now()->format('YmdHis'), $ext);
+
+        if ($maintenance->dashboard_photo_path && Storage::disk('public')->exists($maintenance->dashboard_photo_path)) {
+            Storage::disk('public')->delete($maintenance->dashboard_photo_path);
+        }
+
+        $path = $file->storeAs('maintenance-dashboards', $name, 'public');
+
+        $maintenance->update([
+            'dashboard_photo_path' => $path,
+            'dashboard_photo_filename' => $file->getClientOriginalName(),
+        ]);
+    }
+
     public function history(Request $request)
     {
-        $query = Maintenance::with(['truck', 'profile', 'assignedTo:id,name', 'assignedBy:id,name', 'approvedBy:id,name'])
+        $query = Maintenance::with(['truck.maintenanceProfiles' => fn ($q) => $q->active()->where('maintenance_type', 'general'), 'profile', 'approvedBy:id,name'])
             ->orderByDesc('maintenance_date');
 
         if ($request->truck_id) {
@@ -552,15 +668,19 @@ class MaintenanceController extends Controller
             'differential_status' => $m->differential_status,
             'hydraulic_status' => $m->hydraulic_status,
             'greasing_status' => $m->greasing_status,
+            'brake_status' => $m->brake_status,
+            'coolant_status' => $m->coolant_status,
+            'battery_status' => $m->battery_status,
+            'oil_quantity_liters' => $m->oil_quantity_liters,
+            'dashboard_photo_url' => $m->dashboard_photo_path ? Storage::disk('public')->url($m->dashboard_photo_path) : null,
             'filter_oil_changed' => (bool) $m->filter_oil_changed,
             'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
             'status' => $m->status ?? Maintenance::STATUS_PENDING,
-            'assigned_to' => $m->assignedTo?->name,
-            'assigned_by' => $m->assignedBy?->name,
-            'assigned_at' => $m->assigned_at?->format('d/m/Y H:i'),
-            'approved_by' => $m->approvedBy?->name,
+            'signed_by' => $m->electronic_signature_name ?? $m->approvedBy?->name,
+            'truck_interval_km' => $m->truck?->maintenanceProfiles?->firstWhere('maintenance_type', 'general')?->interval_km
+                ?? $m->profile?->interval_km,
             'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
         ]);
 
@@ -571,59 +691,91 @@ class MaintenanceController extends Controller
         ])->values();
 
         $user = auth()->user();
-        $canAssign = $user?->can('maintenance-assign') ?? false;
         $canApprove = $user?->can('maintenance-approve') ?? false;
-
-        $assignableUsers = ($canAssign)
-            ? User::orderBy('name')->get(['id', 'name'])->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-            ])
-            : collect();
+        $canEdit = $user?->can('maintenance-create') ?? false;
 
         return Inertia::render('maintenance/History', [
             'maintenances' => $maintenances,
             'trucks' => $trucks,
             'maintenanceTypes' => $maintenanceTypes,
             'filters' => $request->only(['truck_id', 'maintenance_type']),
-            'canAssign' => $canAssign,
             'canApprove' => $canApprove,
-            'assignableUsers' => $assignableUsers,
+            'canEdit' => $canEdit,
+            'currentUserName' => $user?->name ?? '',
+            'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
         ]);
     }
 
-    public function assign(Request $request, Maintenance $maintenance)
-    {
-        $data = $request->validate([
-            'assigned_to_id' => 'required|exists:users,id',
-        ]);
-
-        $maintenance->update([
-            'assigned_to_id' => $data['assigned_to_id'],
-            'assigned_by_id' => auth()->id(),
-            'assigned_at'    => now(),
-            'status'         => Maintenance::STATUS_ASSIGNED,
-        ]);
-
-        return back()->with('success', 'Maintenance assignée.');
-    }
-
-    public function approve(Maintenance $maintenance)
+    public function approve(Request $request, Maintenance $maintenance)
     {
         if ($maintenance->status === Maintenance::STATUS_APPROVED) {
-            return back()->with('error', 'Cette maintenance est déjà approuvée.');
+            return back()->with('error', 'Cette maintenance est déjà signée.');
         }
+
+        $data = $request->validate([
+            'signature_name' => 'required|string|max:120',
+        ]);
 
         $user = auth()->user();
 
         $maintenance->update([
             'approved_by_id'            => $user->id,
             'approved_at'               => now(),
-            'electronic_signature_name' => $user->name,
+            'electronic_signature_name' => trim($data['signature_name']),
             'status'                    => Maintenance::STATUS_APPROVED,
         ]);
 
-        return back()->with('success', 'Maintenance approuvée et signée électroniquement.');
+        $this->notifyMaintenanceSigned($maintenance);
+
+        return back()->with('success', 'Maintenance signée électroniquement.');
+    }
+
+    /**
+     * Notify HSE Agents and admins when a maintenance is signed.
+     * The signer is excluded so they don't notify themselves.
+     */
+    private function notifyMaintenanceSigned(Maintenance $maintenance): void
+    {
+        try {
+            $recipients = User::query()
+                ->where('id', '!=', $maintenance->approved_by_id)
+                ->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
+                ->get();
+
+            if ($recipients->isEmpty()) {
+                Log::info('No recipients for maintenance signed notification', [
+                    'maintenance_id' => $maintenance->id,
+                ]);
+                return;
+            }
+
+            Notification::send($recipients, new MaintenanceSignedNotification($maintenance, ['database']));
+
+            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
+            if ($mailRecipients->isNotEmpty()) {
+                try {
+                    Notification::send($mailRecipients, new MaintenanceSignedNotification($maintenance, ['mail']));
+                } catch (\Throwable $e) {
+                    Log::error('MaintenanceSignedNotification mail failed', [
+                        'maintenance_id' => $maintenance->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            Log::info('Maintenance signed notification dispatched', [
+                'maintenance_id' => $maintenance->id,
+                'recipients_count' => $recipients->count(),
+                'mail_recipients_count' => $mailRecipients->count(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Maintenance signed notification failed', [
+                'maintenance_id' => $maintenance->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function exportRecordPdf(Maintenance $maintenance)
@@ -631,8 +783,6 @@ class MaintenanceController extends Controller
         $maintenance->load([
             'truck:id,matricule',
             'profile',
-            'assignedTo:id,name',
-            'assignedBy:id,name',
             'approvedBy:id,name',
         ]);
 
