@@ -34,7 +34,10 @@ return [
     'azure' => [
         'client_id' => env('SHAREPOINT_CLIENT_ID'),
         'client_secret' => env('SHAREPOINT_CLIENT_SECRET'),
-        'tenant' => env('SHAREPOINT_TENANT_ID'),
+        // OAuth tenant is separate from SharePoint so we can broaden the
+        // sign-in audience (e.g. `organizations`, `common`) without
+        // touching the tenant SharePoint file access is bound to.
+        'tenant' => env('MICROSOFT_OAUTH_TENANT', env('SHAREPOINT_TENANT_ID')),
         'redirect' => env('MICROSOFT_REDIRECT_URI'),
     ],
 

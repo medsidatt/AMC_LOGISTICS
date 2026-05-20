@@ -2,10 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Place;
+use App\Models\Provider;
 use App\Models\TheftIncident;
+use App\Models\TransportTracking;
+use App\Models\TripSegment;
 use App\Models\Truck;
 use App\Services\TheftIncidentService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class TheftIncidentController extends Controller
@@ -116,6 +122,31 @@ class TheftIncidentController extends Controller
             'reviewer:id,name',
         ]);
 
+        $evidence = $theftIncident->evidence ?? [];
+
+        // Surface whether any of the trip's segments now has a ticket linked
+        // (it may have been entered between detection and viewing).
+        $segmentIds = data_get($evidence, 'segment_ids', []);
+        $linkedTicketId = null;
+        if (! empty($segmentIds)) {
+            $linkedTicketId = TripSegment::whereIn('id', $segmentIds)
+                ->whereNotNull('transport_tracking_id')
+                ->value('transport_tracking_id');
+        }
+        if ($linkedTicketId) {
+            $evidence['linked_transport_tracking_id'] = $linkedTicketId;
+        }
+
+        // For the "create missing ticket" form we expose the list of
+        // available providers (so the operator can pick one).
+        $providersForForm = [];
+        if ($theftIncident->type === TheftIncident::TYPE_UNTRACKED_TRIP) {
+            $providersForForm = Provider::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->toArray();
+        }
+
         return Inertia::render('logistics/theft-incidents/Show', [
             'incident' => [
                 'id' => $theftIncident->id,
@@ -126,7 +157,7 @@ class TheftIncidentController extends Controller
                 'detected_at' => $theftIncident->detected_at?->format('d/m/Y H:i'),
                 'latitude' => $theftIncident->latitude,
                 'longitude' => $theftIncident->longitude,
-                'evidence' => $theftIncident->evidence,
+                'evidence' => $evidence,
                 'review_notes' => $theftIncident->review_notes,
                 'reviewed_at' => $theftIncident->reviewed_at?->format('d/m/Y H:i'),
                 'reviewer' => $theftIncident->reviewer?->name,
@@ -147,7 +178,81 @@ class TheftIncidentController extends Controller
                 'truck_stop_id' => $theftIncident->truck_stop_id,
                 'fuel_event_id' => $theftIncident->fuel_event_id,
             ],
+            'providers' => $providersForForm,
         ]);
+    }
+
+    /**
+     * Create a TransportTracking ticket from an untracked-trip incident.
+     * Links the trip segments to the new ticket and dismisses the incident.
+     */
+    public function createTicket(Request $request, TheftIncident $theftIncident, TheftIncidentService $service)
+    {
+        abort_unless(
+            $theftIncident->type === TheftIncident::TYPE_UNTRACKED_TRIP,
+            422,
+            'Cet incident ne supporte pas la création de bon de transport.',
+        );
+
+        $validated = $request->validate([
+            'reference' => 'required|string|max:191|unique:transport_trackings,reference',
+            'provider_id' => 'nullable|exists:providers,id',
+            'product' => 'nullable|in:0/3,3/8,8/16',
+            'provider_net_weight' => 'nullable|numeric|min:0',
+            'client_net_weight' => 'nullable|numeric|min:0',
+            'provider_gross_weight' => 'nullable|numeric|min:0',
+            'client_gross_weight' => 'nullable|numeric|min:0',
+        ]);
+
+        $evidence = $theftIncident->evidence ?? [];
+        $providerDate = $this->safeDate(data_get($evidence, 'provider_departure_at'));
+        $clientDate = $this->safeDate(data_get($evidence, 'client_arrival_at'));
+        $segmentIds = data_get($evidence, 'segment_ids', []);
+
+        $ticket = DB::transaction(function () use ($theftIncident, $validated, $providerDate, $clientDate, $segmentIds) {
+            $ticket = TransportTracking::create([
+                'reference' => $validated['reference'],
+                'truck_id' => $theftIncident->truck_id,
+                'provider_id' => $validated['provider_id'] ?? null,
+                'provider_date' => $providerDate,
+                'client_date' => $clientDate,
+                'product' => $validated['product'] ?? null,
+                'provider_net_weight' => $validated['provider_net_weight'] ?? null,
+                'client_net_weight' => $validated['client_net_weight'] ?? null,
+                'provider_gross_weight' => $validated['provider_gross_weight'] ?? null,
+                'client_gross_weight' => $validated['client_gross_weight'] ?? null,
+            ]);
+
+            // Backfill the link on every segment of this freight loop so the
+            // detector doesn't re-flag the same trip on its next run.
+            if (! empty($segmentIds)) {
+                TripSegment::whereIn('id', $segmentIds)->update([
+                    'transport_tracking_id' => $ticket->id,
+                ]);
+            }
+
+            return $ticket;
+        });
+
+        $service->markDismissed(
+            $theftIncident,
+            $request->user(),
+            'Bon de transport ' . $ticket->reference . ' créé depuis l\'incident.',
+        );
+
+        return redirect()
+            ->route('theft-incidents.show', $theftIncident->id)
+            ->with('success', 'Bon de transport ' . $ticket->reference . ' créé.');
+    }
+
+    private function safeDate(mixed $iso): ?string
+    {
+        if (! $iso) return null;
+        try {
+            return Carbon::parse($iso)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function update(Request $request, TheftIncident $theftIncident, TheftIncidentService $service)

@@ -1,4 +1,4 @@
-import { Clock, Fuel, Route, Scale, Wifi, AlertCircle } from 'lucide-react';
+import { Clock, Fuel, Route, Scale, Wifi, AlertCircle, FileCheck, FileX, MapPin } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import { formatMinutes } from '@/utils/theft-incident';
 
@@ -111,6 +111,56 @@ export default function EvidencePanel({ type, evidence }: Props) {
                 <Row label="Fin de la fenêtre" value={formatDate(evidence.window_end)} />
                 <Row label="Vitesse maximale" value={`${Number(evidence.max_speed_kmh ?? 0).toFixed(0)} km/h`} />
                 <Row label="Nombre de points GPS" value={evidence.snapshot_count ?? '—'} />
+            </Section>
+        );
+    }
+
+    if (type === 'untracked_trip') {
+        const ticketLinked = Boolean(evidence.linked_transport_tracking_id);
+        const parking = evidence.parking_place ?? null;
+        const provider = evidence.provider_place ?? null;
+        const client = evidence.client_place ?? null;
+        return (
+            <Section icon={<Route size={16} className="text-red-500" />} title="Voyage sans bon de transport">
+                <Row
+                    label="Bon de transport"
+                    value={ticketLinked
+                        ? <span className="inline-flex items-center gap-1 text-emerald-600"><FileCheck size={14} /> Lié</span>
+                        : <span className="inline-flex items-center gap-1 text-[var(--color-danger)] font-semibold"><FileX size={14} /> Aucun bon enregistré</span>}
+                />
+                <Row label="Camion" value={evidence.truck_matricule ?? '—'} />
+                <Row label="Distance totale" value={formatKm(evidence.distance_km)} />
+                <div className="py-3">
+                    <div className="text-[var(--color-text-muted)] text-xs uppercase mb-2 flex items-center gap-1">
+                        <MapPin size={12} /> Chronologie GPS
+                    </div>
+                    <ol className="space-y-2 text-sm">
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Départ parking</span> — <span className="font-medium">{parking?.label ?? '—'}</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.parking_departure_at)}</span>
+                        </li>
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Arrivée carrière</span> — <span className="font-medium">{provider?.label ?? '—'}</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.provider_arrival_at)}</span>
+                        </li>
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Départ carrière</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.provider_departure_at)}</span>
+                        </li>
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Arrivée chantier</span> — <span className="font-medium">{client?.label ?? '—'}</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.client_arrival_at)}</span>
+                        </li>
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Départ chantier</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.client_departure_at)}</span>
+                        </li>
+                        <li className="flex justify-between gap-3">
+                            <span><span className="text-[var(--color-text-muted)]">Retour parking</span></span>
+                            <span className="font-mono text-xs">{formatDate(evidence.parking_arrival_at)}</span>
+                        </li>
+                    </ol>
+                </div>
             </Section>
         );
     }
