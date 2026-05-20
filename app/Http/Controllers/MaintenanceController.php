@@ -10,6 +10,7 @@ use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
 use App\Models\User;
+use App\Notifications\MaintenanceAssignedNotification;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -17,6 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
@@ -648,7 +650,59 @@ class MaintenanceController extends Controller
             'status'         => Maintenance::STATUS_ASSIGNED,
         ]);
 
+        $this->notifyMaintenanceAssignment($maintenance);
+
         return back()->with('success', 'Maintenance assignée.');
+    }
+
+    /**
+     * Notify HSE Agents, admins and the assignee when a maintenance is assigned.
+     * Excludes the assigner so the Logistics Responsible doesn't notify themselves.
+     */
+    private function notifyMaintenanceAssignment(Maintenance $maintenance): void
+    {
+        try {
+            $recipients = User::query()
+                ->where('id', '!=', $maintenance->assigned_by_id)
+                ->where(function ($q) use ($maintenance) {
+                    $q->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
+                      ->orWhere('id', $maintenance->assigned_to_id);
+                })
+                ->get()
+                ->unique('id');
+
+            if ($recipients->isEmpty()) {
+                Log::info('No recipients for maintenance assignment notification', [
+                    'maintenance_id' => $maintenance->id,
+                ]);
+                return;
+            }
+
+            Notification::send($recipients, new MaintenanceAssignedNotification($maintenance, ['database']));
+
+            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
+            if ($mailRecipients->isNotEmpty()) {
+                try {
+                    Notification::send($mailRecipients, new MaintenanceAssignedNotification($maintenance, ['mail']));
+                } catch (\Throwable $e) {
+                    Log::error('MaintenanceAssignedNotification mail failed', [
+                        'maintenance_id' => $maintenance->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            Log::info('Maintenance assignment notification dispatched', [
+                'maintenance_id' => $maintenance->id,
+                'recipients_count' => $recipients->count(),
+                'mail_recipients_count' => $mailRecipients->count(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Maintenance assignment notification failed', [
+                'maintenance_id' => $maintenance->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function approve(Maintenance $maintenance)
