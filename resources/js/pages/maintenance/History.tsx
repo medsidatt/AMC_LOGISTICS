@@ -3,8 +3,10 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
+import FormInput from '@/components/ui/FormInput';
 import Pagination from '@/components/ui/Pagination';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { History as HistoryIcon, FileText, UserPlus, CheckCircle2 } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
@@ -46,6 +48,7 @@ interface Props {
     filters: Record<string, string>;
     canAssign: boolean;
     canApprove: boolean;
+    currentUserName: string;
 }
 
 function FiltersSummary({ m }: { m: MaintenanceRecord }) {
@@ -79,7 +82,7 @@ function StatusPill({ status }: { status: MaintenanceStatus }) {
     );
 }
 
-export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canAssign, canApprove }: Props) {
+export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canAssign, canApprove, currentUserName }: Props) {
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
 
     const applyFilter = (key: string, value: string | number | null) => {
@@ -89,13 +92,29 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
     };
 
     const [assignTarget, setAssignTarget] = useState<MaintenanceRecord | null>(null);
+    const [signatureName, setSignatureName] = useState('');
+    const [submitting, setSubmitting] = useState(false);
     const [approveTarget, setApproveTarget] = useState<MaintenanceRecord | null>(null);
 
+    const openAssign = (m: MaintenanceRecord) => {
+        setAssignTarget(m);
+        setSignatureName(currentUserName);
+    };
+
+    const closeAssign = () => {
+        setAssignTarget(null);
+        setSignatureName('');
+    };
+
     const submitAssign = () => {
-        if (!assignTarget) return;
-        router.post(`/maintenance/${assignTarget.id}/assign`, {}, {
+        if (!assignTarget || !signatureName.trim()) return;
+        setSubmitting(true);
+        router.post(`/maintenance/${assignTarget.id}/assign`, { signature_name: signatureName.trim() }, {
             preserveScroll: true,
-            onFinish: () => setAssignTarget(null),
+            onFinish: () => {
+                setSubmitting(false);
+                closeAssign();
+            },
         });
     };
 
@@ -176,7 +195,7 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                                 <FileText size={14} /> PDF
                                             </a>
                                             {canAssign && m.status === 'pending' && (
-                                                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => setAssignTarget(m)}>
+                                                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => openAssign(m)}>
                                                     Assigner
                                                 </Button>
                                             )}
@@ -197,18 +216,38 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                 </div>
             </Card>
 
-            <ConfirmDialog
-                open={assignTarget !== null}
-                onClose={() => setAssignTarget(null)}
-                title="Assigner la maintenance"
-                message={
-                    assignTarget
-                        ? `Confirmer l'assignation de la maintenance N° ${assignTarget.id} (camion ${assignTarget.truck}, du ${assignTarget.maintenance_date}) par vous-même ? Les agents HSE et l'administration seront notifiés.`
-                        : ''
-                }
-                confirmLabel="Confirmer l'assignation"
-                onConfirm={submitAssign}
-            />
+            <Modal open={assignTarget !== null} onClose={closeAssign} title="Assigner la maintenance" size="md">
+                <div className="space-y-4">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                        Maintenance N° <b>{assignTarget?.id}</b> — Camion <b>{assignTarget?.truck}</b> du <b>{assignTarget?.maintenance_date}</b>
+                    </p>
+                    <FormInput
+                        label="Nom préféré pour la signature"
+                        value={signatureName}
+                        onChange={(e) => setSignatureName(e.target.value)}
+                        autoFocus
+                        required
+                    />
+                    <p className="text-xs text-[var(--color-text-muted)] -mt-2">
+                        Ce nom apparaîtra en signature manuscrite sur le PDF lorsque la maintenance sera approuvée.
+                        Par défaut, votre nom de compte est proposé — modifiez-le si nécessaire.
+                    </p>
+                    {signatureName.trim() && (
+                        <div className="text-center py-2 border border-dashed border-[var(--color-border)] rounded-lg">
+                            <span style={{ fontFamily: '"Dancing Script", cursive', fontSize: '28px', color: '#111' }}>
+                                {signatureName.trim()}
+                            </span>
+                            <p className="text-xs text-[var(--color-text-muted)] mt-1">Aperçu de la signature</p>
+                        </div>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <Button variant="ghost" onClick={closeAssign} disabled={submitting}>Annuler</Button>
+                        <Button variant="primary" onClick={submitAssign} loading={submitting} disabled={!signatureName.trim()}>
+                            Confirmer l'assignation
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
 
             <ConfirmDialog
                 open={approveTarget !== null}
