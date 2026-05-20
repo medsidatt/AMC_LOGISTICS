@@ -602,7 +602,7 @@ class MaintenanceController extends Controller
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
             'status' => $m->status ?? Maintenance::STATUS_PENDING,
-            'assigned_to' => $m->assignedTo?->name,
+            'assigned_to' => $m->assigned_to_name ?? $m->assignedTo?->name,
             'assigned_by' => $m->assignedBy?->name,
             'assigned_at' => $m->assigned_at?->format('d/m/Y H:i'),
             'approved_by' => $m->approvedBy?->name,
@@ -619,13 +619,6 @@ class MaintenanceController extends Controller
         $canAssign = $user?->can('maintenance-assign') ?? false;
         $canApprove = $user?->can('maintenance-approve') ?? false;
 
-        $assignableUsers = ($canAssign)
-            ? User::orderBy('name')->get(['id', 'name'])->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-            ])
-            : collect();
-
         return Inertia::render('maintenance/History', [
             'maintenances' => $maintenances,
             'trucks' => $trucks,
@@ -633,21 +626,21 @@ class MaintenanceController extends Controller
             'filters' => $request->only(['truck_id', 'maintenance_type']),
             'canAssign' => $canAssign,
             'canApprove' => $canApprove,
-            'assignableUsers' => $assignableUsers,
         ]);
     }
 
     public function assign(Request $request, Maintenance $maintenance)
     {
         $data = $request->validate([
-            'assigned_to_id' => 'required|exists:users,id',
+            'assigned_to_name' => 'required|string|max:120',
         ]);
 
         $maintenance->update([
-            'assigned_to_id' => $data['assigned_to_id'],
-            'assigned_by_id' => auth()->id(),
-            'assigned_at'    => now(),
-            'status'         => Maintenance::STATUS_ASSIGNED,
+            'assigned_to_name' => trim($data['assigned_to_name']),
+            'assigned_to_id'   => null,
+            'assigned_by_id'   => auth()->id(),
+            'assigned_at'      => now(),
+            'status'           => Maintenance::STATUS_ASSIGNED,
         ]);
 
         $this->notifyMaintenanceAssignment($maintenance);
@@ -656,20 +649,18 @@ class MaintenanceController extends Controller
     }
 
     /**
-     * Notify HSE Agents, admins and the assignee when a maintenance is assigned.
-     * Excludes the assigner so the Logistics Responsible doesn't notify themselves.
+     * Notify HSE Agents and admins when a maintenance is assigned.
+     * The assignee is a free-text name (often an external mechanic),
+     * not a system user, so no notification is sent to them.
+     * The assigner is excluded so they don't notify themselves.
      */
     private function notifyMaintenanceAssignment(Maintenance $maintenance): void
     {
         try {
             $recipients = User::query()
                 ->where('id', '!=', $maintenance->assigned_by_id)
-                ->where(function ($q) use ($maintenance) {
-                    $q->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
-                      ->orWhere('id', $maintenance->assigned_to_id);
-                })
-                ->get()
-                ->unique('id');
+                ->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
+                ->get();
 
             if ($recipients->isEmpty()) {
                 Log::info('No recipients for maintenance assignment notification', [

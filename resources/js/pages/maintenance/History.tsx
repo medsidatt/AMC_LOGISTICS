@@ -3,6 +3,7 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
+import FormInput from '@/components/ui/FormInput';
 import Pagination from '@/components/ui/Pagination';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -41,8 +42,6 @@ interface MaintenanceRecord {
     approved_at: string | null;
 }
 
-interface AssignableUser { id: number; name: string }
-
 interface Props {
     maintenances: { data: MaintenanceRecord[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
     trucks: { id: number; matricule: string }[];
@@ -50,7 +49,6 @@ interface Props {
     filters: Record<string, string>;
     canAssign: boolean;
     canApprove: boolean;
-    assignableUsers: AssignableUser[];
 }
 
 function FiltersSummary({ m }: { m: MaintenanceRecord }) {
@@ -84,7 +82,7 @@ function StatusPill({ status }: { status: MaintenanceStatus }) {
     );
 }
 
-export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canAssign, canApprove, assignableUsers }: Props) {
+export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canAssign, canApprove }: Props) {
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
 
     const applyFilter = (key: string, value: string | number | null) => {
@@ -94,24 +92,24 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
     };
 
     const [assignTarget, setAssignTarget] = useState<MaintenanceRecord | null>(null);
-    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [assigneeName, setAssigneeName] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [approveTarget, setApproveTarget] = useState<MaintenanceRecord | null>(null);
 
     const openAssign = (m: MaintenanceRecord) => {
         setAssignTarget(m);
-        setSelectedUserId(null);
+        setAssigneeName(m.assigned_to ?? '');
     };
 
     const closeAssign = () => {
         setAssignTarget(null);
-        setSelectedUserId(null);
+        setAssigneeName('');
     };
 
     const submitAssign = () => {
-        if (!assignTarget || !selectedUserId) return;
+        if (!assignTarget || !assigneeName.trim()) return;
         setSubmitting(true);
-        router.post(`/maintenance/${assignTarget.id}/assign`, { assigned_to_id: selectedUserId }, {
+        router.post(`/maintenance/${assignTarget.id}/assign`, { assigned_to_name: assigneeName.trim() }, {
             preserveScroll: true,
             onFinish: () => {
                 setSubmitting(false);
@@ -127,8 +125,6 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
             onFinish: () => setApproveTarget(null),
         });
     };
-
-    const userOpts = assignableUsers.map((u) => ({ value: u.id, label: u.name }));
 
     return (
         <AuthenticatedLayout title="Historique maintenance">
@@ -217,20 +213,24 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
             </Card>
 
             <Modal open={assignTarget !== null} onClose={closeAssign} title="Assigner la maintenance" size="md">
-                <div className="p-5 space-y-4">
+                <div className="space-y-4">
                     <p className="text-sm text-[var(--color-text-secondary)]">
                         Maintenance N° <b>{assignTarget?.id}</b> — Camion <b>{assignTarget?.truck}</b> du <b>{assignTarget?.maintenance_date}</b>
                     </p>
-                    <FormSelect
-                        label="Assigner à"
-                        placeholder="Sélectionner un utilisateur…"
-                        options={userOpts}
-                        value={selectedUserId}
-                        onChange={(v) => setSelectedUserId(v ? Number(v) : null)}
+                    <FormInput
+                        label="Assignée à (nom)"
+                        placeholder="Ex. Garage Saharien, Ahmed Ould Mohamed…"
+                        value={assigneeName}
+                        onChange={(e) => setAssigneeName(e.target.value)}
+                        autoFocus
+                        required
                     />
+                    <p className="text-xs text-[var(--color-text-muted)] -mt-2">
+                        Saisissez le nom de la personne ou du prestataire chargé de l'intervention.
+                    </p>
                     <div className="flex items-center justify-end gap-2 pt-2">
                         <Button variant="ghost" onClick={closeAssign} disabled={submitting}>Annuler</Button>
-                        <Button variant="primary" onClick={submitAssign} loading={submitting} disabled={!selectedUserId}>
+                        <Button variant="primary" onClick={submitAssign} loading={submitting} disabled={!assigneeName.trim()}>
                             Confirmer l'assignation
                         </Button>
                     </div>
