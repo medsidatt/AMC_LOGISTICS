@@ -50,12 +50,16 @@
         /* Section header (red left accent, used for non-card sections) */
         .section-header { border-left: 3px solid #b91c1c; padding: 2px 0 2px 6px; font-weight: bold; font-size: 9px; color: #1f2937; margin: 5px 0 3px 0; letter-spacing: 0.2px; }
 
-        /* General info grid */
+        /* General info grid (default 2-pair layout: 38% label / value) */
         .info-grid { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
-        .info-grid td { padding: 3px 6px; vertical-align: top; border-bottom: 1px solid #f1f5f9; font-size: 9px; }
-        .info-grid td.k { width: 38%; color: #6b7280; font-size: 8px; text-transform: uppercase; letter-spacing: 0.2px; font-weight: 600; }
+        .info-grid td { padding: 3px 6px; vertical-align: middle; border-bottom: 1px solid #f1f5f9; font-size: 9px; }
+        .info-grid td.k { width: 38%; color: #6b7280; font-size: 8px; text-transform: uppercase; letter-spacing: 0.2px; font-weight: 600; white-space: nowrap; }
         .info-grid td.v { color: #111827; font-weight: 600; }
         .info-grid tr:last-child td { border-bottom: none; }
+
+        /* Header info row: 3 pairs in one row (Camion / Date / Distance) */
+        .info-grid.header-row td.k { width: 9%; }
+        .info-grid.header-row td.v { white-space: nowrap; width: 24%; }
 
         /* Oil checklist */
         .oil-list { width: 100%; border-collapse: collapse; }
@@ -168,8 +172,8 @@
     </tr>
 </table>
 
-{{-- General info (full width, very compact) --}}
-<table class="info-grid">
+{{-- General info — header row, three pairs side by side --}}
+<table class="info-grid header-row">
     <tr>
         <td class="k">Camion</td>
         <td class="v">{{ $maintenance->truck?->matricule ?? '—' }}</td>
