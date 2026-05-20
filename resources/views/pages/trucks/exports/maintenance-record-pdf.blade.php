@@ -188,18 +188,6 @@
 <div class="section-title">Notes</div>
 <div class="notes-block">{{ $maintenance->notes ?: '—' }}</div>
 
-@if ($maintenance->assigned_at || $maintenance->assignedBy)
-    <div class="section-title">Assignation</div>
-    <table class="info">
-        <tr>
-            <td class="label">Assignée par</td>
-            <td>{{ $maintenance->assignedBy?->name ?? '—' }}</td>
-            <td class="label">Le</td>
-            <td>{{ $maintenance->assigned_at?->format('d/m/Y H:i') ?? '—' }}</td>
-        </tr>
-    </table>
-@endif
-
 @if ($maintenance->status === 'approved')
     <div class="signature-block">
         <div class="label">Approuvée et signée par le Responsable Logistique</div>

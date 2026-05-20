@@ -10,7 +10,7 @@ use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
 use App\Models\Auth\User;
-use App\Notifications\MaintenanceAssignedNotification;
+use App\Notifications\MaintenanceSignedNotification;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -40,7 +40,6 @@ class MaintenanceController extends Controller
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
             ],
         ]);
-        $this->middleware('permission:maintenance-assign', ['only' => ['assign']]);
         $this->middleware('permission:maintenance-approve', ['only' => ['approve']]);
         $this->middleware('permission:maintenance-rule-create', ['only' => ['storeRule']]);
         $this->middleware('permission:maintenance-rule-deactivate', ['only' => ['deactivateRule']]);
@@ -565,7 +564,7 @@ class MaintenanceController extends Controller
 
     public function history(Request $request)
     {
-        $query = Maintenance::with(['truck', 'profile', 'assignedTo:id,name', 'assignedBy:id,name', 'approvedBy:id,name'])
+        $query = Maintenance::with(['truck', 'profile', 'approvedBy:id,name'])
             ->orderByDesc('maintenance_date');
 
         if ($request->truck_id) {
@@ -602,9 +601,7 @@ class MaintenanceController extends Controller
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
             'status' => $m->status ?? Maintenance::STATUS_PENDING,
-            'assigned_by' => $m->assignedBy?->name,
-            'assigned_at' => $m->assigned_at?->format('d/m/Y H:i'),
-            'approved_by' => $m->approvedBy?->name,
+            'signed_by' => $m->electronic_signature_name ?? $m->approvedBy?->name,
             'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
         ]);
 
@@ -615,7 +612,6 @@ class MaintenanceController extends Controller
         ])->values();
 
         $user = auth()->user();
-        $canAssign = $user?->can('maintenance-assign') ?? false;
         $canApprove = $user?->can('maintenance-approve') ?? false;
 
         return Inertia::render('maintenance/History', [
@@ -623,95 +619,79 @@ class MaintenanceController extends Controller
             'trucks' => $trucks,
             'maintenanceTypes' => $maintenanceTypes,
             'filters' => $request->only(['truck_id', 'maintenance_type']),
-            'canAssign' => $canAssign,
             'canApprove' => $canApprove,
             'currentUserName' => $user?->name ?? '',
         ]);
     }
 
-    public function assign(Request $request, Maintenance $maintenance)
+    public function approve(Request $request, Maintenance $maintenance)
     {
+        if ($maintenance->status === Maintenance::STATUS_APPROVED) {
+            return back()->with('error', 'Cette maintenance est déjà signée.');
+        }
+
         $data = $request->validate([
             'signature_name' => 'required|string|max:120',
         ]);
-
-        $maintenance->update([
-            'assigned_by_id'            => auth()->id(),
-            'assigned_at'               => now(),
-            'status'                    => Maintenance::STATUS_ASSIGNED,
-            'electronic_signature_name' => trim($data['signature_name']),
-        ]);
-
-        $this->notifyMaintenanceAssignment($maintenance);
-
-        return back()->with('success', 'Maintenance assignée.');
-    }
-
-    /**
-     * Notify HSE Agents and admins when a maintenance is assigned.
-     * The assignee is a free-text name (often an external mechanic),
-     * not a system user, so no notification is sent to them.
-     * The assigner is excluded so they don't notify themselves.
-     */
-    private function notifyMaintenanceAssignment(Maintenance $maintenance): void
-    {
-        try {
-            $recipients = User::query()
-                ->where('id', '!=', $maintenance->assigned_by_id)
-                ->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
-                ->get();
-
-            if ($recipients->isEmpty()) {
-                Log::info('No recipients for maintenance assignment notification', [
-                    'maintenance_id' => $maintenance->id,
-                ]);
-                return;
-            }
-
-            Notification::send($recipients, new MaintenanceAssignedNotification($maintenance, ['database']));
-
-            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
-            if ($mailRecipients->isNotEmpty()) {
-                try {
-                    Notification::send($mailRecipients, new MaintenanceAssignedNotification($maintenance, ['mail']));
-                } catch (\Throwable $e) {
-                    Log::error('MaintenanceAssignedNotification mail failed', [
-                        'maintenance_id' => $maintenance->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            Log::info('Maintenance assignment notification dispatched', [
-                'maintenance_id' => $maintenance->id,
-                'recipients_count' => $recipients->count(),
-                'mail_recipients_count' => $mailRecipients->count(),
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('Maintenance assignment notification failed', [
-                'maintenance_id' => $maintenance->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    public function approve(Maintenance $maintenance)
-    {
-        if ($maintenance->status === Maintenance::STATUS_APPROVED) {
-            return back()->with('error', 'Cette maintenance est déjà approuvée.');
-        }
 
         $user = auth()->user();
 
         $maintenance->update([
             'approved_by_id'            => $user->id,
             'approved_at'               => now(),
-            // Keep the preferred signature name chosen at assign time if present.
-            'electronic_signature_name' => $maintenance->electronic_signature_name ?: $user->name,
+            'electronic_signature_name' => trim($data['signature_name']),
             'status'                    => Maintenance::STATUS_APPROVED,
         ]);
 
-        return back()->with('success', 'Maintenance approuvée et signée électroniquement.');
+        $this->notifyMaintenanceSigned($maintenance);
+
+        return back()->with('success', 'Maintenance signée électroniquement.');
+    }
+
+    /**
+     * Notify HSE Agents and admins when a maintenance is signed.
+     * The signer is excluded so they don't notify themselves.
+     */
+    private function notifyMaintenanceSigned(Maintenance $maintenance): void
+    {
+        try {
+            $recipients = User::query()
+                ->where('id', '!=', $maintenance->approved_by_id)
+                ->whereHas('roles', fn ($r) => $r->whereIn('name', ['HSE Agent', 'Super Admin', 'Admin']))
+                ->get();
+
+            if ($recipients->isEmpty()) {
+                Log::info('No recipients for maintenance signed notification', [
+                    'maintenance_id' => $maintenance->id,
+                ]);
+                return;
+            }
+
+            Notification::send($recipients, new MaintenanceSignedNotification($maintenance, ['database']));
+
+            $mailRecipients = $recipients->filter(fn ($u) => !empty($u->email));
+            if ($mailRecipients->isNotEmpty()) {
+                try {
+                    Notification::send($mailRecipients, new MaintenanceSignedNotification($maintenance, ['mail']));
+                } catch (\Throwable $e) {
+                    Log::error('MaintenanceSignedNotification mail failed', [
+                        'maintenance_id' => $maintenance->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            Log::info('Maintenance signed notification dispatched', [
+                'maintenance_id' => $maintenance->id,
+                'recipients_count' => $recipients->count(),
+                'mail_recipients_count' => $mailRecipients->count(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Maintenance signed notification failed', [
+                'maintenance_id' => $maintenance->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function exportRecordPdf(Maintenance $maintenance)
@@ -719,8 +699,6 @@ class MaintenanceController extends Controller
         $maintenance->load([
             'truck:id,matricule',
             'profile',
-            'assignedTo:id,name',
-            'assignedBy:id,name',
             'approvedBy:id,name',
         ]);
 
