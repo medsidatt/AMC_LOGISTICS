@@ -111,8 +111,13 @@ class HseController extends Controller
         $rows = $this->buildPdfRows($inspection);
 
         $logoPath = $this->absoluteLocalPath(public_path('images/logo.png'));
-        $bureauVeritasPath = $this->resolveCertBadgePath(['iso-bureau-veritas.png', 'iso-bureau-veritas.jpg', 'bureau-veritas.png']);
-        $ukasPath = $this->resolveCertBadgePath(['ukas.png', 'ukas.jpg']);
+        $isoBadgePath = $this->resolveCertBadgePath([
+            'iso-certification.png',
+            'iso-certification.jpg',
+            'iso-bureau-veritas.png',
+            'iso-bureau-veritas.jpg',
+            'bureau-veritas.png',
+        ]);
 
         $vehiclePhotoPath = $inspection->vehicle_photo_path
             ? $this->absoluteLocalPath(storage_path('app/public/' . $inspection->vehicle_photo_path))
@@ -124,8 +129,7 @@ class HseController extends Controller
             'inspection' => $inspection,
             'rows' => $rows,
             'logoPath' => $logoPath,
-            'bureauVeritasPath' => $bureauVeritasPath,
-            'ukasPath' => $ukasPath,
+            'isoBadgePath' => $isoBadgePath,
             'vehiclePhotoPath' => $vehiclePhotoPath,
             'projectLabel' => $projectLabel,
         ])->setPaper('A4', 'portrait');
