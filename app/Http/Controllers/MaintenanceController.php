@@ -625,15 +625,21 @@ class MaintenanceController extends Controller
             'filters' => $request->only(['truck_id', 'maintenance_type']),
             'canAssign' => $canAssign,
             'canApprove' => $canApprove,
+            'currentUserName' => $user?->name ?? '',
         ]);
     }
 
-    public function assign(Maintenance $maintenance)
+    public function assign(Request $request, Maintenance $maintenance)
     {
+        $data = $request->validate([
+            'signature_name' => 'required|string|max:120',
+        ]);
+
         $maintenance->update([
-            'assigned_by_id' => auth()->id(),
-            'assigned_at'    => now(),
-            'status'         => Maintenance::STATUS_ASSIGNED,
+            'assigned_by_id'            => auth()->id(),
+            'assigned_at'               => now(),
+            'status'                    => Maintenance::STATUS_ASSIGNED,
+            'electronic_signature_name' => trim($data['signature_name']),
         ]);
 
         $this->notifyMaintenanceAssignment($maintenance);
@@ -700,7 +706,8 @@ class MaintenanceController extends Controller
         $maintenance->update([
             'approved_by_id'            => $user->id,
             'approved_at'               => now(),
-            'electronic_signature_name' => $user->name,
+            // Keep the preferred signature name chosen at assign time if present.
+            'electronic_signature_name' => $maintenance->electronic_signature_name ?: $user->name,
             'status'                    => Maintenance::STATUS_APPROVED,
         ]);
 
