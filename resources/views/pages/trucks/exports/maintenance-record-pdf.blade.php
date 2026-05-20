@@ -188,18 +188,14 @@
 <div class="section-title">Notes</div>
 <div class="notes-block">{{ $maintenance->notes ?: '—' }}</div>
 
-@if ($maintenance->assigned_at || $maintenance->assigned_to_name || $maintenance->assignedTo)
+@if ($maintenance->assigned_at || $maintenance->assignedBy)
     <div class="section-title">Assignation</div>
     <table class="info">
         <tr>
-            <td class="label">Assignée à</td>
-            <td>{{ $maintenance->assigned_to_name ?? $maintenance->assignedTo?->name ?? '—' }}</td>
+            <td class="label">Assignée par</td>
+            <td>{{ $maintenance->assignedBy?->name ?? '—' }}</td>
             <td class="label">Le</td>
             <td>{{ $maintenance->assigned_at?->format('d/m/Y H:i') ?? '—' }}</td>
-        </tr>
-        <tr>
-            <td class="label">Assignée par</td>
-            <td colspan="3">{{ $maintenance->assignedBy?->name ?? '—' }}</td>
         </tr>
     </table>
 @endif

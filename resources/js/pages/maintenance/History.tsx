@@ -3,10 +3,8 @@ import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
-import FormInput from '@/components/ui/FormInput';
 import Pagination from '@/components/ui/Pagination';
 import Button from '@/components/ui/Button';
-import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { History as HistoryIcon, FileText, UserPlus, CheckCircle2 } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
@@ -35,7 +33,6 @@ interface MaintenanceRecord {
     filter_air_changed?: boolean;
     filter_fuel_changed?: boolean;
     status: MaintenanceStatus;
-    assigned_to: string | null;
     assigned_by: string | null;
     assigned_at: string | null;
     approved_by: string | null;
@@ -92,29 +89,13 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
     };
 
     const [assignTarget, setAssignTarget] = useState<MaintenanceRecord | null>(null);
-    const [assigneeName, setAssigneeName] = useState('');
-    const [submitting, setSubmitting] = useState(false);
     const [approveTarget, setApproveTarget] = useState<MaintenanceRecord | null>(null);
 
-    const openAssign = (m: MaintenanceRecord) => {
-        setAssignTarget(m);
-        setAssigneeName(m.assigned_to ?? '');
-    };
-
-    const closeAssign = () => {
-        setAssignTarget(null);
-        setAssigneeName('');
-    };
-
     const submitAssign = () => {
-        if (!assignTarget || !assigneeName.trim()) return;
-        setSubmitting(true);
-        router.post(`/maintenance/${assignTarget.id}/assign`, { assigned_to_name: assigneeName.trim() }, {
+        if (!assignTarget) return;
+        router.post(`/maintenance/${assignTarget.id}/assign`, {}, {
             preserveScroll: true,
-            onFinish: () => {
-                setSubmitting(false);
-                closeAssign();
-            },
+            onFinish: () => setAssignTarget(null),
         });
     };
 
@@ -152,7 +133,7 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Prochaine</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Filtres</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Statut</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Assignée à</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Assignée par</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Signée par</th>
                                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
                             </tr>
@@ -173,7 +154,11 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.next_oil_change_km != null ? Number(m.next_oil_change_km).toLocaleString('fr-FR') : '-'}</td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]"><FiltersSummary m={m} /></td>
                                     <td className="px-4 py-3"><StatusPill status={m.status} /></td>
-                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.assigned_to ?? '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">
+                                        {m.assigned_by ? (
+                                            <span title={m.assigned_at ?? ''}>{m.assigned_by}</span>
+                                        ) : '-'}
+                                    </td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">
                                         {m.approved_by ? (
                                             <span title={m.approved_at ?? ''}>{m.approved_by}</span>
@@ -191,7 +176,7 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                                 <FileText size={14} /> PDF
                                             </a>
                                             {canAssign && m.status === 'pending' && (
-                                                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => openAssign(m)}>
+                                                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => setAssignTarget(m)}>
                                                     Assigner
                                                 </Button>
                                             )}
@@ -212,30 +197,18 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                 </div>
             </Card>
 
-            <Modal open={assignTarget !== null} onClose={closeAssign} title="Assigner la maintenance" size="md">
-                <div className="space-y-4">
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                        Maintenance N° <b>{assignTarget?.id}</b> — Camion <b>{assignTarget?.truck}</b> du <b>{assignTarget?.maintenance_date}</b>
-                    </p>
-                    <FormInput
-                        label="Assignée à (nom)"
-                        placeholder="Ex. Garage Saharien, Ahmed Ould Mohamed…"
-                        value={assigneeName}
-                        onChange={(e) => setAssigneeName(e.target.value)}
-                        autoFocus
-                        required
-                    />
-                    <p className="text-xs text-[var(--color-text-muted)] -mt-2">
-                        Saisissez le nom de la personne ou du prestataire chargé de l'intervention.
-                    </p>
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                        <Button variant="ghost" onClick={closeAssign} disabled={submitting}>Annuler</Button>
-                        <Button variant="primary" onClick={submitAssign} loading={submitting} disabled={!assigneeName.trim()}>
-                            Confirmer l'assignation
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+            <ConfirmDialog
+                open={assignTarget !== null}
+                onClose={() => setAssignTarget(null)}
+                title="Assigner la maintenance"
+                message={
+                    assignTarget
+                        ? `Confirmer l'assignation de la maintenance N° ${assignTarget.id} (camion ${assignTarget.truck}, du ${assignTarget.maintenance_date}) par vous-même ? Les agents HSE et l'administration seront notifiés.`
+                        : ''
+                }
+                confirmLabel="Confirmer l'assignation"
+                onConfirm={submitAssign}
+            />
 
             <ConfirmDialog
                 open={approveTarget !== null}

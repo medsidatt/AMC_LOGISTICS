@@ -602,7 +602,6 @@ class MaintenanceController extends Controller
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
             'status' => $m->status ?? Maintenance::STATUS_PENDING,
-            'assigned_to' => $m->assigned_to_name ?? $m->assignedTo?->name,
             'assigned_by' => $m->assignedBy?->name,
             'assigned_at' => $m->assigned_at?->format('d/m/Y H:i'),
             'approved_by' => $m->approvedBy?->name,
@@ -629,18 +628,12 @@ class MaintenanceController extends Controller
         ]);
     }
 
-    public function assign(Request $request, Maintenance $maintenance)
+    public function assign(Maintenance $maintenance)
     {
-        $data = $request->validate([
-            'assigned_to_name' => 'required|string|max:120',
-        ]);
-
         $maintenance->update([
-            'assigned_to_name' => trim($data['assigned_to_name']),
-            'assigned_to_id'   => null,
-            'assigned_by_id'   => auth()->id(),
-            'assigned_at'      => now(),
-            'status'           => Maintenance::STATUS_ASSIGNED,
+            'assigned_by_id' => auth()->id(),
+            'assigned_at'    => now(),
+            'status'         => Maintenance::STATUS_ASSIGNED,
         ]);
 
         $this->notifyMaintenanceAssignment($maintenance);
