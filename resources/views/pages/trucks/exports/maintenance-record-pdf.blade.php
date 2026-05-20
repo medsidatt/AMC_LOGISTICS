@@ -99,15 +99,6 @@
         /* Notes */
         .notes-block { padding: 4px 8px; border: 1px solid #e5e7eb; min-height: 22px; font-size: 9px; white-space: pre-wrap; background: #f9fafb; }
 
-        /* Photo + signature side by side */
-        .footer-section { width: 100%; border-collapse: collapse; margin-top: 5px; }
-        .footer-section td { vertical-align: top; padding: 0; }
-        .footer-section td.photo-col { width: 38%; padding-right: 4px; }
-        .footer-section td.sig-col { width: 62%; padding-left: 4px; }
-
-        .photo-box { text-align: center; padding: 3px; border: 1px solid #e5e7eb; background: #f9fafb; }
-        .photo-box img { max-width: 100%; max-height: 90px; }
-
         .signature-block { padding: 6px 10px 8px 12px; border: 1px solid #e5e7eb; border-left: 3px solid #b91c1c; background: #fffbeb; }
         .signature-block .label { font-weight: bold; font-size: 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
         .signature-name { font-family: 'Dancing Script', cursive; font-size: 26px; color: #111827; line-height: 1; }
@@ -133,11 +124,6 @@
     $isApproved = $status === 'approved';
     $signerName = $maintenance->electronic_signature_name ?? $maintenance->approvedBy?->name ?? '—';
     $signedAt = $maintenance->approved_at?->format('d/m/Y à H:i') ?? '—';
-
-    $dashboardPhotoPath = $maintenance->dashboard_photo_path
-        ? storage_path('app/public/' . $maintenance->dashboard_photo_path)
-        : null;
-    $dashboardPhotoExists = $dashboardPhotoPath && file_exists($dashboardPhotoPath);
 
     $oilTypes = \App\Models\Maintenance::OIL_TYPES;
     $selectedOil = $maintenance->oil_type;
@@ -315,30 +301,14 @@
     <div class="notes-block">{{ $maintenance->notes }}</div>
 @endif
 
-{{-- Photo + signature side by side --}}
-<table class="footer-section">
-    <tr>
-        @if ($dashboardPhotoExists)
-            <td class="photo-col">
-                <div class="section-header" style="margin: 0 0 3px 0;">Photo tableau de bord</div>
-                <div class="photo-box">
-                    <img src="{{ $dashboardPhotoPath }}" alt="Tableau de bord">
-                </div>
-            </td>
-            <td class="sig-col">
-        @else
-            <td colspan="2">
-        @endif
-                @if ($isApproved)
-                    <div class="signature-block">
-                        <div class="label">Signée par le Responsable Logistique</div>
-                        <div class="signature-name">{{ $signerName }}</div>
-                        <div class="signature-meta">Le {{ $signedAt }}</div>
-                    </div>
-                @endif
-            </td>
-    </tr>
-</table>
+{{-- Signature --}}
+@if ($isApproved)
+    <div class="signature-block" style="margin-top: 5px;">
+        <div class="label">Signée par le Responsable Logistique</div>
+        <div class="signature-name">{{ $signerName }}</div>
+        <div class="signature-meta">Le {{ $signedAt }}</div>
+    </div>
+@endif
 
 {{-- E-signature line at the bottom of the body --}}
 @if ($isApproved)
