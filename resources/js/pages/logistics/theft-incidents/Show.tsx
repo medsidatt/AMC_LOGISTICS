@@ -1,10 +1,14 @@
 import { Head, router, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import LeafletMap from '@/components/map/LeafletMap';
-import { ArrowLeft, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import FormInput from '@/components/ui/FormInput';
+import FormSelect from '@/components/ui/FormSelect';
+import { ArrowLeft, CheckCircle, XCircle, AlertTriangle, FilePlus2 } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
 import EvidencePanel from '@/components/theft/EvidencePanel';
 import { displayIncidentTitle } from '@/utils/theft-incident';
@@ -39,6 +43,7 @@ interface Incident {
 
 interface Props {
     incident: Incident;
+    providers?: { id: number; name: string }[];
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -47,6 +52,7 @@ const TYPE_LABELS: Record<string, string> = {
     unauthorized_stop: 'Arrêt non autorisé',
     route_deviation: "Déviation d'itinéraire",
     off_hours_movement: 'Mouvement hors horaires',
+    untracked_trip: 'Voyage sans bon de transport',
 };
 
 const SEVERITY_COLOR: Record<string, string> = {
@@ -55,12 +61,33 @@ const SEVERITY_COLOR: Record<string, string> = {
     low: '#3b82f6',
 };
 
-export default function TheftIncidentShow({ incident }: Props) {
+export default function TheftIncidentShow({ incident, providers = [] }: Props) {
     const { isAdmin } = usePermission();
     const form = useForm<{ action: 'review' | 'dismiss' | 'confirm'; notes: string }>({
         action: 'review',
         notes: '',
     });
+
+    const [showTicketModal, setShowTicketModal] = useState(false);
+    const ticketForm = useForm({
+        reference: '',
+        provider_id: '',
+        product: '' as '' | '0/3' | '3/8' | '8/16',
+        provider_net_weight: '',
+        client_net_weight: '',
+        provider_gross_weight: '',
+        client_gross_weight: '',
+    });
+
+    const isUntrackedTrip = incident.type === 'untracked_trip';
+    const ticketAlreadyLinked = Boolean(incident.evidence?.linked_transport_tracking_id);
+
+    const submitTicket = (e: React.FormEvent) => {
+        e.preventDefault();
+        ticketForm.post(`/logistics/theft-incidents/${incident.id}/create-ticket`, {
+            onSuccess: () => setShowTicketModal(false),
+        });
+    };
 
     const handleAction = (action: 'review' | 'dismiss' | 'confirm') => {
         form.setData('action', action);
@@ -237,6 +264,95 @@ export default function TheftIncidentShow({ incident }: Props) {
                     </div>
                 </Card>
             )}
+
+            {isUntrackedTrip && !ticketAlreadyLinked && isAdmin && (
+                <Card header="Bon de transport manquant" className="mb-5">
+                    <p className="text-sm text-[var(--color-text-secondary)] mb-3">
+                        Aucun bon de transport n'a été enregistré pour ce voyage. Créez-le ici
+                        — les segments GPS seront automatiquement liés et l'incident sera clôturé.
+                    </p>
+                    <Button
+                        onClick={() => setShowTicketModal(true)}
+                        icon={<FilePlus2 size={16} />}
+                    >
+                        Créer le bon de transport
+                    </Button>
+                </Card>
+            )}
+
+            <Modal open={showTicketModal} onClose={() => setShowTicketModal(false)} title="Nouveau bon de transport">
+                <form onSubmit={submitTicket} className="space-y-3">
+                    <FormInput
+                        label="Référence"
+                        name="reference"
+                        value={ticketForm.data.reference}
+                        onChange={(e) => ticketForm.setData('reference', e.target.value)}
+                        error={ticketForm.errors.reference}
+                        required
+                        autoFocus
+                    />
+                    <FormSelect
+                        label="Fournisseur (carrière)"
+                        options={[{ value: '', label: '— Aucun —' }, ...providers.map((p) => ({ value: String(p.id), label: p.name }))]}
+                        value={ticketForm.data.provider_id}
+                        onChange={(v) => ticketForm.setData('provider_id', String(v ?? ''))}
+                        error={ticketForm.errors.provider_id}
+                    />
+                    <FormSelect
+                        label="Produit"
+                        options={[
+                            { value: '', label: '— Aucun —' },
+                            { value: '0/3', label: '0/3' },
+                            { value: '3/8', label: '3/8' },
+                            { value: '8/16', label: '8/16' },
+                        ]}
+                        value={ticketForm.data.product}
+                        onChange={(v) => ticketForm.setData('product', (v ?? '') as any)}
+                        error={ticketForm.errors.product}
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <FormInput
+                            label="Poids net carrière (t)"
+                            type="number"
+                            step="0.01"
+                            value={ticketForm.data.provider_net_weight}
+                            onChange={(e) => ticketForm.setData('provider_net_weight', e.target.value)}
+                            error={ticketForm.errors.provider_net_weight}
+                        />
+                        <FormInput
+                            label="Poids net chantier (t)"
+                            type="number"
+                            step="0.01"
+                            value={ticketForm.data.client_net_weight}
+                            onChange={(e) => ticketForm.setData('client_net_weight', e.target.value)}
+                            error={ticketForm.errors.client_net_weight}
+                        />
+                        <FormInput
+                            label="Poids brut carrière (t)"
+                            type="number"
+                            step="0.01"
+                            value={ticketForm.data.provider_gross_weight}
+                            onChange={(e) => ticketForm.setData('provider_gross_weight', e.target.value)}
+                            error={ticketForm.errors.provider_gross_weight}
+                        />
+                        <FormInput
+                            label="Poids brut chantier (t)"
+                            type="number"
+                            step="0.01"
+                            value={ticketForm.data.client_gross_weight}
+                            onChange={(e) => ticketForm.setData('client_gross_weight', e.target.value)}
+                            error={ticketForm.errors.client_gross_weight}
+                        />
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                        Les dates fournisseur et client seront prises directement du GPS.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="secondary" onClick={() => setShowTicketModal(false)}>Annuler</Button>
+                        <Button type="submit" loading={ticketForm.processing}>Créer le bon</Button>
+                    </div>
+                </form>
+            </Modal>
 
             {incident.status === 'pending' && isAdmin && (
                 <Card header="Actions">

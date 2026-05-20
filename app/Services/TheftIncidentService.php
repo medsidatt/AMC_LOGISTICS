@@ -128,6 +128,7 @@ class TheftIncidentService
             TheftIncident::TYPE_ROUTE_DEVIATION => 'route_deviation:transport=' . ($attrs['transport_tracking_id'] ?? 'null'),
             TheftIncident::TYPE_OFF_HOURS_MOVEMENT => 'off_hours:truck=' . ($attrs['truck_id'] ?? 'null')
                 . ':window=' . ($attrs['_window_key'] ?? Carbon::now()->startOfHour()->toDateTimeString()),
+            TheftIncident::TYPE_UNTRACKED_TRIP => 'untracked_trip:segment=' . ($attrs['trip_segment_id'] ?? 'null'),
             default => $type . ':truck=' . ($attrs['truck_id'] ?? 'null'),
         };
     }
@@ -140,6 +141,7 @@ class TheftIncidentService
             TheftIncident::TYPE_UNAUTHORIZED_STOP => 'Arrêt non autorisé',
             TheftIncident::TYPE_ROUTE_DEVIATION => 'Déviation d\'itinéraire',
             TheftIncident::TYPE_OFF_HOURS_MOVEMENT => 'Mouvement hors horaires',
+            TheftIncident::TYPE_UNTRACKED_TRIP => 'Voyage sans bon de transport',
             default => 'Incident détecté',
         };
     }
@@ -176,6 +178,7 @@ class TheftIncidentService
                 TheftIncident::TYPE_UNAUTHORIZED_STOP => 'unauthorized_stop_detected',
                 TheftIncident::TYPE_ROUTE_DEVIATION => 'route_deviation_detected',
                 TheftIncident::TYPE_OFF_HOURS_MOVEMENT => 'off_hours_movement_detected',
+                TheftIncident::TYPE_UNTRACKED_TRIP => 'untracked_trip_detected',
                 default => 'theft_incident',
             };
 

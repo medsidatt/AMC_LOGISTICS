@@ -17,6 +17,7 @@ class TheftIncident extends Model
     public const TYPE_UNAUTHORIZED_STOP = 'unauthorized_stop';
     public const TYPE_ROUTE_DEVIATION = 'route_deviation';
     public const TYPE_OFF_HOURS_MOVEMENT = 'off_hours_movement';
+    public const TYPE_UNTRACKED_TRIP = 'untracked_trip';
 
     public const SEVERITY_LOW = 'low';
     public const SEVERITY_MEDIUM = 'medium';
