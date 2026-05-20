@@ -170,4 +170,34 @@ class InspectionChecklist extends Model
     {
         return $query->where('status', self::STATUS_SUBMITTED);
     }
+
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_VALIDATED;
+    }
+
+    /**
+     * Once an inspection is validated (signed electronically) it is sealed:
+     * any update or delete via Eloquent throws. The transition INTO
+     * validated is permitted because the original status at that point
+     * is still submitted/draft/rejected.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $inspection) {
+            if ($inspection->getOriginal('status') === self::STATUS_VALIDATED) {
+                throw new \DomainException(
+                    'Cette inspection est déjà signée électroniquement et ne peut plus être modifiée.'
+                );
+            }
+        });
+
+        static::deleting(function (self $inspection) {
+            if ($inspection->status === self::STATUS_VALIDATED) {
+                throw new \DomainException(
+                    'Cette inspection est déjà signée électroniquement et ne peut plus être supprimée.'
+                );
+            }
+        });
+    }
 }

@@ -4,7 +4,14 @@
     <meta charset="UTF-8">
     <title>Fiche d'Inspection d'Équipement — #{{ $inspection->id }}</title>
     <style>
-        @page { margin: 16mm 12mm 14mm 12mm; }
+        @font-face {
+            font-family: 'Dancing Script';
+            font-style: normal;
+            font-weight: 400;
+            src: url('{{ public_path("fonts/dancing-script.ttf") }}') format('truetype');
+        }
+
+        @page { margin: 16mm 12mm 18mm 12mm; }
         * { box-sizing: border-box; }
         body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #222; }
 
@@ -52,8 +59,14 @@
 
         .signature-row { width: 100%; margin-top: 6px; }
         .signature-row td { vertical-align: top; padding: 6px 0; }
-        .signature-row .left { width: 60%; }
-        .signature-row .right { width: 40%; text-align: right; font-weight: bold; }
+        .signature-row .left { width: 55%; }
+        .signature-row .right { width: 45%; text-align: right; font-weight: bold; }
+        .signature-block { display: inline-block; padding: 8px 12px 10px 14px; border: 1px solid #e5e7eb; border-left: 3px solid #b91c1c; background: #fffbeb; text-align: left; }
+        .signature-block .lbl { font-weight: bold; font-size: 8.5px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+        .signature-block .name { font-family: 'Dancing Script', cursive; font-size: 28px; color: #111827; line-height: 1; font-weight: normal; }
+        .signature-block .meta { margin-top: 4px; font-size: 8.5px; color: #6b7280; font-weight: normal; }
+
+        .body-esign { margin-top: 8px; padding-top: 5px; border-top: 1px dashed #b91c1c; text-align: center; font-style: italic; font-size: 9px; color: #4b5563; }
 
         .footer { position: fixed; bottom: 4mm; left: 12mm; right: 12mm; border-top: 1px solid #b00; padding-top: 4px; font-size: 8px; color: #555; }
         .footer table { width: 100%; }
@@ -154,6 +167,12 @@
     </tbody>
 </table>
 
+@php
+    $isValidated = $inspection->status === 'validated';
+    $signerName = $inspection->electronic_signature_name ?? $inspection->validator?->name ?? '—';
+    $signedAt = $inspection->validated_at?->format('d/m/Y à H:i') ?? '—';
+@endphp
+
 <table class="signature-row">
     <tr>
         <td class="left">
@@ -168,14 +187,33 @@
                 @endif
             </div>
         </td>
-        <td class="right">Inspecteur<br><span style="font-weight:normal;">{{ $inspection->inspector?->name ?? '—' }}</span></td>
+        <td class="right">
+            <div style="font-size:9px; color:#6b7280; font-weight:bold; text-transform:uppercase; margin-bottom:3px;">Inspecteur</div>
+            <div style="font-weight:normal; color:#111827; margin-bottom:8px;">{{ $inspection->inspector?->name ?? '—' }}</div>
+
+            @if ($isValidated)
+                <div class="signature-block">
+                    <div class="lbl">Signée par le Responsable Logistique</div>
+                    <div class="name">{{ $signerName }}</div>
+                    <div class="meta">Le {{ $signedAt }}</div>
+                </div>
+            @endif
+        </td>
     </tr>
 </table>
 
-<div class="footer">
-    <div style="text-align:center; font-style:italic; font-size:8px; color:#666; margin-bottom:2px;">
-        Ce document est signé électroniquement.
+{{-- E-signature line at the bottom of the body --}}
+@if ($isValidated)
+    <div class="body-esign">
+        Ce document est signé électroniquement par
+        <b>{{ $signerName }}</b>
+        le <b>{{ $signedAt }}</b>.
     </div>
+@else
+    <div class="body-esign">Ce document est signé électroniquement lorsqu'il est validé.</div>
+@endif
+
+<div class="footer">
     <table>
         <tr>
             <td class="col1"><b style="color:#b00;">AMC Travaux SARL</b><br>BP 7495 — NQT 304</td>

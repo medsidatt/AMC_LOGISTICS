@@ -1,8 +1,11 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { ShieldCheck, Edit2, FileDown, Camera, ClipboardList, FileText } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import FormInput from '@/components/ui/FormInput';
+import { ShieldCheck, Edit2, FileDown, Camera, ClipboardList, FileText, PenLine, CheckCircle2, Clock } from 'lucide-react';
 
 interface Inspection {
     id: number;
@@ -18,6 +21,9 @@ interface Inspection {
     vehicle_photo_url?: string | null;
     vehicle_photo_filename?: string | null;
     field_remarks?: Record<string, string> | null;
+    validator?: string | null;
+    validated_at?: string | null;
+    electronic_signature_name?: string | null;
     [key: string]: any;
 }
 
@@ -34,12 +40,33 @@ interface Props {
         fields: string[];
         sections: Record<string, Section>;
     };
+    canSign: boolean;
+    currentUserName: string;
 }
 
-export default function InspectionShow({ inspection, options }: Props) {
+export default function InspectionShow({ inspection, options, canSign, currentUserName }: Props) {
     const { auth } = usePage().props as any;
     const can = (perm: string) => Array.isArray(auth?.permissions) && auth.permissions.includes(perm);
-    const editable = inspection.status !== 'validated' && can('inspection-edit');
+    const isValidated = inspection.status === 'validated';
+    const editable = !isValidated && can('inspection-edit');
+
+    const [signOpen, setSignOpen] = useState(false);
+    const [signatureName, setSignatureName] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const openSign = () => {
+        setSignatureName(currentUserName);
+        setSignOpen(true);
+    };
+    const closeSign = () => { setSignOpen(false); setSignatureName(''); };
+    const submitSign = () => {
+        if (!signatureName.trim()) return;
+        setSubmitting(true);
+        router.post(`/hse/inspections/${inspection.id}/sign`, { signature_name: signatureName.trim() }, {
+            preserveScroll: true,
+            onFinish: () => { setSubmitting(false); closeSign(); },
+        });
+    };
 
     return (
         <AuthenticatedLayout>
@@ -49,8 +76,16 @@ export default function InspectionShow({ inspection, options }: Props) {
                     <div className="flex items-center gap-2">
                         <ShieldCheck size={22} className="text-emerald-500" />
                         <h1 className="text-xl font-semibold">Inspection #{inspection.id}</h1>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${
+                            isValidated
+                                ? 'bg-emerald-100 text-emerald-800 ring-emerald-200'
+                                : 'bg-amber-100 text-amber-800 ring-amber-200'
+                        }`}>
+                            {isValidated ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+                            {isValidated ? 'Signée' : 'En attente'}
+                        </span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         <a href={`/hse/inspections/${inspection.id}/pdf`}>
                             <Button variant="secondary"><FileDown size={14} className="mr-1" /> Télécharger PDF</Button>
                         </a>
@@ -58,6 +93,11 @@ export default function InspectionShow({ inspection, options }: Props) {
                             <Link href={`/logistics/inspections/${inspection.id}/edit`}>
                                 <Button variant="secondary"><Edit2 size={14} className="mr-1" /> Modifier</Button>
                             </Link>
+                        )}
+                        {canSign && !isValidated && (
+                            <Button variant="primary" onClick={openSign}>
+                                <PenLine size={14} className="mr-1" /> Signer
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -139,7 +179,58 @@ export default function InspectionShow({ inspection, options }: Props) {
                         )}
                     </Card>
                 )}
+
+                {/* Signature électronique */}
+                {isValidated && (
+                    <Card className="border-l-4 border-l-red-600 bg-amber-50">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Signée par le Responsable Logistique</div>
+                        <div className="mt-1 text-2xl sm:text-3xl text-[var(--color-text)] break-words" style={{ fontFamily: '"Dancing Script", cursive', lineHeight: 1.1 }}>
+                            {inspection.electronic_signature_name ?? inspection.validator ?? '—'}
+                        </div>
+                        {inspection.validated_at && (
+                            <div className="text-xs text-[var(--color-text-muted)] mt-2">Le {inspection.validated_at}</div>
+                        )}
+                    </Card>
+                )}
             </div>
+
+            <Modal open={signOpen} onClose={closeSign} title="Signer l'inspection" size="md">
+                <div className="space-y-4">
+                    <div className="rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border)] p-3 text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                            <ShieldCheck size={14} className="text-emerald-500" />
+                            <span className="font-semibold text-[var(--color-text)]">Inspection N° {inspection.id}</span>
+                            <span className="text-[var(--color-text-muted)]">— {inspection.truck?.matricule ?? '—'}</span>
+                        </div>
+                        <div className="text-xs text-[var(--color-text-muted)]">Date : {inspection.inspection_date} · Inspecteur : {inspection.inspector ?? '—'}</div>
+                    </div>
+                    <FormInput
+                        label="Nom préféré pour la signature"
+                        value={signatureName}
+                        onChange={(e) => setSignatureName(e.target.value)}
+                        autoFocus
+                        required
+                    />
+                    <p className="text-xs text-[var(--color-text-muted)] -mt-2">
+                        Ce nom apparaîtra en signature manuscrite sur le PDF de l'inspection.
+                        Par défaut, votre nom de compte est proposé — modifiez-le si nécessaire.
+                    </p>
+                    {signatureName.trim() && (
+                        <div className="text-center py-3 border border-dashed border-[var(--color-border)] rounded-lg bg-[var(--color-surface)]">
+                            <span className="text-[24px] sm:text-[32px] break-words text-[var(--color-text)]" style={{ fontFamily: '"Dancing Script", cursive', lineHeight: 1.1 }}>
+                                {signatureName.trim()}
+                            </span>
+                            <p className="text-xs text-[var(--color-text-muted)] mt-2">Aperçu de la signature</p>
+                        </div>
+                    )}
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <Button variant="ghost" onClick={closeSign} disabled={submitting}>Annuler</Button>
+                        <Button variant="primary" onClick={submitSign} loading={submitting} disabled={!signatureName.trim()} icon={<PenLine size={14} />}>
+                            Signer électroniquement
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </AuthenticatedLayout>
     );
 }
