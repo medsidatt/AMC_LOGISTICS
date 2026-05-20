@@ -1,10 +1,16 @@
 import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
 import Pagination from '@/components/ui/Pagination';
-import { History as HistoryIcon } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { History as HistoryIcon, FileText, UserPlus, CheckCircle2 } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
+
+type MaintenanceStatus = 'pending' | 'assigned' | 'completed' | 'approved';
 
 interface MaintenanceRecord {
     id: number;
@@ -27,13 +33,24 @@ interface MaintenanceRecord {
     filter_hydraulic_changed?: boolean;
     filter_air_changed?: boolean;
     filter_fuel_changed?: boolean;
+    status: MaintenanceStatus;
+    assigned_to: string | null;
+    assigned_by: string | null;
+    assigned_at: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
 }
+
+interface AssignableUser { id: number; name: string }
 
 interface Props {
     maintenances: { data: MaintenanceRecord[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
     trucks: { id: number; matricule: string }[];
     maintenanceTypes: { value: string; label: string }[];
     filters: Record<string, string>;
+    canAssign: boolean;
+    canApprove: boolean;
+    assignableUsers: AssignableUser[];
 }
 
 function FiltersSummary({ m }: { m: MaintenanceRecord }) {
@@ -45,7 +62,29 @@ function FiltersSummary({ m }: { m: MaintenanceRecord }) {
     return <>{flags.length === 0 ? '-' : flags.join(', ')}</>;
 }
 
-export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters }: Props) {
+const STATUS_LABEL: Record<MaintenanceStatus, string> = {
+    pending: 'En attente',
+    assigned: 'Assignée',
+    completed: 'Terminée',
+    approved: 'Approuvée',
+};
+
+const STATUS_CLASS: Record<MaintenanceStatus, string> = {
+    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    assigned: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+};
+
+function StatusPill({ status }: { status: MaintenanceStatus }) {
+    return (
+        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_CLASS[status]}`}>
+            {STATUS_LABEL[status]}
+        </span>
+    );
+}
+
+export default function MaintenanceHistory({ maintenances, trucks, maintenanceTypes, filters, canAssign, canApprove, assignableUsers }: Props) {
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
 
     const applyFilter = (key: string, value: string | number | null) => {
@@ -53,6 +92,43 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
         Object.keys(newFilters).forEach((k) => { if (!newFilters[k]) delete newFilters[k]; });
         router.get('/maintenance/history', newFilters, { preserveState: true, preserveScroll: true });
     };
+
+    const [assignTarget, setAssignTarget] = useState<MaintenanceRecord | null>(null);
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [approveTarget, setApproveTarget] = useState<MaintenanceRecord | null>(null);
+
+    const openAssign = (m: MaintenanceRecord) => {
+        setAssignTarget(m);
+        setSelectedUserId(null);
+    };
+
+    const closeAssign = () => {
+        setAssignTarget(null);
+        setSelectedUserId(null);
+    };
+
+    const submitAssign = () => {
+        if (!assignTarget || !selectedUserId) return;
+        setSubmitting(true);
+        router.post(`/maintenance/${assignTarget.id}/assign`, { assigned_to_id: selectedUserId }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setSubmitting(false);
+                closeAssign();
+            },
+        });
+    };
+
+    const submitApprove = () => {
+        if (!approveTarget) return;
+        router.post(`/maintenance/${approveTarget.id}/approve`, {}, {
+            preserveScroll: true,
+            onFinish: () => setApproveTarget(null),
+        });
+    };
+
+    const userOpts = assignableUsers.map((u) => ({ value: u.id, label: u.name }));
 
     return (
         <AuthenticatedLayout title="Historique maintenance">
@@ -79,12 +155,15 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Vidange à</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Prochaine</th>
                                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Filtres</th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Notes</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Statut</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Assignée à</th>
+                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Signée par</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-[var(--color-border)]">
                             {maintenances.data.length === 0 ? (
-                                <tr><td colSpan={8} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
+                                <tr><td colSpan={11} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
                                     <HistoryIcon size={32} className="mx-auto mb-2 opacity-30" />
                                     Aucune maintenance enregistrée
                                 </td></tr>
@@ -97,7 +176,36 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.oil_change_km != null ? Number(m.oil_change_km).toLocaleString('fr-FR') : '-'}</td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.next_oil_change_km != null ? Number(m.next_oil_change_km).toLocaleString('fr-FR') : '-'}</td>
                                     <td className="px-4 py-3 text-[var(--color-text-secondary)]"><FiltersSummary m={m} /></td>
-                                    <td className="px-4 py-3 text-[var(--color-text-secondary)] max-w-[200px] truncate">{m.notes ?? '-'}</td>
+                                    <td className="px-4 py-3"><StatusPill status={m.status} /></td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">{m.assigned_to ?? '-'}</td>
+                                    <td className="px-4 py-3 text-[var(--color-text-secondary)]">
+                                        {m.approved_by ? (
+                                            <span title={m.approved_at ?? ''}>{m.approved_by}</span>
+                                        ) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <a
+                                                href={`/maintenance/${m.id}/pdf`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]"
+                                                title="Télécharger le PDF"
+                                            >
+                                                <FileText size={14} /> PDF
+                                            </a>
+                                            {canAssign && m.status === 'pending' && (
+                                                <Button size="sm" variant="secondary" icon={<UserPlus size={14} />} onClick={() => openAssign(m)}>
+                                                    Assigner
+                                                </Button>
+                                            )}
+                                            {canApprove && (m.status === 'assigned' || m.status === 'completed') && (
+                                                <Button size="sm" variant="primary" icon={<CheckCircle2 size={14} />} onClick={() => setApproveTarget(m)}>
+                                                    Approuver
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -107,6 +215,36 @@ export default function MaintenanceHistory({ maintenances, trucks, maintenanceTy
                     <Pagination meta={maintenances} />
                 </div>
             </Card>
+
+            <Modal open={assignTarget !== null} onClose={closeAssign} title="Assigner la maintenance" size="md">
+                <div className="p-5 space-y-4">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                        Maintenance N° <b>{assignTarget?.id}</b> — Camion <b>{assignTarget?.truck}</b> du <b>{assignTarget?.maintenance_date}</b>
+                    </p>
+                    <FormSelect
+                        label="Assigner à"
+                        placeholder="Sélectionner un utilisateur…"
+                        options={userOpts}
+                        value={selectedUserId}
+                        onChange={(v) => setSelectedUserId(v ? Number(v) : null)}
+                    />
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                        <Button variant="ghost" onClick={closeAssign} disabled={submitting}>Annuler</Button>
+                        <Button variant="primary" onClick={submitAssign} loading={submitting} disabled={!selectedUserId}>
+                            Confirmer l'assignation
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <ConfirmDialog
+                open={approveTarget !== null}
+                onClose={() => setApproveTarget(null)}
+                title="Approuver et signer électroniquement"
+                message="Vous allez signer électroniquement cette maintenance avec votre nom. Cette action est irréversible. Continuer ?"
+                confirmLabel="Approuver et signer"
+                onConfirm={submitApprove}
+            />
         </AuthenticatedLayout>
     );
 }

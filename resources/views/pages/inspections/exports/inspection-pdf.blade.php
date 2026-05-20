@@ -10,12 +10,12 @@
 
         .brand-row { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
         .brand-row td { vertical-align: middle; padding: 0; }
-        .brand-logo { width: 35%; }
+        .brand-logo { width: 30%; }
         .brand-logo img { max-height: 55px; }
-        .brand-center { width: 35%; text-align: center; }
-        .brand-iso { width: 30%; text-align: right; font-size: 7px; line-height: 1.3; color: #555; white-space: nowrap; }
-        .brand-iso img { height: 42px; vertical-align: middle; margin-left: 4px; }
-        .brand-iso .iso-badge { display: inline-block; border: 1px solid #999; padding: 2px 6px; margin-left: 4px; font-weight: bold; font-size: 8px; }
+        .brand-center { width: 32%; text-align: center; }
+        .brand-iso { width: 38%; text-align: right; font-size: 7px; line-height: 1.3; color: #555; }
+        .brand-iso img { max-height: 55px; max-width: 100%; vertical-align: middle; }
+        .brand-iso .iso-badge { display: inline-block; border: 1px solid #999; padding: 2px 6px; font-weight: bold; font-size: 8px; }
         .brand-iso .cert-number { display: block; margin-top: 3px; font-size: 7px; }
 
         .title-bar { background: #f3f3f3; border: 1px solid #999; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 12px; margin-bottom: 4px; }
@@ -76,15 +76,10 @@
         </td>
         <td class="brand-center"></td>
         <td class="brand-iso">
-            @if ($bureauVeritasPath)
-                <img src="{{ $bureauVeritasPath }}" alt="ISO 9001 / 14001 / 45001 — Bureau Veritas">
+            @if ($isoBadgePath)
+                <img src="{{ $isoBadgePath }}" alt="ISO 9001 & 45001 — Bureau Veritas / UKAS">
             @else
-                <span class="iso-badge">ISO 9001 / 14001 / 45001 — BUREAU VERITAS</span>
-            @endif
-            @if ($ukasPath)
-                <img src="{{ $ukasPath }}" alt="UKAS Management Systems">
-            @else
-                <span class="iso-badge">UKAS</span>
+                <span class="iso-badge">ISO 9001 / 45001 — BUREAU VERITAS / UKAS</span>
             @endif
             <span class="cert-number">CERTIFICAT N° AFR 20231019 SEN QS AMC</span>
         </td>
@@ -178,6 +173,9 @@
 </table>
 
 <div class="footer">
+    <div style="text-align:center; font-style:italic; font-size:8px; color:#666; margin-bottom:2px;">
+        Ce document est signé électroniquement.
+    </div>
     <table>
         <tr>
             <td class="col1"><b style="color:#b00;">AMC Travaux SARL</b><br>BP 7495 — NQT 304</td>

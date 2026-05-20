@@ -9,6 +9,7 @@ use App\Models\Maintenance;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
+use App\Models\User;
 use App\Services\MaintenanceStatusService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -27,7 +28,7 @@ class MaintenanceController extends Controller
     ) {
         // Read-only endpoints
         $this->middleware('permission:maintenance-list', [
-            'only' => ['index', 'history', 'rules', 'due', 'exportPdf', 'exportExcel'],
+            'only' => ['index', 'history', 'rules', 'due', 'exportPdf', 'exportExcel', 'exportRecordPdf'],
         ]);
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
@@ -36,6 +37,8 @@ class MaintenanceController extends Controller
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
             ],
         ]);
+        $this->middleware('permission:maintenance-assign', ['only' => ['assign']]);
+        $this->middleware('permission:maintenance-approve', ['only' => ['approve']]);
         $this->middleware('permission:maintenance-rule-create', ['only' => ['storeRule']]);
         $this->middleware('permission:maintenance-rule-deactivate', ['only' => ['deactivateRule']]);
     }
@@ -522,7 +525,7 @@ class MaintenanceController extends Controller
 
     public function history(Request $request)
     {
-        $query = Maintenance::with(['truck', 'profile'])
+        $query = Maintenance::with(['truck', 'profile', 'assignedTo:id,name', 'assignedBy:id,name', 'approvedBy:id,name'])
             ->orderByDesc('maintenance_date');
 
         if ($request->truck_id) {
@@ -553,6 +556,12 @@ class MaintenanceController extends Controller
             'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
             'filter_air_changed' => (bool) $m->filter_air_changed,
             'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
+            'status' => $m->status ?? Maintenance::STATUS_PENDING,
+            'assigned_to' => $m->assignedTo?->name,
+            'assigned_by' => $m->assignedBy?->name,
+            'assigned_at' => $m->assigned_at?->format('d/m/Y H:i'),
+            'approved_by' => $m->approvedBy?->name,
+            'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
         ]);
 
         $trucks = Truck::orderBy('matricule')->get(['id', 'matricule']);
@@ -561,11 +570,101 @@ class MaintenanceController extends Controller
             'label' => $cfg['label'] ?? $key,
         ])->values();
 
+        $user = auth()->user();
+        $canAssign = $user?->can('maintenance-assign') ?? false;
+        $canApprove = $user?->can('maintenance-approve') ?? false;
+
+        $assignableUsers = ($canAssign)
+            ? User::orderBy('name')->get(['id', 'name'])->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+            ])
+            : collect();
+
         return Inertia::render('maintenance/History', [
             'maintenances' => $maintenances,
             'trucks' => $trucks,
             'maintenanceTypes' => $maintenanceTypes,
             'filters' => $request->only(['truck_id', 'maintenance_type']),
+            'canAssign' => $canAssign,
+            'canApprove' => $canApprove,
+            'assignableUsers' => $assignableUsers,
         ]);
+    }
+
+    public function assign(Request $request, Maintenance $maintenance)
+    {
+        $data = $request->validate([
+            'assigned_to_id' => 'required|exists:users,id',
+        ]);
+
+        $maintenance->update([
+            'assigned_to_id' => $data['assigned_to_id'],
+            'assigned_by_id' => auth()->id(),
+            'assigned_at'    => now(),
+            'status'         => Maintenance::STATUS_ASSIGNED,
+        ]);
+
+        return back()->with('success', 'Maintenance assignée.');
+    }
+
+    public function approve(Maintenance $maintenance)
+    {
+        if ($maintenance->status === Maintenance::STATUS_APPROVED) {
+            return back()->with('error', 'Cette maintenance est déjà approuvée.');
+        }
+
+        $user = auth()->user();
+
+        $maintenance->update([
+            'approved_by_id'            => $user->id,
+            'approved_at'               => now(),
+            'electronic_signature_name' => $user->name,
+            'status'                    => Maintenance::STATUS_APPROVED,
+        ]);
+
+        return back()->with('success', 'Maintenance approuvée et signée électroniquement.');
+    }
+
+    public function exportRecordPdf(Maintenance $maintenance)
+    {
+        $maintenance->load([
+            'truck:id,matricule',
+            'profile',
+            'assignedTo:id,name',
+            'assignedBy:id,name',
+            'approvedBy:id,name',
+        ]);
+
+        $logoPath = file_exists(public_path('images/logo.png'))
+            ? public_path('images/logo.png')
+            : null;
+
+        $isoBadgePath = $this->resolveIsoBadgePath();
+
+        $pdf = Pdf::loadView('pages.trucks.exports.maintenance-record-pdf', [
+            'maintenance'  => $maintenance,
+            'logoPath'     => $logoPath,
+            'isoBadgePath' => $isoBadgePath,
+        ])->setPaper('A4', 'portrait');
+
+        $filename = sprintf(
+            'maintenance-%s-%s.pdf',
+            $maintenance->truck?->matricule ?? 'NA',
+            $maintenance->maintenance_date?->format('Y-m-d') ?? now()->format('Y-m-d')
+        );
+
+        return $pdf->download($filename);
+    }
+
+    private function resolveIsoBadgePath(): ?string
+    {
+        foreach (['iso-certification.png', 'iso-certification.jpg', 'iso-bureau-veritas.png', 'iso-bureau-veritas.jpg'] as $name) {
+            $full = public_path('images/' . $name);
+            if (file_exists($full)) {
+                return $full;
+            }
+        }
+        return null;
     }
 }

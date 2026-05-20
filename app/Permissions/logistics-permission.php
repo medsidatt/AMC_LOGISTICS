@@ -28,6 +28,8 @@ return [
 
     'maintenance-list',
     'maintenance-create',
+    'maintenance-assign',
+    'maintenance-approve',
     'maintenance-rule-create',
     'maintenance-rule-deactivate',
     'rotation-validate',
