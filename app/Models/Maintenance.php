@@ -67,6 +67,36 @@ class Maintenance extends Model
         'REMPLACÉ' => 'Remplacé',
     ];
 
+    /**
+     * Once a maintenance is signed (status = approved) the record is sealed:
+     * no further updates or deletes are allowed via Eloquent. The transition
+     * INTO approved (signing) is permitted because the original status at
+     * that moment is still pending/assigned/completed.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $maintenance) {
+            if ($maintenance->getOriginal('status') === self::STATUS_APPROVED) {
+                throw new \DomainException(
+                    'Cette maintenance est déjà signée électroniquement et ne peut plus être modifiée.'
+                );
+            }
+        });
+
+        static::deleting(function (self $maintenance) {
+            if ($maintenance->status === self::STATUS_APPROVED) {
+                throw new \DomainException(
+                    'Cette maintenance est déjà signée électroniquement et ne peut plus être supprimée.'
+                );
+            }
+        });
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->status === self::STATUS_APPROVED;
+    }
+
     public function truck(): BelongsTo
     {
         return $this->belongsTo(Truck::class);
