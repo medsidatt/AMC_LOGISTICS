@@ -205,3 +205,14 @@ Route::prefix('v1')->group(function () {
         Route::post('trucks/bulk-update-maintenance-type', [\App\Http\Controllers\TruckController::class, 'bulkUpdateMaintenanceType'])->name('api.trucks.bulk-update-maintenance-type');
     });
 });
+
+// WhatsApp Business Cloud API webhooks — Meta calls these without auth.
+// GET is the verify-token handshake; POST carries delivery/read/failure
+// events and is signature-verified via VerifyWhatsappSignature.
+Route::prefix('webhooks/whatsapp')->group(function () {
+    Route::get('/', [\App\Http\Controllers\WhatsappWebhookController::class, 'verify'])
+        ->name('api.webhooks.whatsapp.verify');
+    Route::post('/', [\App\Http\Controllers\WhatsappWebhookController::class, 'receive'])
+        ->middleware(\App\Http\Middleware\VerifyWhatsappSignature::class)
+        ->name('api.webhooks.whatsapp.receive');
+});

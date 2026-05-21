@@ -1,41 +1,45 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import { usePermission } from '@/hooks/usePermission';
 import {
-    Users, MessageCircle, ChevronLeft, ChevronRight, Check,
-    Search, Truck as TruckIcon, Calendar,
+    Users, ChevronLeft, ChevronRight, Check,
+    Search, Calendar, RotateCcw,
+    PhoneOff, ShieldOff, AlertTriangle, Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+
+type NotificationStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed' | 'skipped' | null;
 
 interface DriverRow {
     id: number;
     name: string;
+    has_phone: boolean;
+    opted_in: boolean;
     dispatched: boolean;
     dispatch_id: number | null;
-    truck_id: number | null;
-    truck_matricule: string | null;
-    notes: string | null;
+    wish_provider_id: number | null;
     notified_at: string | null;
+    notification_status: NotificationStatus;
+    notification_error: string | null;
 }
 
-interface TruckOpt { id: number; matricule: string }
+interface ProviderOpt { id: number; name: string }
 
 interface Props {
     date: string;
     isPast: boolean;
     isTomorrow: boolean;
     drivers: DriverRow[];
-    trucks: TruckOpt[];
+    providers: ProviderOpt[];
     dispatchedCount: number;
 }
 
-type FormRow = { driver_id: number; dispatched: boolean; truck_id: number | null; notes: string };
+type FormRow = { driver_id: number; dispatched: boolean; wish_provider_id: number | null };
 
 function shiftDate(iso: string, days: number): string {
     const d = new Date(iso + 'T00:00:00');
@@ -56,6 +60,102 @@ function dayRelativeLabel(iso: string, isTomorrow: boolean, isPast: boolean): st
     return null;
 }
 
+function NotificationStatusLine({ driver, isPast, canEdit }: { driver: DriverRow; isPast: boolean; canEdit: boolean }) {
+    const status = driver.notification_status;
+    const showRenotify = canEdit && !isPast && driver.dispatch_id !== null;
+
+    const renotify = () => {
+        if (!driver.dispatch_id) return;
+        router.post(
+            `/logistics/planning/${driver.dispatch_id}/renotify`,
+            {},
+            { preserveScroll: true, preserveState: false },
+        );
+    };
+
+    // No phone — clearest possible signal (status would also be 'skipped'
+    // but we want the action to be "go fix the driver record")
+    if (!driver.has_phone) {
+        return (
+            <div className="text-xs flex items-center gap-1 flex-wrap mt-0.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium">
+                    <PhoneOff size={10} /> Pas de téléphone
+                </span>
+                <Link href={`/drivers/${driver.id}/edit`} className="text-[var(--color-primary)] hover:underline">
+                    Modifier
+                </Link>
+            </div>
+        );
+    }
+
+    if (!driver.opted_in) {
+        return (
+            <div className="text-xs flex items-center gap-1 flex-wrap mt-0.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium">
+                    <ShieldOff size={10} /> Sans consentement
+                </span>
+                <Link href={`/drivers/${driver.id}/edit`} className="text-[var(--color-primary)] hover:underline">
+                    Modifier
+                </Link>
+            </div>
+        );
+    }
+
+    if (status === 'failed') {
+        return (
+            <div className="text-xs flex items-center gap-1 flex-wrap mt-0.5">
+                <span
+                    className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 font-medium max-w-full"
+                    title={driver.notification_error ?? undefined}
+                >
+                    <AlertTriangle size={10} />
+                    <span className="truncate max-w-[12rem]">
+                        Échec{driver.notification_error ? ` — ${driver.notification_error}` : ''}
+                    </span>
+                </span>
+                {showRenotify && (
+                    <button type="button" onClick={renotify} className="text-[var(--color-primary)] hover:underline inline-flex items-center gap-1">
+                        <RotateCcw size={10} /> Renvoyer
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    if (status === 'sent' || status === 'delivered' || status === 'read') {
+        const label = status === 'read'
+            ? `Lu${driver.notified_at ? ` · envoyé le ${driver.notified_at}` : ''}`
+            : status === 'delivered'
+                ? `Livré${driver.notified_at ? ` à ${driver.notified_at}` : ''}`
+                : `Notifié${driver.notified_at ? ` à ${driver.notified_at}` : ''}`;
+        return (
+            <div className="text-xs flex items-center gap-2 flex-wrap mt-0.5 text-emerald-600 dark:text-emerald-400">
+                <span>{label}</span>
+                {showRenotify && (
+                    <button type="button" onClick={renotify} className="text-[var(--color-primary)] hover:underline inline-flex items-center gap-1" title="Renvoyer la notification">
+                        <RotateCcw size={10} /> Renvoyer
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    if (status === 'skipped') {
+        return (
+            <div className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                {driver.notification_error ?? 'Notification non envoyée'}
+            </div>
+        );
+    }
+
+    // pending / null
+    return (
+        <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 inline-flex items-center gap-1">
+            <Clock size={10} /> Notification en attente
+        </div>
+    );
+}
+
 function KpiTile({ value, label, color, icon }: { value: number | string; label: string; color: string; icon: React.ReactNode }) {
     return (
         <Card className="h-full">
@@ -70,7 +170,7 @@ function KpiTile({ value, label, color, icon }: { value: number | string; label:
     );
 }
 
-export default function PlanningIndex({ date, isPast, isTomorrow, drivers, trucks, dispatchedCount }: Props) {
+export default function PlanningIndex({ date, isPast, isTomorrow, drivers, providers, dispatchedCount }: Props) {
     const { can } = usePermission();
     const canEdit = can('daily-dispatch-edit') && !isPast;
 
@@ -78,10 +178,15 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
         drivers.map((d) => ({
             driver_id: d.id,
             dispatched: d.dispatched,
-            truck_id: d.truck_id,
-            notes: d.notes ?? '',
+            wish_provider_id: d.wish_provider_id,
         })),
     );
+
+    const providerOptions = useMemo(
+        () => [{ value: '', label: '— sans préférence —' }, ...providers.map((p) => ({ value: p.id, label: p.name }))],
+        [providers],
+    );
+    const providersById = useMemo(() => Object.fromEntries(providers.map((p) => [p.id, p.name])), [providers]);
     const [search, setSearch] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -102,11 +207,6 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
         });
     };
 
-    const truckOptions = useMemo(
-        () => [{ value: '', label: '— sans camion —' }, ...trucks.map((t) => ({ value: t.id, label: t.matricule }))],
-        [trucks],
-    );
-
     const driversById = useMemo(() => Object.fromEntries(drivers.map((d) => [d.id, d])), [drivers]);
 
     const filteredRows = useMemo(() => {
@@ -121,15 +221,13 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
     const scheduledRows = filteredRows.filter((r) => r.dispatched);
     const availableRows = filteredRows.filter((r) => !r.dispatched);
     const selectedCount = rows.filter((r) => r.dispatched).length;
-    const withTruckCount = rows.filter((r) => r.dispatched && r.truck_id).length;
 
     const isDirty = useMemo(() => {
         for (const r of rows) {
             const orig = driversById[r.driver_id];
             if (!orig) continue;
             if (orig.dispatched !== r.dispatched) return true;
-            if ((orig.truck_id ?? null) !== (r.truck_id ?? null)) return true;
-            if ((orig.notes ?? '') !== r.notes) return true;
+            if ((orig.wish_provider_id ?? null) !== (r.wish_provider_id ?? null)) return true;
         }
         return false;
     }, [rows, driversById]);
@@ -191,7 +289,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
                 </Card>
 
                 {/* KPI tiles */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                     <KpiTile
                         value={drivers.length}
                         label="Chauffeurs actifs"
@@ -204,24 +302,6 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
                         color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
                         icon={<Check size={18} />}
                     />
-                    <KpiTile
-                        value={withTruckCount}
-                        label="Avec camion"
-                        color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                        icon={<TruckIcon size={18} />}
-                    />
-                    <KpiTile
-                        value={selectedCount - withTruckCount}
-                        label="Sans camion"
-                        color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-                        icon={<TruckIcon size={18} />}
-                    />
-                </div>
-
-                {/* WhatsApp banner */}
-                <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/10 p-3 flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300">
-                    <MessageCircle size={14} />
-                    <span>Les chauffeurs programmés seront notifiés par WhatsApp dans une prochaine version.</span>
                 </div>
 
                 {isPast && (
@@ -268,7 +348,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
                                             <button
                                                 type="button"
                                                 disabled={!canEdit}
-                                                onClick={() => setRow(r.driver_id, { dispatched: false, truck_id: null, notes: '' })}
+                                                onClick={() => setRow(r.driver_id, { dispatched: false, wish_provider_id: null })}
                                                 className={clsx(
                                                     'w-6 h-6 rounded border-2 flex items-center justify-center transition shrink-0',
                                                     'border-emerald-500 bg-emerald-500 text-white',
@@ -280,39 +360,25 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, truck
                                             </button>
                                             <div className="font-semibold min-w-0 flex-1">
                                                 <div className="truncate">{orig?.name ?? '—'}</div>
-                                                {orig?.notified_at ? (
-                                                    <div className="text-xs text-emerald-600 dark:text-emerald-400">Notifié le {orig.notified_at}</div>
-                                                ) : (
-                                                    <div className="text-xs text-amber-600 dark:text-amber-400">Notification en attente</div>
+                                                {orig && (
+                                                    <NotificationStatusLine
+                                                        driver={orig}
+                                                        isPast={isPast}
+                                                        canEdit={canEdit}
+                                                    />
                                                 )}
                                             </div>
-                                            <div className="w-full sm:w-44">
+                                            <div className="w-full sm:w-52">
                                                 {canEdit ? (
                                                     <FormSelect
-                                                        options={truckOptions}
-                                                        value={r.truck_id ?? null}
-                                                        onChange={(v) => setRow(r.driver_id, { truck_id: v === '' || v == null ? null : Number(v) })}
+                                                        options={providerOptions}
+                                                        value={r.wish_provider_id ?? null}
+                                                        onChange={(v) => setRow(r.driver_id, { wish_provider_id: v === '' || v == null ? null : Number(v) })}
                                                         wrapperClass=""
                                                     />
-                                                ) : r.truck_id ? (
-                                                    <Badge variant="muted">{trucks.find((t) => t.id === r.truck_id)?.matricule ?? '—'}</Badge>
                                                 ) : (
-                                                    <span className="text-[var(--color-text-muted)] text-sm">sans camion</span>
-                                                )}
-                                            </div>
-                                            <div className="w-full sm:w-56">
-                                                {canEdit ? (
-                                                    <input
-                                                        type="text"
-                                                        value={r.notes}
-                                                        onChange={(e) => setRow(r.driver_id, { notes: e.target.value })}
-                                                        placeholder="Ex : carrière A, 3 rotations…"
-                                                        className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
-                                                        maxLength={500}
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs text-[var(--color-text-muted)] block truncate" title={r.notes}>
-                                                        {r.notes || '—'}
+                                                    <span className="text-xs text-[var(--color-text-muted)] block truncate">
+                                                        {r.wish_provider_id ? `Souhait : ${providersById[r.wish_provider_id] ?? '—'}` : 'sans préférence'}
                                                     </span>
                                                 )}
                                             </div>

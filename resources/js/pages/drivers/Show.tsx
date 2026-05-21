@@ -14,6 +14,7 @@ interface Props {
         phone: string | null;
         address: string | null;
         is_active: boolean;
+        whatsapp_opt_in_at: string | null;
         created_at: string | null;
         updated_at: string | null;
     };
@@ -27,6 +28,9 @@ export default function DriversShow({ driver, kpi, filter }: Props) {
         ['Email', driver.email],
         ['Téléphone', driver.phone],
         ['Adresse', driver.address],
+        ['Consentement WhatsApp', driver.whatsapp_opt_in_at
+            ? `Oui (depuis le ${driver.whatsapp_opt_in_at})`
+            : 'Non'],
         ['Créé le', driver.created_at],
         ['Modifié le', driver.updated_at],
     ];
