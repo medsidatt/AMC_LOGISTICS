@@ -14,30 +14,26 @@ class InvitationMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct(public Invitation $invitation) {}
+    public function __construct(
+        public Invitation $invitation,
+        public ?string $tempPassword = null,
+    ) {}
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Invitation Mail',
+            subject: 'Vos identifiants AMC Logistics',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
             view: 'auth.emails.invitation',
             with: [
-                'url' => route('invitation.accept', $this->invitation->token)
+                'invitation' => $this->invitation,
+                'tempPassword' => $this->tempPassword,
+                'loginUrl' => route('login'),
             ],
         );
     }
