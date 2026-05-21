@@ -25,6 +25,7 @@ class InvitationController extends Controller
             ->paginate(15)
             ->through(fn (Invitation $inv) => [
                 'id' => $inv->id,
+                'name' => $inv->name,
                 'email' => $inv->email,
                 'role_name' => $inv->role_name,
                 'is_used' => $inv->is_used,
@@ -56,17 +57,6 @@ class InvitationController extends Controller
     }
 
     /**
-     * Derive a display name from the local part of an email.
-     * "med.sidatt@amc.mr" -> "Med Sidatt", "jdoe@x.com" -> "Jdoe".
-     */
-    private function nameFromEmail(string $email): string
-    {
-        $local = Str::before($email, '@');
-        $parts = preg_split('/[._\-+]+/', $local, -1, PREG_SPLIT_NO_EMPTY) ?: [$local];
-        return Str::title(implode(' ', $parts));
-    }
-
-    /**
      * Roles the current user can assign. Only Super Admin can hand out
      * "Super Admin"; everyone else gets every role currently defined in
      * the roles table.
@@ -85,6 +75,7 @@ class InvitationController extends Controller
     public function sendInvitation(Request $request)
     {
         $request->validate([
+            'name' => 'required|string|max:255',
             'email' => [
                 'required',
                 'email',
@@ -101,7 +92,7 @@ class InvitationController extends Controller
             // Create the account up front so the invitee can log in
             // directly with the password we email them.
             $user = User::create([
-                'name' => $this->nameFromEmail($request->email),
+                'name' => $request->name,
                 'email' => $request->email,
                 'password' => $plainPassword,
                 'must_change_password' => true,
@@ -109,6 +100,7 @@ class InvitationController extends Controller
             $user->syncRoles([$request->role_name]);
 
             $invitation = Invitation::create([
+                'name' => $request->name,
                 'email' => $request->email,
                 'role_name' => $request->role_name,
                 'token' => Str::random(32),
@@ -142,6 +134,7 @@ class InvitationController extends Controller
         $invitation = Invitation::findOrFail($id);
 
         $request->validate([
+            'name' => 'required|string|max:255',
             'email' => [
                 'required',
                 'email',
@@ -157,15 +150,16 @@ class InvitationController extends Controller
         try {
             $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
 
-            $user = User::where('email', $invitation->email)->first()
-                ?? new User(['name' => $this->nameFromEmail($request->email)]);
+            $user = User::where('email', $invitation->email)->first() ?? new User();
 
+            $user->name = $request->name;
             $user->email = $request->email;
             $user->password = $plainPassword;
             $user->must_change_password = true;
             $user->save();
             $user->syncRoles([$request->role_name]);
 
+            $invitation->name = $request->name;
             $invitation->email = $request->email;
             $invitation->role_name = $request->role_name;
             $invitation->expires_at = now()->addDays(7);
