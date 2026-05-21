@@ -10,7 +10,7 @@ class Invitation extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['email', 'role_name', 'token', 'expires_at', 'is_used'];
+    protected $fillable = ['name', 'email', 'role_name', 'token', 'expires_at', 'is_used'];
 
     /*public function isExpired(): bool
     {
