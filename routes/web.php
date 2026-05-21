@@ -40,6 +40,10 @@ Route::get('/admin/audit-logs', [App\Http\Controllers\AuditLogController::class,
     ->middleware(['auth'])
     ->name('admin.audit-logs');
 
+Route::get('/admin/audit-logs/export', [App\Http\Controllers\AuditLogController::class, 'export'])
+    ->middleware(['auth'])
+    ->name('admin.audit-logs.export');
+
 Route::group(['middleware' => ['auth'], 'prefix' => 'fuel/import'], function () {
     Route::get('', [App\Http\Controllers\FuelImportController::class, 'showPage'])->name('fuel.import');
     Route::post('edk/preview', [App\Http\Controllers\FuelImportController::class, 'previewEdk'])->name('fuel.import.edk.preview');

@@ -139,7 +139,20 @@ class TransportTrackingController extends Controller
             'sort' => ['by' => $sortColumn, 'dir' => $sortDirection],
             'transporters' => Transporter::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
             'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
-            'drivers' => Driver::where('is_active', true)->orderBy('name')->get()->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'drivers' => Driver::where('is_active', true)
+                ->when(!empty($filters['truck_id']), function ($q) use ($filters) {
+                    $q->whereIn('id', function ($sub) use ($filters) {
+                        $sub->select('driver_id')
+                            ->from('transport_trackings')
+                            ->where('truck_id', $filters['truck_id'])
+                            ->whereNotNull('driver_id')
+                            ->distinct();
+                    });
+                })
+                ->orderBy('name')
+                ->get()
+                ->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])
+                ->toArray(),
             'providers' => Provider::all()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
             'products' => [
                 ['id' => '0/3', 'name' => '0/3'],
@@ -1038,19 +1051,20 @@ EOT;
 
     public function export(Request $request)
     {
-
+        // Accept the canonical Index keys; fall back to legacy *_filter keys for backward compatibility.
         $filters = [
-            'start_date' => request('start_date'),
-            'end_date' => request('end_date'),
-            'driver_id_filter' => request('driver_id_filter'),
-            'provider_id_filter' => request('provider_id_filter'),
-            'truck_id_filter' => request('truck_id_filter'),
-            'transporter_id_filter' => request('transporter_id_filter'),
+            'truck_id'       => $request->input('truck_id')       ?: $request->input('truck_id_filter'),
+            'driver_id'      => $request->input('driver_id')      ?: $request->input('driver_id_filter'),
+            'provider_id'    => $request->input('provider_id')    ?: $request->input('provider_id_filter'),
+            'transporter_id' => $request->input('transporter_id') ?: $request->input('transporter_id_filter'),
+            'product'        => $request->input('product'),
+            'start_date'     => $request->input('start_date'),
+            'end_date'       => $request->input('end_date'),
         ];
 
-//        dd($filters);
+        $filename = 'suivi-transport-' . now()->format('Y-m-d-His') . '.xlsx';
 
-        return Excel::download(new TransportTrackingExport($filters), 'transport_tracking.xlsx');
+        return Excel::download(new TransportTrackingExport($filters), $filename);
     }
 
     public function exportMissing()
