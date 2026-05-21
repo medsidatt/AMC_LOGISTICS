@@ -20,15 +20,29 @@ class MicrosoftAuthController extends Controller
         // so the user can sign in again without first being on /login.
         SilentSso::clearCooldown($request);
 
-        $driver = Socialite::driver('azure')
-            ->stateless()
-            ->scopes(['openid', 'profile', 'email', 'User.Read']);
-
-        if ($request->boolean('silent')) {
-            $driver->with(['prompt' => 'none']);
+        // Bad tenant config would land the user on Microsoft's AADSTS50059
+        // page, which we can't recover from server-side. Silently fall back
+        // to /login and engage the cooldown so we don't loop right back here.
+        if (! SilentSso::microsoftConfigured()) {
+            SilentSso::markFailed($request);
+            return redirect('/login');
         }
 
-        return $driver->redirect();
+        try {
+            $driver = Socialite::driver('azure')
+                ->stateless()
+                ->scopes(['openid', 'profile', 'email', 'User.Read']);
+
+            if ($request->boolean('silent')) {
+                $driver->with(['prompt' => 'none']);
+            }
+
+            return $driver->redirect();
+        } catch (\Throwable $e) {
+            Log::warning('Microsoft OAuth redirect build failed', ['message' => $e->getMessage()]);
+            SilentSso::markFailed($request);
+            return redirect('/login');
+        }
     }
 
     public function callback(Request $request)

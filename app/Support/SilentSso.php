@@ -31,6 +31,9 @@ class SilentSso
 
     public static function shouldAttempt(Request $request): bool
     {
+        if (! self::microsoftConfigured()) {
+            return false;
+        }
         if ($request->expectsJson()) {
             return false;
         }
@@ -39,6 +42,25 @@ class SilentSso
         }
         $lastFailed = (int) $request->session()->get(self::FAILED_AT_KEY, 0);
         return (time() - $lastFailed) > self::COOLDOWN_SECONDS;
+    }
+
+    /**
+     * True only when Azure OAuth is configured against a specific tenant.
+     * `common`, `organizations`, `consumers`, or an empty tenant trigger
+     * AADSTS50059 on a single-tenant Azure app, so we treat them as
+     * "not configured" and skip silent SSO entirely.
+     */
+    public static function microsoftConfigured(): bool
+    {
+        $tenant = (string) config('services.azure.tenant');
+        $clientId = (string) config('services.azure.client_id');
+        $redirect = (string) config('services.azure.redirect');
+
+        if ($clientId === '' || $redirect === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $tenant);
     }
 
     public static function markFailed(Request $request): void
