@@ -9,7 +9,6 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus, FileText, Image, Filter, ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Download } from 'lucide-react';
-import { exportToCsv } from '@/utils/csv-export';
 import { clsx } from 'clsx';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -85,12 +84,63 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
     };
 
     const applyFilter = (key: string, value: string | number | null) => {
-        router.get('/transport_tracking', buildParams({ [key]: value ? String(value) : null }), { preserveState: true, preserveScroll: true });
+        const overrides: Record<string, string | null> = { [key]: value ? String(value) : null };
+        // The driver list is scoped to the selected truck — changing truck invalidates the driver pick.
+        if (key === 'truck_id') {
+            overrides.driver_id = null;
+        }
+        router.get('/transport_tracking', buildParams(overrides), { preserveState: true, preserveScroll: true });
     };
 
     const clearFilters = () => {
         router.get('/transport_tracking', {}, { preserveState: true, preserveScroll: true });
     };
+
+    const toIsoDate = (d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const computeRange = (kind: 'today' | 'week' | 'month' | 'year' | '7d' | '30d'): { start: string; end: string } => {
+        const now = new Date();
+        let start: Date;
+        if (kind === 'today') {
+            start = new Date(now);
+        } else if (kind === 'week') {
+            // Monday-based week
+            start = new Date(now);
+            const diff = (start.getDay() + 6) % 7;
+            start.setDate(start.getDate() - diff);
+        } else if (kind === 'month') {
+            start = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (kind === 'year') {
+            start = new Date(now.getFullYear(), 0, 1);
+        } else if (kind === '7d') {
+            start = new Date(now); start.setDate(now.getDate() - 6);
+        } else {
+            start = new Date(now); start.setDate(now.getDate() - 29);
+        }
+        return { start: toIsoDate(start), end: toIsoDate(now) };
+    };
+
+    const applyDatePreset = (kind: 'today' | 'week' | 'month' | 'year' | '7d' | '30d') => {
+        const { start, end } = computeRange(kind);
+        router.get('/transport_tracking', buildParams({ start_date: start, end_date: end }), { preserveState: true, preserveScroll: true });
+    };
+
+    const activePreset = (() => {
+        const f = filters.start_date ?? '';
+        const t = filters.end_date ?? '';
+        if (!f || !t) return null;
+        const presets: Array<'today' | 'week' | 'month' | 'year' | '7d' | '30d'> = ['today', 'week', 'month', 'year', '7d', '30d'];
+        for (const p of presets) {
+            const { start, end } = computeRange(p);
+            if (start === f && end === t) return p;
+        }
+        return null;
+    })();
 
     // Server-side sort — sends new request
     const handleSort = (key: SortKey) => {
@@ -181,7 +231,14 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
                 <Card className="mb-4">
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <FormSelect label="Camion" placeholder="Tous" options={toOptions(trucks, 'matricule')} value={filters.truck_id ?? null} onChange={(v) => applyFilter('truck_id', v)} wrapperClass="mb-0" />
-                        <FormSelect label="Conducteur" placeholder="Tous" options={toOptions(drivers)} value={filters.driver_id ?? null} onChange={(v) => applyFilter('driver_id', v)} wrapperClass="mb-0" />
+                        <FormSelect
+                            label={filters.truck_id ? `Conducteur (camion sélectionné)` : 'Conducteur'}
+                            placeholder={filters.truck_id ? (drivers.length ? 'Tous les conducteurs de ce camion' : 'Aucun conducteur enregistré') : 'Tous'}
+                            options={toOptions(drivers)}
+                            value={filters.driver_id ?? null}
+                            onChange={(v) => applyFilter('driver_id', v)}
+                            wrapperClass="mb-0"
+                        />
                         <FormSelect label="Fournisseur" placeholder="Tous" options={toOptions(providers)} value={filters.provider_id ?? null} onChange={(v) => applyFilter('provider_id', v)} wrapperClass="mb-0" />
                         <FormSelect label="Produit" placeholder="Tous" options={toOptions(products)} value={filters.product ?? null} onChange={(v) => applyFilter('product', v)} wrapperClass="mb-0" />
                     </div>
@@ -208,9 +265,38 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
                         <div className="flex items-end">
                             {hasActiveFilters && (
                                 <button onClick={clearFilters} className="text-xs text-[var(--color-danger)] hover:underline flex items-center gap-1 pb-2">
-                                    <X size={12} /> Rinitialiser
+                                    <X size={12} /> Réinitialiser
                                 </button>
                             )}
+                        </div>
+                    </div>
+
+                    {/* Date presets */}
+                    <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-2">Période rapide</label>
+                        <div className="flex flex-wrap gap-2">
+                            {([
+                                { key: 'today', label: "Aujourd'hui" },
+                                { key: 'week', label: 'Cette semaine' },
+                                { key: 'month', label: 'Ce mois' },
+                                { key: 'year', label: 'Cette année' },
+                                { key: '7d', label: '7 jours' },
+                                { key: '30d', label: '30 jours' },
+                            ] as const).map((p) => (
+                                <button
+                                    key={p.key}
+                                    type="button"
+                                    onClick={() => applyDatePreset(p.key)}
+                                    className={clsx(
+                                        'px-3 py-1 text-xs rounded-full border transition-colors',
+                                        activePreset === p.key
+                                            ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white'
+                                            : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]'
+                                    )}
+                                >
+                                    {p.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </Card>
@@ -231,23 +317,20 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
                             />
                         </div>
                         <span className="text-xs text-[var(--color-text-muted)]">{trackings.total} rotation(s)</span>
-                        {displayData.length > 0 && (
+                        {trackings.total > 0 && (
                             <button
-                                onClick={() => exportToCsv(displayData, [
-                                    { key: 'reference', label: 'Rfrence' },
-                                    { key: 'truck', label: 'Camion' },
-                                    { key: 'driver', label: 'Conducteur' },
-                                    { key: 'provider', label: 'Fournisseur' },
-                                    { key: 'provider_net_weight', label: 'Poids Fournisseur' },
-                                    { key: 'client_net_weight', label: 'Poids Client' },
-                                    { key: 'gap', label: 'Perte' },
-                                    { key: 'client_date', label: 'Date Client' },
-                                    { key: 'product', label: 'Produit' },
-                                ], `suivi-transport-${new Date().toISOString().slice(0, 10)}.csv`)}
+                                onClick={() => {
+                                    const params = new URLSearchParams();
+                                    Object.entries(filters as Record<string, string | number | null>).forEach(([k, v]) => {
+                                        if (v !== null && v !== undefined && v !== '') params.set(k, String(v));
+                                    });
+                                    const qs = params.toString();
+                                    window.location.href = '/transport_tracking/export' + (qs ? `?${qs}` : '');
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium transition"
-                                title="Exporter en Excel"
+                                title="Exporter toutes les rotations filtrées (Excel)"
                             >
-                                <Download size={14} /> Excel
+                                <Download size={14} /> Excel ({trackings.total})
                             </button>
                         )}
                     </div>
