@@ -1,4 +1,4 @@
-<p>Bonjour,</p>
+<p>Bonjour {{ $invitation->name ?? '' }},</p>
 
 <p>Un compte vous a été créé sur <strong>AMC Logistics</strong> avec le rôle <strong>{{ $invitation->role_name }}</strong>.</p>
 

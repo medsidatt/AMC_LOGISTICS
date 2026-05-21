@@ -25,6 +25,7 @@ class InvitationController extends Controller
             ->paginate(15)
             ->through(fn (Invitation $inv) => [
                 'id' => $inv->id,
+                'name' => $inv->name,
                 'email' => $inv->email,
                 'role_name' => $inv->role_name,
                 'is_used' => $inv->is_used,
@@ -74,6 +75,7 @@ class InvitationController extends Controller
     public function sendInvitation(Request $request)
     {
         $request->validate([
+            'name' => 'required|string|max:255',
             'email' => [
                 'required',
                 'email',
@@ -90,7 +92,7 @@ class InvitationController extends Controller
             // Create the account up front so the invitee can log in
             // directly with the password we email them.
             $user = User::create([
-                'name' => Str::before($request->email, '@'),
+                'name' => $request->name,
                 'email' => $request->email,
                 'password' => $plainPassword,
                 'must_change_password' => true,
@@ -98,6 +100,7 @@ class InvitationController extends Controller
             $user->syncRoles([$request->role_name]);
 
             $invitation = Invitation::create([
+                'name' => $request->name,
                 'email' => $request->email,
                 'role_name' => $request->role_name,
                 'token' => Str::random(32),
@@ -131,6 +134,7 @@ class InvitationController extends Controller
         $invitation = Invitation::findOrFail($id);
 
         $request->validate([
+            'name' => 'required|string|max:255',
             'email' => [
                 'required',
                 'email',
@@ -146,15 +150,16 @@ class InvitationController extends Controller
         try {
             $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
 
-            $user = User::where('email', $invitation->email)->first()
-                ?? new User(['name' => Str::before($request->email, '@')]);
+            $user = User::where('email', $invitation->email)->first() ?? new User();
 
+            $user->name = $request->name;
             $user->email = $request->email;
             $user->password = $plainPassword;
             $user->must_change_password = true;
             $user->save();
             $user->syncRoles([$request->role_name]);
 
+            $invitation->name = $request->name;
             $invitation->email = $request->email;
             $invitation->role_name = $request->role_name;
             $invitation->expires_at = now()->addDays(7);

@@ -15,6 +15,7 @@ import { Plus } from 'lucide-react';
 
 interface Invitation {
     id: number;
+    name: string | null;
     email: string;
     role_name: string;
     is_used: boolean;
@@ -34,12 +35,12 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
 
     const roleOpts = roles.map((r) => ({ value: r.name, label: r.name }));
 
-    const createForm = useForm({ email: '', role_name: '' });
-    const editForm = useForm({ email: '', role_name: '' });
+    const createForm = useForm({ name: '', email: '', role_name: '' });
+    const editForm = useForm({ name: '', email: '', role_name: '' });
 
     const openEdit = (inv: Invitation) => {
         setSelected(inv);
-        editForm.setData({ email: inv.email, role_name: inv.role_name });
+        editForm.setData({ name: inv.name ?? '', email: inv.email, role_name: inv.role_name });
         setModal('edit');
     };
 
@@ -69,6 +70,7 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
                     <DataTable
                         data={invitations.data}
                         columns={[
+                            { key: 'name', label: 'Nom', render: (r) => r.name ?? '—' },
                             { key: 'email', label: 'Email' },
                             { key: 'role_name', label: 'Rôle', render: (r) => <Badge variant="primary">{r.role_name}</Badge> },
                             { key: 'is_used', label: 'Utilisée', render: (r) => (
@@ -102,7 +104,8 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
 
             <Modal open={modal === 'create'} onClose={() => setModal(null)} title="Nouvelle invitation">
                 <form onSubmit={submitCreate}>
-                    <FormInput label="Email" type="email" name="email" value={createForm.data.email} onChange={(e) => createForm.setData('email', e.target.value)} error={createForm.errors.email} required autoFocus />
+                    <FormInput label="Nom" name="name" value={createForm.data.name} onChange={(e) => createForm.setData('name', e.target.value)} error={createForm.errors.name} required autoFocus />
+                    <FormInput label="Email" type="email" name="email" value={createForm.data.email} onChange={(e) => createForm.setData('email', e.target.value)} error={createForm.errors.email} required />
                     <FormSelect label="Rôle" options={roleOpts} value={createForm.data.role_name} onChange={(v) => createForm.setData('role_name', String(v ?? ''))} error={createForm.errors.role_name} required />
                     <div className="flex justify-end gap-2 mt-6">
                         <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>
@@ -113,7 +116,8 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
 
             <Modal open={modal === 'edit'} onClose={() => setModal(null)} title="Modifier invitation">
                 <form onSubmit={submitEdit}>
-                    <FormInput label="Email" type="email" name="email" value={editForm.data.email} onChange={(e) => editForm.setData('email', e.target.value)} error={editForm.errors.email} required autoFocus />
+                    <FormInput label="Nom" name="name" value={editForm.data.name} onChange={(e) => editForm.setData('name', e.target.value)} error={editForm.errors.name} required autoFocus />
+                    <FormInput label="Email" type="email" name="email" value={editForm.data.email} onChange={(e) => editForm.setData('email', e.target.value)} error={editForm.errors.email} required />
                     <FormSelect label="Rôle" options={roleOpts} value={editForm.data.role_name} onChange={(v) => editForm.setData('role_name', String(v ?? ''))} error={editForm.errors.role_name} required />
                     <div className="flex justify-end gap-2 mt-6">
                         <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>
