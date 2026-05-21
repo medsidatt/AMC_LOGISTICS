@@ -134,9 +134,10 @@ class DriverController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:drivers,email',
-            'phone' => 'nullable|string|max:15',
+            'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
+            'whatsapp_opt_in' => 'nullable|boolean',
         ]);
 
         Driver::firstOrCreate([
@@ -145,6 +146,7 @@ class DriverController extends Controller
             'phone' => $request->phone,
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : true,
+            'whatsapp_opt_in_at' => $request->boolean('whatsapp_opt_in') ? now() : null,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur créé avec succès.');
@@ -171,6 +173,7 @@ class DriverController extends Controller
                 'phone' => $driver->phone,
                 'address' => $driver->address,
                 'is_active' => (bool) $driver->is_active,
+                'whatsapp_opt_in_at' => $driver->whatsapp_opt_in_at?->format('d/m/Y H:i'),
                 'created_at' => $driver->created_at?->format('d/m/Y'),
                 'updated_at' => $driver->updated_at?->format('d/m/Y'),
             ],
@@ -631,10 +634,21 @@ class DriverController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:drivers,email,' . $driver->id,
-            'phone' => 'nullable|string|max:15',
+            'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
+            'whatsapp_opt_in' => 'nullable|boolean',
         ]);
+
+        // Only flip the opt-in timestamp on transitions: false→true sets now(),
+        // true→false clears it. Editing other fields keeps the existing date.
+        $optInRequested = $request->boolean('whatsapp_opt_in');
+        $optInValue = $driver->whatsapp_opt_in_at;
+        if ($optInRequested && ! $optInValue) {
+            $optInValue = now();
+        } elseif (! $optInRequested) {
+            $optInValue = null;
+        }
 
         $driver->update([
             'name' => $request->name,
@@ -642,6 +656,7 @@ class DriverController extends Controller
             'phone' => $request->phone,
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : (bool) $driver->is_active,
+            'whatsapp_opt_in_at' => $optInValue,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur mis à jour avec succès.');

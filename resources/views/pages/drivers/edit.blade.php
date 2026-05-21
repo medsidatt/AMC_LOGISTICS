@@ -34,6 +34,28 @@
                 :value="$driver->address"
             />
 
+            <div class="col-12 mt-2">
+                <label class="form-check d-flex align-items-start gap-2">
+                    <input type="hidden" name="whatsapp_opt_in" value="0">
+                    <input class="form-check-input mt-1"
+                           type="checkbox"
+                           name="whatsapp_opt_in"
+                           value="1"
+                           {{ $driver->whatsapp_opt_in_at ? 'checked' : '' }}>
+                    <span>
+                        <strong>{{ __('Consentement WhatsApp') }}</strong>
+                        @if($driver->whatsapp_opt_in_at)
+                            <small class="text-success ms-2">
+                                ({{ __('depuis le') }} {{ $driver->whatsapp_opt_in_at->format('d/m/Y') }})
+                            </small>
+                        @endif
+                        <br>
+                        <small class="text-muted">
+                            {{ __("Le chauffeur consent à recevoir des notifications WhatsApp pour la programmation des rotations.") }}
+                        </small>
+                    </span>
+                </label>
+            </div>
         </div>
 
         <x-buttons.save

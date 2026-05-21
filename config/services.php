@@ -55,4 +55,16 @@ return [
         'list_id' => env('SHAREPOINT_LIST_ID'),
     ],
 
+    'whatsapp' => [
+        'api_version' => env('WHATSAPP_API_VERSION', 'v21.0'),
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+        'webhook_verify_token' => env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'),
+        'template_dispatch' => env('WHATSAPP_TEMPLATE_DISPATCH', 'amc_dispatch_v1'),
+        'template_lang' => env('WHATSAPP_TEMPLATE_LANG', 'fr'),
+        'default_country' => env('WHATSAPP_DEFAULT_COUNTRY', 'MR'),
+    ],
+
 ];
