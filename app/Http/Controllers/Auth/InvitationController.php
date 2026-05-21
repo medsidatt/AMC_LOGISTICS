@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
-use App\Support\SilentSso;
+use App\Models\Auth\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -85,16 +85,27 @@ class InvitationController extends Controller
 
         DB::beginTransaction();
         try {
-            $token = Str::random(32);
+            $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
+
+            // Create the account up front so the invitee can log in
+            // directly with the password we email them.
+            $user = User::create([
+                'name' => Str::before($request->email, '@'),
+                'email' => $request->email,
+                'password' => $plainPassword,
+                'must_change_password' => true,
+            ]);
+            $user->syncRoles([$request->role_name]);
 
             $invitation = Invitation::create([
                 'email' => $request->email,
                 'role_name' => $request->role_name,
-                'token' => $token,
+                'token' => Str::random(32),
                 'expires_at' => now()->addDays(7),
+                'is_used' => true,
             ]);
 
-            Mail::to($request->email)->send(new InvitationMail($invitation));
+            Mail::to($request->email)->send(new InvitationMail($invitation, $plainPassword));
             DB::commit();
             return redirect()->back()->with('success', 'Invitation sent successfully.');
         } catch (\Exception $e) {
@@ -106,53 +117,58 @@ class InvitationController extends Controller
 
     public function accept(Request $request, $token)
     {
-        $invitation = Invitation::where('token', $token)->firstOrFail();
-
-        if ($invitation->is_used || $invitation->isExpired()) {
-            return view('auth.invitations.expired', [
-                'message' => 'Invalid or expired invitation.',
-            ]);
-        }
-
-        // Stash the token so the Microsoft callback can finalise account
-        // creation with the invited role once the user authenticates.
-        $request->session()->put('invitation_token', $token);
-
-        // Try silent SSO if we haven't recently failed it. If the user is
-        // already signed into the tenant account matching this invitation,
-        // they're straight in. Otherwise we render the manual button.
-        if (SilentSso::shouldAttempt($request)) {
-            return redirect('/auth/microsoft?silent=1');
-        }
-
-        return Inertia::render('auth/AcceptInvitation', [
-            'email' => $invitation->email,
-            'roleName' => $invitation->role_name,
-        ]);
+        // The new flow creates the account at invitation time and emails
+        // the password. Any link landing here just sends the user to /login
+        // where they sign in with the credentials from their email.
+        return redirect('/login')->with(
+            'success',
+            'Connectez-vous avec le mot de passe reçu par email.'
+        );
     }
 
     public function update(Request $request, $id)
     {
+        $invitation = Invitation::findOrFail($id);
+
         $request->validate([
             'email' => [
                 'required',
                 'email',
-                Rule::unique('users', 'email')->whereNull('deleted_at'),
+                Rule::unique('users', 'email')->ignore(
+                    optional(User::where('email', $invitation->email)->first())->id
+                )->whereNull('deleted_at'),
                 Rule::unique('invitations', 'email')->ignore($id)->whereNull('deleted_at'),
             ],
             'role_name' => 'required|string|exists:roles,name',
         ]);
 
-        $invitation = Invitation::findOrFail($id);
-        $invitation->email = $request->email;
-        $invitation->role_name = $request->role_name;
-        $invitation->expires_at = now()->addDays(7);
-        $invitation->save();
+        DB::beginTransaction();
+        try {
+            $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
 
-        Mail::to($request->email)->send(new InvitationMail($invitation));
+            $user = User::where('email', $invitation->email)->first()
+                ?? new User(['name' => Str::before($request->email, '@')]);
 
-        return redirect()->back()->with('success', 'Invitation updated successfully.');
+            $user->email = $request->email;
+            $user->password = $plainPassword;
+            $user->must_change_password = true;
+            $user->save();
+            $user->syncRoles([$request->role_name]);
 
+            $invitation->email = $request->email;
+            $invitation->role_name = $request->role_name;
+            $invitation->expires_at = now()->addDays(7);
+            $invitation->is_used = true;
+            $invitation->save();
+
+            Mail::to($request->email)->send(new InvitationMail($invitation, $plainPassword));
+            DB::commit();
+
+            return redirect()->back()->with('success', 'Invitation updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollback();
+            return redirect()->back()->with('error', 'Failed to update invitation.');
+        }
     }
 
     // delete
