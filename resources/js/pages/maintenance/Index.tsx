@@ -11,7 +11,7 @@ import Modal from '@/components/ui/Modal';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
 import { useForm } from '@inertiajs/react';
-import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck, Camera } from 'lucide-react';
+import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck, Camera, Receipt, FileText } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
 import CameraCapture from '@/components/inspection/CameraCapture';
 import { usePermission } from '@/hooks/usePermission';
@@ -31,6 +31,11 @@ interface InspectionIssue {
     severity: string;
     issue_notes: string | null;
     inspection_date: string | null;
+    parts_cost: string | null;
+    labor_cost: string | null;
+    total_cost: string | null;
+    devis_url: string | null;
+    devis_name: string | null;
 }
 
 interface TruckRow {
@@ -69,8 +74,48 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
     const [filter, setFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
     const [search, setSearch] = useState('');
     const [recordTruck, setRecordTruck] = useState<TruckRow | null>(null);
+    const [issuesTruck, setIssuesTruck] = useState<TruckRow | null>(null);
+    const [costIssue, setCostIssue] = useState<InspectionIssue | null>(null);
     const { can } = usePermission();
     const canRecord = can('maintenance-create');
+
+    const costForm = useForm<Record<string, any>>({
+        parts_cost: '',
+        labor_cost: '',
+        devis: null as File | null,
+    });
+
+    const fcfa = (v: string | null) =>
+        v == null || v === '' ? null : `${Number(v).toLocaleString('fr-FR')} FCFA`;
+
+    const openCost = (issue: InspectionIssue) => {
+        setCostIssue(issue);
+        costForm.setData({
+            parts_cost: issue.parts_cost ?? '',
+            labor_cost: issue.labor_cost ?? '',
+            devis: null,
+        });
+        costForm.clearErrors();
+    };
+
+    const costTotal = () => {
+        const p = Number(costForm.data.parts_cost) || 0;
+        const l = Number(costForm.data.labor_cost) || 0;
+        return p + l;
+    };
+
+    const submitCost = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!costIssue) return;
+        costForm.post(`/maintenance/issues/${costIssue.id}/cost`, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setCostIssue(null);
+                setIssuesTruck(null);
+            },
+        });
+    };
 
     const statusOpts = Object.entries(componentStatuses ?? {}).map(([k, l]) => ({ value: k, label: l }));
     const oilTypeOpts = [{ value: '', label: '—' }, ...Object.entries(oilTypes).map(([k, l]) => ({ value: k, label: l }))];
@@ -262,7 +307,11 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                                 {truck.open_issues > 0 ? <Badge variant="warning">{truck.open_issues}</Badge> : <span className="text-[var(--color-text-muted)]">0</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                {truck.open_inspection_issues > 0 ? <Badge variant="danger">{truck.open_inspection_issues}</Badge> : <span className="text-[var(--color-text-muted)]">0</span>}
+                                                {truck.open_inspection_issues > 0 ? (
+                                                    <button type="button" onClick={() => setIssuesTruck(truck)} title="Coûts / devis des findings">
+                                                        <Badge variant="danger">{truck.open_inspection_issues}</Badge>
+                                                    </button>
+                                                ) : <span className="text-[var(--color-text-muted)]">0</span>}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {canRecord ? (
@@ -304,10 +353,10 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                             <p className="font-mono text-[var(--color-text)]">{general ? `${general.remaining?.toLocaleString('fr-FR')} km` : '-'}</p>
                                         </div>
                                         {truck.open_inspection_issues > 0 && (
-                                            <div className="col-span-2 flex items-center gap-2">
+                                            <button type="button" onClick={() => setIssuesTruck(truck)} className="col-span-2 flex items-center gap-2 text-left">
                                                 <ShieldCheck size={14} className="text-red-500" />
-                                                <span className="text-xs"><Badge variant="danger">{truck.open_inspection_issues}</Badge> findings d'inspection</span>
-                                            </div>
+                                                <span className="text-xs"><Badge variant="danger">{truck.open_inspection_issues}</Badge> findings d'inspection — coûts / devis</span>
+                                            </button>
                                         )}
                                     </div>
                                     {canRecord && (
@@ -346,14 +395,6 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 required
                             />
                         </div>
-                        {truckInterval(recordTruck) !== null && (
-                            <p className="text-xs text-[var(--color-text-muted)] -mt-2">
-                                Intervalle de maintenance enregistré pour ce camion :
-                                <b> {truckInterval(recordTruck)!.toLocaleString('fr-FR')} km</b>.
-                                La prochaine vidange est calculée automatiquement comme
-                                <i> distance actuelle + intervalle</i>.
-                            </p>
-                        )}
                         <div>
                             <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1 flex items-center gap-1">
                                 <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
@@ -396,15 +437,6 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                                 error={recordForm.errors.next_oil_change_km as string | undefined}
                             />
                         </div>
-                        <p className="text-xs text-[var(--color-text-muted)]">
-                            {truckInterval(recordTruck) !== null ? (
-                                <>Prochaine vidange = distance actuelle + <b>{truckInterval(recordTruck)!.toLocaleString('fr-FR')} km</b> (intervalle du camion en base).</>
-                            ) : recordForm.data.oil_type && oilIntervals?.[recordForm.data.oil_type] ? (
-                                <>Aucun intervalle enregistré pour ce camion — calcul basé sur l'huile : <b>{oilIntervals[recordForm.data.oil_type].toLocaleString('fr-FR')} km</b>.</>
-                            ) : (
-                                <>Vous pouvez saisir la prochaine vidange manuellement.</>
-                            )}
-                        </p>
                     </fieldset>
 
                     <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
@@ -464,6 +496,92 @@ export default function MaintenanceIndex({ trucks, counts, oilTypes, oilInterval
                     <div className="flex justify-end gap-2 mt-4">
                         <Button variant="secondary" type="button" onClick={() => setRecordTruck(null)}>Annuler</Button>
                         <Button type="submit" loading={recordForm.processing}>Enregistrer</Button>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal open={!!issuesTruck} onClose={() => setIssuesTruck(null)} title={`Findings d'inspection — ${issuesTruck?.matricule ?? ''}`}>
+                <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                    {issuesTruck?.inspection_issues.length ? issuesTruck.inspection_issues.map((issue) => (
+                        <div key={issue.id} className="rounded-lg border border-[var(--color-border)] p-3">
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                    <span className="font-medium">{issue.category}</span>
+                                    {' '}<Badge variant={SEVERITY_VARIANT[issue.severity] ?? 'default'}>{issue.severity}</Badge>
+                                    {issue.issue_notes && <span className="block text-xs text-[var(--color-text-muted)]">{issue.issue_notes}</span>}
+                                    <span className="block text-xs text-[var(--color-text-muted)]">Inspection du {issue.inspection_date}</span>
+                                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
+                                        {fcfa(issue.total_cost) ? (
+                                            <span className="font-semibold text-[var(--color-text)]">Coût : {fcfa(issue.total_cost)}</span>
+                                        ) : (
+                                            <span className="text-[var(--color-text-muted)]">Aucun coût enregistré</span>
+                                        )}
+                                        {issue.devis_url && (
+                                            <a href={issue.devis_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline">
+                                                <FileText size={12} /> Devis
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                                {canRecord && (
+                                    <Button size="sm" variant="secondary" type="button" onClick={() => openCost(issue)}>
+                                        <Receipt size={14} className="mr-1" /> Coût / Devis
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )) : (
+                        <p className="text-center py-8 text-[var(--color-text-muted)]">Aucun finding ouvert.</p>
+                    )}
+                </div>
+            </Modal>
+
+            <Modal open={!!costIssue} onClose={() => setCostIssue(null)} title={`Coût du finding — ${costIssue?.category ?? ''}`}>
+                <form onSubmit={submitCost} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <FormInput
+                            label="Pièces (FCFA)"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={costForm.data.parts_cost}
+                            onChange={(e) => costForm.setData('parts_cost', e.target.value)}
+                            error={costForm.errors.parts_cost}
+                        />
+                        <FormInput
+                            label="Main d'œuvre (FCFA)"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={costForm.data.labor_cost}
+                            onChange={(e) => costForm.setData('labor_cost', e.target.value)}
+                            error={costForm.errors.labor_cost}
+                        />
+                    </div>
+
+                    <div className="text-sm font-semibold text-[var(--color-text)]">
+                        Total : {costTotal().toLocaleString('fr-FR')} FCFA
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Devis (PDF ou image, optionnel)</label>
+                        <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            onChange={(e) => costForm.setData('devis', e.target.files?.[0] ?? null)}
+                            className="block w-full text-sm text-[var(--color-text)] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[var(--color-surface-hover)] file:text-[var(--color-text-secondary)]"
+                        />
+                        {costForm.errors.devis && <p className="mt-1 text-xs text-red-600">{costForm.errors.devis}</p>}
+                        {costIssue?.devis_url && !costForm.data.devis && (
+                            <a href={costIssue.devis_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+                                <FileText size={12} /> Devis actuel{costIssue.devis_name ? ` — ${costIssue.devis_name}` : ''}
+                            </a>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 mt-4">
+                        <Button variant="secondary" type="button" onClick={() => setCostIssue(null)}>Annuler</Button>
+                        <Button type="submit" loading={costForm.processing}>Enregistrer</Button>
                     </div>
                 </form>
             </Modal>

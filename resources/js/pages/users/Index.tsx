@@ -1,4 +1,4 @@
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
@@ -32,6 +32,16 @@ interface Props {
 }
 
 export default function UsersIndex({ users, roles }: Props) {
+    const page = usePage().props as unknown as { auth: { user: { id: number } | null; roles: string[] } };
+    const currentUserId = page.auth?.user?.id ?? null;
+    const isSuperAdmin = (page.auth?.roles ?? []).includes('Super Admin');
+
+    // A row can be managed (edit/suspend/delete) unless it's the current user's
+    // own account, or a Super Admin account being viewed by a non-Super-Admin.
+    const canManageUser = (u: User) =>
+        u.id !== currentUserId &&
+        (isSuperAdmin || !u.roles.some((r) => r.name === 'Super Admin'));
+
     const [modal, setModal] = useState<'create' | 'edit' | 'show' | null>(null);
     const [selected, setSelected] = useState<User | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
@@ -103,22 +113,31 @@ export default function UsersIndex({ users, roles }: Props) {
                             )},
                             {
                                 key: 'actions', label: 'Actions', sortable: false,
-                                render: (r) => (
+                                render: (r) => {
+                                    const manageable = canManageUser(r);
+                                    return (
                                     <div className="flex items-center gap-1">
                                         <ActionButtons
                                             onView={() => openShow(r)}
-                                            onEdit={() => openEdit(r)}
-                                            onDelete={() => setDeleteUrl(`/users/destroy/${r.id}`)}
+                                            onEdit={manageable ? () => openEdit(r) : undefined}
+                                            onDelete={manageable ? () => setDeleteUrl(`/users/destroy/${r.id}`) : undefined}
                                         />
-                                        <button
-                                            onClick={() => router.get(`/users/suspend/${r.id}`)}
-                                            className="p-1.5 rounded-lg transition-colors text-[var(--color-warning)] hover:bg-[var(--color-warning)]/10"
-                                            title={r.is_suspended ? 'Activer' : 'Suspendre'}
-                                        >
-                                            {r.is_suspended ? <CheckCircle2 size={14} /> : <Ban size={14} />}
-                                        </button>
+                                        {manageable && (
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm(r.is_suspended ? `Réactiver ${r.name} ?` : `Suspendre ${r.name} ?`)) {
+                                                        router.put(`/users/suspend/${r.id}`, {}, { preserveScroll: true });
+                                                    }
+                                                }}
+                                                className="p-1.5 rounded-lg transition-colors text-[var(--color-warning)] hover:bg-[var(--color-warning)]/10"
+                                                title={r.is_suspended ? 'Activer' : 'Suspendre'}
+                                            >
+                                                {r.is_suspended ? <CheckCircle2 size={14} /> : <Ban size={14} />}
+                                            </button>
+                                        )}
                                     </div>
-                                ),
+                                    );
+                                },
                             },
                         ]}
                         perPage={users.per_page}

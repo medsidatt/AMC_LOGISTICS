@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Socialite\Facades\Socialite;
 use SocialiteProviders\Azure\Provider as AzureProvider;
 use SocialiteProviders\Manager\Config as SocialiteConfig;
@@ -49,6 +50,10 @@ class AppServiceProvider extends ServiceProvider
             ));
             return $provider;
         });
+
+        // Single source of truth for password strength across every endpoint
+        // that sets or changes a password (self-service, force-change, admin).
+        Password::defaults(fn () => Password::min(8)->mixedCase()->numbers());
 
         Carbon::setLocale('fr');
 

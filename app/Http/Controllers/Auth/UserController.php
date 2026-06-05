@@ -2,27 +2,51 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Http\Concerns\AssignableRoles;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreUserRequest;
+use App\Http\Requests\UpdateUserRequest;
+use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
-use Yajra\DataTables\DataTables;
 
 class UserController extends Controller
 {
+    use AssignableRoles;
 
     public function __construct()
     {
         $this->middleware('permission:user-list', ['only' => ['index']]);
-        $this->middleware('permission:user-create', ['only' => ['create', 'store']]);
-        $this->middleware('permission:user-edit', ['only' => ['edit', 'update']]);
+        $this->middleware('permission:user-create', ['only' => ['store']]);
+        $this->middleware('permission:user-edit', ['only' => ['update']]);
         $this->middleware('permission:user-delete', ['only' => ['destroy']]);
-        $this->middleware('permission:user-invitation', ['only' => ['resendInvitation']]);
         $this->middleware('permission:user-suspend', ['only' => ['suspend']]);
-        $this->middleware('permission:user-change-password', ['only' => ['changePassword', 'changeUserPassword']]);
+    }
+
+    /**
+     * Block management actions that target the current user (self-suspend,
+     * self-delete, self role-change) or that target a Super Admin when the
+     * caller is not one. Returns a redirect on violation, or null when allowed.
+     */
+    private function guardManage(User $target)
+    {
+        if (auth()->id() === $target->id) {
+            return redirect()->back()->with('error', 'Vous ne pouvez pas effectuer cette action sur votre propre compte.');
+        }
+
+        if ($target->hasRole('Super Admin') && ! auth()->user()->hasRole('Super Admin')) {
+            return redirect()->back()->with('error', "Action non autorisée sur un compte Super Admin.");
+        }
+
+        return null;
     }
 
     // index
@@ -52,61 +76,54 @@ class UserController extends Controller
         ]);
     }
 
-    //create
-    public function create()
-    {
-        Role::firstOrCreate(['name' => 'Driver'], ['guard_name' => 'web']);
-        $roles = Role::query()->orderBy('name')->get(['id', 'name']);
-
-        return view('pages.users.create', compact('roles'));
-    }
-
     //store
-    public function store(Request $request)
+    public function store(StoreUserRequest $request)
     {
-        $this->validate($request, [
-            'name' => 'required',
-            'email' => ['required', Rule::unique('users', 'email')->whereNull('deleted_at')],
-            'roles' => ['nullable', 'array'],
-            'roles.*' => ['integer', 'exists:roles,id'],
-        ]);
+        $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
 
-        $user = User::firstOrCreate(
-            ['email' => $request->email],
-            [
+        DB::beginTransaction();
+        try {
+            // Password is cast to 'hashed' on the model, so pass it in plain.
+            $user = User::create([
                 'name' => $request->name,
-                'password' => bcrypt('password'),
+                'email' => $request->email,
+                'password' => $plainPassword,
                 'must_change_password' => true,
-            ]
-        );
+            ]);
 
-        if (! empty($request->roles)) {
-            $roles = Role::query()->whereIn('id', $request->roles)->pluck('name');
-            $user->syncRoles($roles);
+            if (! empty($request->roles)) {
+                $roles = Role::query()->whereIn('id', $request->roles)->pluck('name');
+                $user->syncRoles($roles);
+            }
+
+            // Email the generated credentials so the account is usable without
+            // a hardcoded default password.
+            Mail::to($user->email)->send(new InvitationMail(
+                new Invitation([
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role_name' => $user->getRoleNames()->first(),
+                ]),
+                $plainPassword,
+            ));
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', "Échec de la création de l'utilisateur.");
         }
 
-        return redirect()->back()->with('success', 'User created successfully.');
-    }
-
-    //edit
-    public function edit($id)
-    {
-        $user = User::find($id);
-        Role::firstOrCreate(['name' => 'Driver'], ['guard_name' => 'web']);
-        $roles = Role::all();
-        return view('pages.users.edit', compact('user', 'roles'));
+        return redirect()->back()->with('success', 'Utilisateur créé. Les identifiants ont été envoyés par email.');
     }
 
     //update
-    public function update(Request $request, $id)
+    public function update(UpdateUserRequest $request, $id)
     {
-        $this->validate($request, [
-            'name' => 'required',
-            'email' => ['required', Rule::unique('users', 'email')->ignore($id)->whereNull('deleted_at')],
-            'roles' => ['required', 'array']
-        ]);
+        $user = User::findOrFail($id);
 
-        $user = User::find($id);
+        if ($deny = $this->guardManage($user)) {
+            return $deny;
+        }
 
         $user->update([
             'name' => $request->name,
@@ -124,34 +141,29 @@ class UserController extends Controller
 
     public function destroy($id)
     {
-        User::find($id)->delete();
-        return redirect()->back()->with('success', 'User deleted successfully.');
-    }
+        $user = User::findOrFail($id);
 
-    //show
-    public function show($id)
-    {
-        $user = User::find($id);
-        return view('pages.users.show', compact('user'));
+        if ($deny = $this->guardManage($user)) {
+            return $deny;
+        }
+
+        $user->delete();
+        return redirect()->back()->with('success', 'User deleted successfully.');
     }
 
     // suspend
     public function suspend($id)
     {
-        $user = User::find($id);
+        $user = User::findOrFail($id);
+
+        if ($deny = $this->guardManage($user)) {
+            return $deny;
+        }
+
         $user->is_suspended = !$user->is_suspended;
         $user->save();
         return redirect()->back()->with([
             'success' => 'User status updated successfully'
-        ]);
-    }
-
-    // changePassword
-    public function changePassword($id)
-    {
-        $user = User::find($id);
-        return view('pages.users.change-password', [
-            'user' => $user
         ]);
     }
 
@@ -160,7 +172,7 @@ class UserController extends Controller
     {
         $this->validate($request, [
             'old_password' => 'required',
-            'password' => 'required|confirmed',
+            'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
         $user = auth()->user();
@@ -168,27 +180,11 @@ class UserController extends Controller
             return redirect()->back()->withErrors(['old_password' => 'L\'ancien mot de passe est incorrect.']);
         }
 
-        $user->password = bcrypt($request->password);
+        // Password is cast to 'hashed' on the model.
+        $user->password = $request->password;
         $user->save();
 
         return redirect()->back()->with('success', 'Mot de passe mis à jour avec succès.');
-    }
-
-    // changeUserPassword
-    public function changeUserPassword(Request $request, $id)
-    {
-        $this->validate($request, [
-            'password' => 'required|confirmed',
-        ]);
-
-        $user = User::find($id);
-        $user->password = bcrypt($request->password);
-        $user->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Password updated successfully.'
-        ], 201);
     }
 
     // account
@@ -245,11 +241,12 @@ class UserController extends Controller
     public function forcePasswordUpdate(Request $request)
     {
         $request->validate([
-            'password' => 'required|min:8|confirmed',
+            'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
         $user = auth()->user();
-        $user->password = bcrypt($request->password);
+        // Password is cast to 'hashed' on the model.
+        $user->password = $request->password;
         $user->must_change_password = false;
         $user->save();
 
