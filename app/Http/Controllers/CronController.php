@@ -28,6 +28,12 @@ class CronController extends Controller
         '30 2 * * *'   => [['places:detect-hubs', []]],
         '45 2 * * *'   => [['logistics:rebuild-trip-segments', ['--days' => 7]]],
         '0 * * * *'    => [['logistics:detect-off-hours-movement', ['--window' => 120]]],
+        // Live polling lane — see bootstrap/app.php for documentation.
+        '* 6-7 * * *'        => [['fleeti:sync-live-dispatch', ['--cadence' => 1]]],
+        '*/2 5,8-22 * * *'   => [['fleeti:sync-live-dispatch', ['--cadence' => 2]]],
+        '*/5 0-4,23 * * *'   => [['fleeti:sync-live-dispatch', ['--cadence' => 5]]],
+        '*/2 5-22 * * *'     => [['fleeti:sync-fleet-positions', []]],
+        '0 23 * * *'         => [['logistics:reconcile-expected-tickets', []]],
     ];
 
     /**
@@ -36,12 +42,15 @@ class CronController extends Controller
      */
     private const JOBS = [
         'fleeti-sync' => 'fleeti:sync-kilometers',
+        'fleeti-sync-live' => 'fleeti:sync-live-dispatch',
+        'fleeti-sync-fleet-positions' => 'fleeti:sync-fleet-positions',
         'notify-due-engine-maintenance' => 'logistics:notify-due-engine-maintenance',
         'notify-missing-weekly-checklists' => 'logistics:notify-missing-weekly-checklists',
         'telemetry-compact' => 'telemetry:compact',
         'places-detect-hubs' => 'places:detect-hubs',
         'rebuild-trip-segments' => 'logistics:rebuild-trip-segments',
         'detect-off-hours-movement' => 'logistics:detect-off-hours-movement',
+        'reconcile-expected-tickets' => 'logistics:reconcile-expected-tickets',
     ];
 
     /**
@@ -147,6 +156,10 @@ class CronController extends Controller
         }
         if ($command === 'logistics:detect-off-hours-movement') {
             $params['--window'] = (int) $request->query('window', 120);
+        }
+        if ($command === 'fleeti:sync-live-dispatch') {
+            $params['--cadence'] = (int) $request->query('cadence', 2);
+            $params['--window-hours'] = (int) $request->query('window_hours', 18);
         }
 
         return $params;

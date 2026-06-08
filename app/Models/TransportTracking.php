@@ -177,4 +177,9 @@ class TransportTracking extends Model
         return $this->hasMany(TheftIncident::class);
     }
 
+    public function expectedTicket(): HasOne
+    {
+        return $this->hasOne(ExpectedTransportTicket::class);
+    }
+
 }

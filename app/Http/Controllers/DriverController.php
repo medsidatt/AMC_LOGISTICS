@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesPeriod;
+use App\Models\Document;
 use App\Models\Driver;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
@@ -11,8 +12,12 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\DriverKpiService;
 use App\Services\SharePointDailyChecklistService;
+use App\Services\SharePointStorageService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 
@@ -23,6 +28,7 @@ class DriverController extends Controller
     public function __construct(
         private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
         private readonly DriverKpiService $kpiService,
+        private readonly SharePointStorageService $sharePointStorage,
     ) {
         $this->middleware('permission:driver-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:driver-create', ['only' => ['create', 'store']]);
@@ -518,6 +524,14 @@ class DriverController extends Controller
             ->limit(30)
             ->get();
 
+        // Latest devis document per issue.
+        $devisByIssue = Document::query()
+            ->where('type', 'devis')
+            ->whereIn('daily_checklist_issue_id', $recent->pluck('id'))
+            ->orderByDesc('id')
+            ->get()
+            ->keyBy('daily_checklist_issue_id');
+
         return Inertia::render('drivers/Issues', [
             'driver' => ['id' => $driver->id, 'name' => $driver->name],
             'truck' => [
@@ -529,16 +543,24 @@ class DriverController extends Controller
                 'severity' => DailyChecklistIssue::SEVERITY_OPTIONS,
                 'light_positions' => DailyChecklist::LIGHT_POSITION_OPTIONS,
             ],
-            'recent' => $recent->map(fn ($i) => [
-                'id' => $i->id,
-                'category' => $i->category,
-                'severity' => $i->severity,
-                'issue_notes' => $i->issue_notes,
-                'positions' => $i->positions ? explode(',', $i->positions) : [],
-                'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
-                'resolved_at' => $i->resolved_at?->format('d/m/Y H:i'),
-                'resolution_notes' => $i->resolution_notes,
-            ])->values()->toArray(),
+            'recent' => $recent->map(function ($i) use ($devisByIssue) {
+                $devis = $devisByIssue->get($i->id);
+                return [
+                    'id' => $i->id,
+                    'category' => $i->category,
+                    'severity' => $i->severity,
+                    'issue_notes' => $i->issue_notes,
+                    'positions' => $i->positions ? explode(',', $i->positions) : [],
+                    'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
+                    'resolved_at' => $i->resolved_at?->format('d/m/Y H:i'),
+                    'resolution_notes' => $i->resolution_notes,
+                    'parts_cost' => $i->parts_cost,
+                    'labor_cost' => $i->labor_cost,
+                    'total_cost' => $i->total_cost,
+                    'devis_url' => $devis?->sharepoint_url ?? ($devis ? asset('storage/' . $devis->file_path) : null),
+                    'devis_name' => $devis?->original_name,
+                ];
+            })->values()->toArray(),
         ]);
     }
 
@@ -558,7 +580,7 @@ class DriverController extends Controller
             return redirect()->back()->withInput()->with('error', 'Aucun camion actif assigne a ce conducteur.');
         }
 
-        $allowedCategories = ['tires', 'brakes', 'lights', 'oil', 'fuel', 'general'];
+        $allowedCategories = ['tires', 'brakes', 'lights', 'oil', 'general'];
         $severityKeys = array_keys(DailyChecklistIssue::SEVERITY_OPTIONS);
         $lightPositionKeys = array_keys(DailyChecklist::LIGHT_POSITION_OPTIONS);
         $tireCount = (int) ($truck->tire_count ?? 26);
@@ -566,8 +588,8 @@ class DriverController extends Controller
         $data = $request->validate([
             'flagged' => 'required|array|min:1',
             'flagged.*' => ['string', 'in:' . implode(',', $allowedCategories)],
-            'severity' => 'nullable|array',
-            'severity.*' => ['nullable', 'string', 'in:' . implode(',', $severityKeys)],
+            'severity' => 'required|array',
+            'severity.*' => ['required', 'string', 'in:' . implode(',', $severityKeys)],
             'notes' => 'nullable|array',
             'notes.*' => 'nullable|string|max:500',
             'positions' => 'nullable|array',
@@ -584,17 +606,61 @@ class DriverController extends Controller
             }],
             'positions.lights' => 'nullable|array',
             'positions.lights.*' => ['string', 'in:' . implode(',', $lightPositionKeys)],
+            'parts_cost' => 'nullable|array',
+            'parts_cost.*' => 'nullable|numeric|min:0|max:999999999999',
+            'labor_cost' => 'nullable|array',
+            'labor_cost.*' => 'nullable|numeric|min:0|max:999999999999',
+            'attachments' => 'nullable|array',
+            'attachments.*' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
         ]);
 
         $severityMap = $data['severity'] ?? [];
         $notesMap = $data['notes'] ?? [];
         $positionsMap = $data['positions'] ?? [];
+        $partsMap = $data['parts_cost'] ?? [];
+        $laborMap = $data['labor_cost'] ?? [];
+
+        // Every flagged category must carry a status (severity) and a cost.
+        foreach ($data['flagged'] as $category) {
+            if (empty($severityMap[$category])) {
+                throw ValidationException::withMessages([
+                    "severity.$category" => 'Veuillez sélectionner une gravité pour chaque catégorie cochée.',
+                ]);
+            }
+
+            $catParts = isset($partsMap[$category]) && $partsMap[$category] !== '' ? (float) $partsMap[$category] : 0;
+            $catLabor = isset($laborMap[$category]) && $laborMap[$category] !== '' ? (float) $laborMap[$category] : 0;
+            if ($catParts + $catLabor <= 0) {
+                throw ValidationException::withMessages([
+                    "parts_cost.$category" => 'Veuillez renseigner le coût (pièces ou main d\'œuvre) pour chaque catégorie cochée.',
+                ]);
+            }
+        }
+
+        $categoryLabels = [
+            'tires' => 'Pneus',
+            'brakes' => 'Freins',
+            'lights' => 'Feux',
+            'oil' => 'Huile',
+            'general' => 'Général',
+        ];
 
         try {
             DB::beginTransaction();
+            $reportedLabels = [];
+            $grandTotal = 0.0;
             foreach ($data['flagged'] as $category) {
                 $positions = $positionsMap[$category] ?? [];
-                DailyChecklistIssue::create([
+
+                $parts = isset($partsMap[$category]) && $partsMap[$category] !== '' ? (float) $partsMap[$category] : null;
+                $labor = isset($laborMap[$category]) && $laborMap[$category] !== '' ? (float) $laborMap[$category] : null;
+                $total = ($parts === null && $labor === null) ? null : (float) ($parts ?? 0) + (float) ($labor ?? 0);
+                $hasCost = $parts !== null || $labor !== null;
+
+                $reportedLabels[] = $categoryLabels[$category] ?? $category;
+                $grandTotal += (float) ($total ?? 0);
+
+                $issue = DailyChecklistIssue::create([
                     'truck_id' => $truck->id,
                     'driver_id' => $driver->id,
                     'category' => $category,
@@ -603,8 +669,57 @@ class DriverController extends Controller
                     'issue_notes' => $notesMap[$category] ?? null,
                     'positions' => ! empty($positions) ? implode(',', $positions) : null,
                     'reported_at' => now(),
+                    'parts_cost' => $parts,
+                    'labor_cost' => $labor,
+                    'total_cost' => $total,
+                    'cost_recorded_by' => $hasCost ? auth()->id() : null,
+                    'cost_recorded_at' => $hasCost ? now() : null,
                 ]);
+
+                if ($request->hasFile("attachments.$category")) {
+                    $file = $request->file("attachments.$category");
+                    $upload = $this->uploadDocument($file, 'issue-devis');
+
+                    Document::create([
+                        'daily_checklist_issue_id' => $issue->id,
+                        'type' => 'devis',
+                        'file_path' => $upload['path'],
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'size' => $file->getSize(),
+                        'sharepoint_id' => $upload['sharepoint_id'],
+                        'sharepoint_url' => $upload['url'],
+                    ]);
+                }
             }
+
+            // Alert the logistics responsible that a driver reported issue(s).
+            $count = count($data['flagged']);
+            $message = sprintf(
+                '%d problème%s signalé%s par %s sur le camion %s : %s. Coût estimé : %s FCFA.',
+                $count,
+                $count > 1 ? 's' : '',
+                $count > 1 ? 's' : '',
+                $driver->name,
+                $truck->matricule,
+                implode(', ', $reportedLabels),
+                number_format($grandTotal, 0, ',', ' ')
+            );
+
+            LogisticsAlert::updateOrCreate(
+                [
+                    'type' => 'driver_issue',
+                    'truck_id' => $truck->id,
+                    'checklist_date' => now()->toDateString(),
+                ],
+                [
+                    'driver_id' => $driver->id,
+                    'message' => $message,
+                    'read_at' => null,
+                    'resolved_at' => null,
+                ]
+            );
+
             DB::commit();
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -616,6 +731,89 @@ class DriverController extends Controller
             ? '1 problème signalé.'
             : "{$count} problèmes signalés.";
         return redirect()->route('drivers.issues')->with('success', $msg);
+    }
+
+    /**
+     * Record the repair cost (parts + labor, FCFA) for one of the driver's
+     * own reported issues, and optionally attach its devis (quote) document.
+     */
+    public function updateIssueCost(Request $request, DailyChecklistIssue $issue)
+    {
+        if (! $this->currentUserIsDriver()) {
+            abort(403, 'Access denied. Driver role is required.');
+        }
+
+        $driver = $this->resolveLinkedDriver();
+        if (! $driver || $issue->driver_id !== $driver->id) {
+            abort(403, 'Ce signalement ne vous appartient pas.');
+        }
+
+        $data = $request->validate([
+            'parts_cost' => 'nullable|numeric|min:0|max:999999999999',
+            'labor_cost' => 'nullable|numeric|min:0|max:999999999999',
+            'devis' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
+        ]);
+
+        try {
+            $parts = isset($data['parts_cost']) ? (float) $data['parts_cost'] : null;
+            $labor = isset($data['labor_cost']) ? (float) $data['labor_cost'] : null;
+            $total = ($parts === null && $labor === null) ? null : (float) ($parts ?? 0) + (float) ($labor ?? 0);
+
+            $issue->update([
+                'parts_cost' => $parts,
+                'labor_cost' => $labor,
+                'total_cost' => $total,
+                'cost_recorded_by' => auth()->id(),
+                'cost_recorded_at' => now(),
+            ]);
+
+            if ($request->hasFile('devis')) {
+                $file = $request->file('devis');
+                $upload = $this->uploadDocument($file, 'issue-devis');
+
+                Document::create([
+                    'daily_checklist_issue_id' => $issue->id,
+                    'type' => 'devis',
+                    'file_path' => $upload['path'],
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'sharepoint_id' => $upload['sharepoint_id'],
+                    'sharepoint_url' => $upload['url'],
+                ]);
+            }
+
+            return redirect()->route('drivers.issues')->with('success', 'Coût enregistré.');
+        } catch (\Throwable $e) {
+            Log::error('driver updateIssueCost failed', ['issue_id' => $issue->id, 'error' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', 'Échec de l\'enregistrement du coût.');
+        }
+    }
+
+    /**
+     * Upload a document to SharePoint, falling back to local public storage.
+     * Returns [path, url, sharepoint_id].
+     */
+    private function uploadDocument(UploadedFile $file, string $folder): array
+    {
+        if ($this->sharePointStorage->isConfigured()) {
+            $result = $this->sharePointStorage->upload($file, $folder);
+            if ($result['success'] ?? false) {
+                return [
+                    'path' => $result['path'],
+                    'url' => $result['url'],
+                    'sharepoint_id' => $result['sharepoint_id'] ?? null,
+                ];
+            }
+        }
+
+        $path = $file->store($folder, 'public');
+
+        return [
+            'path' => $path,
+            'url' => asset('storage/' . $path),
+            'sharepoint_id' => null,
+        ];
     }
 
     /**

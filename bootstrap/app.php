@@ -88,5 +88,36 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('logistics:detect-off-hours-movement --window=120')
             ->hourly()
             ->withoutOverlapping();
+
+        // Live polling lane — dynamic cadence (1/2/5 min) for trucks on today's
+        // dispatch only. Keeps the platform's freshness aligned with Fleeti's
+        // own dashboard during operational hours.
+        // Queue-formation window (06:00–07:59): every 1 min.
+        $schedule->command('fleeti:sync-live-dispatch --cadence=1')
+            ->cron('* 6-7 * * *')
+            ->withoutOverlapping(2);
+
+        // Working hours outside the queue window (05:00 + 08:00–22:00): every 2 min.
+        $schedule->command('fleeti:sync-live-dispatch --cadence=2')
+            ->cron('*/2 5,8-22 * * *')
+            ->withoutOverlapping(5);
+
+        // Overnight slow tick (23:00 + 00:00–04:00): every 5 min.
+        $schedule->command('fleeti:sync-live-dispatch --cadence=5')
+            ->cron('*/5 0-4,23 * * *')
+            ->withoutOverlapping(5);
+
+        // Fleet-wide light position pass — keeps /logistics/fleet-map fresh
+        // for ALL active trucks (not just the dispatched ones). ONE bulk
+        // Fleeti call per tick, no per-asset detail.
+        $schedule->command('fleeti:sync-fleet-positions')
+            ->cron('*/2 5-22 * * *')
+            ->withoutOverlapping(5);
+
+        // Nightly: reconcile GPS-observed quarry loadings against TransportTracking
+        // tickets. Closes the under-ticketing gap.
+        $schedule->command('logistics:reconcile-expected-tickets')
+            ->dailyAt('23:00')
+            ->withoutOverlapping();
     })
     ->create();
