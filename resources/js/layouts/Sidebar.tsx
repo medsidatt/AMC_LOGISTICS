@@ -127,7 +127,7 @@ const onlySuperAdmin: NavSection[] = [
     {
         header: 'Maintenance',
         items: [
-            { label: 'Vue d\'ensemble', href: '/maintenanc  e', icon: <Wrench size={18} />, match: '/maintenance' },
+            { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
             { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
         ],
     },
@@ -277,7 +277,7 @@ export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) 
 
     let sections: NavSection[];
     if (isAdmin) {
-        sections = [...dataSections, securitySection, adminSection, accountSection, onlySuperAdmin];
+        sections = [...dataSections, securitySection, adminSection, accountSection, ...onlySuperAdmin];
     } else if (isDriver) {
         sections = [...driverSections, accountSection];
     } else if (isHse) {
