@@ -1,12 +1,12 @@
-import { usePage } from '@inertiajs/react';
+import {usePage} from '@inertiajs/react';
 import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
     AlertTriangle, Activity, History,
 } from 'lucide-react';
-import { type ReactNode } from 'react';
-import { clsx } from 'clsx';
+import {type ReactNode} from 'react';
+import {clsx} from 'clsx';
 
 interface NavItem {
     label: string;
@@ -33,13 +33,13 @@ function pickActiveHref(url: string, items: NavItem[]): string | null {
             : url === item.href || url.startsWith(item.href + '/');
         if (!matches) continue;
         if (!best || path.length > best.len) {
-            best = { item, len: path.length };
+            best = {item, len: path.length};
         }
     }
     return best ? best.item.href : null;
 }
 
-function SidebarLink({ item, collapsed, activeHref }: { item: NavItem; collapsed: boolean; activeHref: string | null }) {
+function SidebarLink({item, collapsed, activeHref}: { item: NavItem; collapsed: boolean; activeHref: string | null }) {
     const isActive = item.href === activeHref;
 
     return (
@@ -62,9 +62,9 @@ function SidebarLink({ item, collapsed, activeHref }: { item: NavItem; collapsed
     );
 }
 
-function SectionHeader({ label, collapsed }: { label: string; collapsed: boolean }) {
+function SectionHeader({label, collapsed}: { label: string; collapsed: boolean }) {
     if (collapsed) {
-        return <li className="my-2 border-t border-[var(--color-sidebar-border)]" />;
+        return <li className="my-2 border-t border-[var(--color-sidebar-border)]"/>;
     }
     return (
         <li className="px-4 pt-4 pb-1">
@@ -79,64 +79,87 @@ const dataSections: NavSection[] = [
     {
         header: 'Transport',
         items: [
-            { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
+            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
             // { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
-            { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
+            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>},
             // { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
         ],
     },
     {
         header: 'Flotte',
         items: [
-            { label: 'Camions', href: '/trucks', icon: <Truck size={18} /> },
-            { label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18} /> },
-            { label: 'Transporteurs', href: '/transporters', icon: <Network size={18} /> },
+            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
+            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
+            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>},
         ],
     },
-    {
-        header: 'Maintenance',
-        items: [
-            { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
-            // { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
-        ],
-    },
+
 ];
 
 const securitySection: NavSection = {
     header: 'Sécurité',
     items: [
-        { label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18} />, match: '/logistics/fleet-map' },
-        { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
-        { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
+        {
+            label: 'Cartographie flotte',
+            href: '/logistics/fleet-map',
+            icon: <Map size={18}/>,
+            match: '/logistics/fleet-map'
+        },
+        {
+            label: 'Incidents de vol',
+            href: '/logistics/theft-incidents',
+            icon: <ShieldAlert size={18}/>,
+            match: '/logistics/theft-incidents'
+        },
+        {label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18}/>, match: '/logistics/places'},
     ],
 };
 
-const onlySuperAdmin: NavSection = {
-    header: '',
-    items: [
-        { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
-        { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
+const onlySuperAdmin: NavSection[] = [
+    {
+        header: '',
+        items: [
+            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports'},
+            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/'},
 
-    ],
-};
+        ]
+    },
+    {
+        header: 'Maintenance',
+        items: [
+            { label: 'Vue d\'ensemble', href: '/maintenanc  e', icon: <Wrench size={18} />, match: '/maintenance' },
+            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
+        ],
+    },
+];
 
 const accountSection: NavSection = {
     header: 'Compte',
     items: [
-        { label: 'Mon profil', href: '/auth/profile', icon: <Users size={18} />, match: '/auth/profile' },
+        {label: 'Mon profil', href: '/auth/profile', icon: <Users size={18}/>, match: '/auth/profile'},
     ],
 };
 
 const adminSection: NavSection = {
     header: 'Administration',
     items: [
-        { label: 'Utilisateurs', href: '/users', icon: <Users size={18} /> },
-        { label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18} />, match: '/auth/invitations' },
-        { label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18} /> },
-        { label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18} />, match: '/settings/fleet' },
-        { label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18} />, match: '/fuel/import' },
-        { label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18} />, match: '/admin/audit-logs' },
-        { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
+        {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>},
+        {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations'},
+        {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>},
+        {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet'},
+        {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import'},
+        {
+            label: 'Journal d\'activité',
+            href: '/admin/audit-logs',
+            icon: <Activity size={18}/>,
+            match: '/admin/audit-logs'
+        },
+        {
+            label: 'Historique objectifs',
+            href: '/logistics/objective-history',
+            icon: <History size={18}/>,
+            match: '/logistics/objective-history'
+        },
     ],
 };
 
@@ -144,10 +167,10 @@ const driverSections: NavSection[] = [
     {
         header: 'Mon espace',
         items: [
-            { label: 'Checklist hebdomadaire', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18} /> },
-            { label: 'Signaler un problème', href: '/drivers/issues', icon: <AlertTriangle size={18} /> },
-            { label: 'Mes voyages', href: '/drivers/my-trips', icon: <Route size={18} /> },
-            { label: 'Mon camion', href: '/drivers/my-truck', icon: <Truck size={18} /> },
+            {label: 'Checklist hebdomadaire', href: '/drivers/checklist-page', icon: <ClipboardCheck size={18}/>},
+            {label: 'Signaler un problème', href: '/drivers/issues', icon: <AlertTriangle size={18}/>},
+            {label: 'Mes voyages', href: '/drivers/my-trips', icon: <Route size={18}/>},
+            {label: 'Mon camion', href: '/drivers/my-truck', icon: <Truck size={18}/>},
         ],
     },
 ];
@@ -156,30 +179,40 @@ const hseSections: NavSection[] = [
     {
         header: 'HSE',
         items: [
-            { label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
+            {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections'},
         ],
     },
     {
         header: 'Opérations',
         items: [
-            { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
-            { label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
+            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
+            {label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance'},
         ],
     },
     {
         header: 'Flotte',
         items: [
-            { label: 'Camions', href: '/trucks', icon: <Truck size={18} /> },
-            { label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18} /> },
-            { label: 'Transporteurs', href: '/transporters', icon: <Network size={18} /> },
-            { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
+            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
+            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
+            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>},
+            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>},
         ],
     },
     {
         header: 'Sécurité',
         items: [
-            { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
-            { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
+            {
+                label: 'Incidents de vol',
+                href: '/logistics/theft-incidents',
+                icon: <ShieldAlert size={18}/>,
+                match: '/logistics/theft-incidents'
+            },
+            {
+                label: 'Lieux (géofences)',
+                href: '/logistics/places',
+                icon: <MapPin size={18}/>,
+                match: '/logistics/places'
+            },
         ],
     },
 ];
@@ -188,14 +221,19 @@ const logisticsResponsibleSections: NavSection[] = [
     {
         header: 'Inspections',
         items: [
-            { label: 'Liste', href: '/hse/inspections', icon: <ShieldCheck size={18} />, match: '/hse/inspections' },
-            { label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18} /> },
+            {label: 'Liste', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections'},
+            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>},
         ],
     },
     {
         header: 'Validation',
         items: [
-            { label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18} />, match: '/logistics/validation/checklists' },
+            {
+                label: 'Checklists hebdo',
+                href: '/logistics/validation/checklists',
+                icon: <ClipboardCheck size={18}/>,
+                match: '/logistics/validation/checklists'
+            },
         ],
     },
     // {
@@ -209,12 +247,17 @@ const logisticsResponsibleSections: NavSection[] = [
     {
         header: 'Logistique',
         items: [
-            { label: 'Tableau logistique', href: '/logistics/dashboard', icon: <BarChart3 size={18} />, match: '/logistics/dashboard' },
-            { label: 'Camions', href: '/trucks', icon: <Truck size={18} /> },
-            { label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18} /> },
-            { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
-            { label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
-            { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
+            {
+                label: 'Tableau logistique',
+                href: '/logistics/dashboard',
+                icon: <BarChart3 size={18}/>,
+                match: '/logistics/dashboard'
+            },
+            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
+            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
+            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
+            {label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance'},
+            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports'},
         ],
     },
 ];
@@ -225,8 +268,8 @@ interface SidebarProps {
     mobileOpen: boolean;
 }
 
-export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps) {
-    const { auth } = usePage().props;
+export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) {
+    const {auth} = usePage().props;
     const isDriver = auth.roles.includes('Driver');
     const isAdmin = auth.roles.includes('Admin') || auth.roles.includes('Super Admin');
     const isHse = auth.roles.includes('HSE Agent');
@@ -248,10 +291,10 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
     const dashboardItem: NavItem = {
         label: 'Dashboard',
         href: '/dashboard',
-        icon: <LayoutDashboard size={18} />,
+        icon: <LayoutDashboard size={18}/>,
     };
     const allItems: NavItem[] = [dashboardItem, ...sections.flatMap((s) => s.items)];
-    const { url } = usePage();
+    const {url} = usePage();
     const activeHref = pickActiveHref(url, allItems);
 
     return (
@@ -271,36 +314,38 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
                 )}
             >
                 {/* Logo */}
-                <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-sidebar-border)]">
+                <div
+                    className="flex items-center justify-between h-16 px-4 border-b border-[var(--color-sidebar-border)]">
                     {!collapsed && (
                         <div className="flex items-center gap-2">
-                            <img src="/images/logo.png" alt="" className="w-8 h-8 object-contain shrink-0" />
+                            <img src="/images/logo.png" alt="" className="w-8 h-8 object-contain shrink-0"/>
                             <span className="text-lg font-bold text-[var(--color-sidebar-title)] tracking-tight">
                                 AMC <span className="text-[var(--color-primary)]">Travaux SN</span>
                             </span>
                         </div>
                     )}
                     {collapsed && (
-                        <img src="/images/logo.png" alt="AMC Travaux SN" className="w-8 h-8 object-contain mx-auto" />
+                        <img src="/images/logo.png" alt="AMC Travaux SN" className="w-8 h-8 object-contain mx-auto"/>
                     )}
                     <button
                         onClick={onClose}
                         className="lg:hidden text-[var(--color-sidebar-muted)] hover:text-[var(--color-sidebar-text)] p-1"
                     >
-                        <X size={20} />
+                        <X size={20}/>
                     </button>
                 </div>
 
                 {/* Navigation */}
                 <nav className="flex-1 overflow-y-auto py-3 px-2">
                     <ul className="space-y-0.5">
-                        <SidebarLink item={dashboardItem} collapsed={collapsed} activeHref={activeHref} />
+                        <SidebarLink item={dashboardItem} collapsed={collapsed} activeHref={activeHref}/>
 
                         {sections.map((section) => (
                             <div key={section.header}>
-                                <SectionHeader label={section.header} collapsed={collapsed} />
+                                <SectionHeader label={section.header} collapsed={collapsed}/>
                                 {section.items.map((item) => (
-                                    <SidebarLink key={item.href} item={item} collapsed={collapsed} activeHref={activeHref} />
+                                    <SidebarLink key={item.href} item={item} collapsed={collapsed}
+                                                 activeHref={activeHref}/>
                                 ))}
                             </div>
                         ))}
