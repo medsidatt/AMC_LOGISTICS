@@ -107,3 +107,21 @@
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Leaflet stacking-context fix ──────────────
+   Leaflet's controls and popups use z-index 1000+, which punches through
+   the navbar (z-30) on scroll. Isolating each map creates a new stacking
+   context capped at the container's z-index, keeping the navbar on top. */
+.leaflet-container {
+    isolation: isolate;
+    z-index: 0;
+}
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-control,
+.leaflet-pane,
+.leaflet-popup-pane,
+.leaflet-tooltip-pane {
+    z-index: auto;
+}
+

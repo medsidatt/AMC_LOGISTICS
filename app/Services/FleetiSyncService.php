@@ -2,9 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\DailyDispatch;
+use App\Models\DailyDispatchEvent;
 use App\Models\Truck;
 use App\Repositories\TruckRepository;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -20,7 +24,10 @@ class FleetiSyncService
         private readonly FuelEventDetectorService $fuelEventDetector,
         private readonly StopDetectorService $stopDetectorService,
         private readonly PlaceClassifierService $placeClassifierService,
-        private readonly UnauthorizedStopDetector $unauthorizedStopDetector
+        private readonly UnauthorizedStopDetector $unauthorizedStopDetector,
+        private readonly ?DailyDispatchEventDeriver $eventDeriver = null,
+        private readonly ?DispatchStatusResolver $statusResolver = null,
+        private readonly ?DispatchEtaEstimator $etaEstimator = null
     ) {
     }
 
@@ -226,6 +233,343 @@ class FleetiSyncService
             'fuel_events_detected' => 0,
             'stops_closed' => 0,
             'theft_incidents_opened' => 0,
+            'assets_skipped' => 0,
+            'errors' => [],
+            'note' => $note,
+        ];
+    }
+
+    /**
+     * Fleet-wide light position pass used by fleeti:sync-fleet-positions.
+     *
+     * Issues ONE bulk /v1/Asset/Search call (no per-asset detail), updates
+     * truck live cache + writes a lossless snapshot for every active truck,
+     * and runs the (cheap) stop/place classification. Skips fuel sensor
+     * reading, fuel events, odometer & engine-hours — those need the heavy
+     * detail call and are covered by syncKilometers (30 min) and syncLive
+     * (1-5 min, dispatched trucks only).
+     *
+     * Trucks on today's dispatch are skipped here to avoid duplicating work
+     * with syncLive; they get a deeper poll there.
+     */
+    public function syncFleetPositions(?string $customerReference, Collection $allActiveTrucks, Collection $dispatchedTruckIds): array
+    {
+        if ($allActiveTrucks->isEmpty()) {
+            return $this->emptyLiveSummary('No active trucks for fleet-wide light sync.');
+        }
+
+        // ONE bulk call to Fleeti. No assetIds filter — pulls every Fleeti asset
+        // for this customer in a single (paginated) Search call.
+        $assets = $this->fleetiService->fetchAssets($customerReference);
+
+        $summary = [
+            'assets_received' => $assets->count(),
+            'trucks_matched' => 0,
+            'snapshots_created' => 0,
+            'stops_closed' => 0,
+            'assets_skipped' => 0,
+            'dispatched_skipped' => 0,
+            'errors' => [],
+        ];
+
+        foreach ($assets as $asset) {
+            $assetId = data_get($asset, 'id');
+
+            $truck = $this->resolveTruck($asset, $allActiveTrucks);
+            if (! $truck) {
+                $summary['assets_skipped']++;
+                continue;
+            }
+
+            // syncLive owns these trucks at higher cadence + depth.
+            if ($dispatchedTruckIds->contains($truck->id)) {
+                $summary['dispatched_skipped']++;
+                continue;
+            }
+
+            $lock = Cache::lock("fleeti:positions:truck:{$truck->id}", 30);
+            if (! $lock->get()) {
+                $summary['assets_skipped']++;
+                continue;
+            }
+
+            try {
+                $telemetry = $this->fleetiService->extractTelemetry($asset);
+                $summary['trucks_matched']++;
+
+                $truckUpdates = array_filter([
+                    'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
+                ], fn ($v) => ! is_null($v));
+                if (! empty($truckUpdates)) {
+                    $truck->update($truckUpdates);
+                }
+
+                // Light snapshot — refreshes fleeti_last_* cache columns,
+                // which is what /logistics/fleet-map reads.
+                $snapshot = $this->telemetrySnapshotService->record(
+                    $truck->fresh(),
+                    $telemetry,
+                    $asset,
+                    'fleeti'
+                );
+                $summary['snapshots_created']++;
+
+                // Stops + place classification are cheap and useful for the map.
+                try {
+                    $closedStops = $this->stopDetectorService->extendForTruck($truck->fresh(), $snapshot);
+                    foreach ($closedStops as $stop) {
+                        $this->placeClassifierService->classify($stop);
+                        $summary['stops_closed']++;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Stop/place layer failed (fleet-positions).', [
+                        'truck_id' => $truck->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::error('Fleet-position sync failed for truck.', [
+                    'truck_id' => $truck->id,
+                    'asset_id' => $assetId,
+                    'error' => $e->getMessage(),
+                ]);
+                $summary['errors'][] = [
+                    'truck_id' => $truck->id,
+                    'asset_id' => $assetId,
+                    'message' => $e->getMessage(),
+                ];
+            } finally {
+                optional($lock)->release();
+            }
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Fast polling lane used by fleeti:sync-live-dispatch. Only handles trucks
+     * already filtered by the caller (TruckRepository::getTrucksOnDispatchToday).
+     * Skips odometer + engine-hours derivation — those are heavy and fine at
+     * 30-min cadence via syncKilometers.
+     */
+    public function syncLive(?string $customerReference, Collection $trucks): array
+    {
+        if ($trucks->isEmpty()) {
+            return $this->emptyLiveSummary('No trucks on today\'s dispatch.');
+        }
+
+        $assetIds = $trucks->pluck('fleeti_asset_id')->filter()->unique()->values()->all();
+        if (empty($assetIds)) {
+            return $this->emptyLiveSummary('Dispatched trucks have no Fleeti asset IDs.');
+        }
+
+        $assets = $this->fleetiService->fetchAssets($customerReference, $assetIds);
+
+        $summary = [
+            'assets_received' => $assets->count(),
+            'trucks_matched' => 0,
+            'snapshots_created' => 0,
+            'fuel_events_detected' => 0,
+            'stops_closed' => 0,
+            'dispatch_events_created' => 0,
+            'dispatches_updated' => 0,
+            'assets_skipped' => 0,
+            'errors' => [],
+        ];
+
+        foreach ($assets as $asset) {
+            $assetId = data_get($asset, 'id');
+
+            $truck = $this->resolveTruck($asset, $trucks);
+            if (! $truck) {
+                $summary['assets_skipped']++;
+                continue;
+            }
+
+            // Per-truck lock to prevent overlapping fast ticks from racing.
+            $lock = Cache::lock("fleeti:live:truck:{$truck->id}", 60);
+            if (! $lock->get()) {
+                $summary['assets_skipped']++;
+                continue;
+            }
+
+            try {
+                $this->processLiveTruck($truck, $asset, $assetId, $summary);
+            } catch (\Throwable $e) {
+                Log::error('Fleeti live sync failed for truck.', [
+                    'truck_id' => $truck->id,
+                    'asset_id' => $assetId,
+                    'error' => $e->getMessage(),
+                ]);
+                $summary['errors'][] = [
+                    'truck_id' => $truck->id,
+                    'asset_id' => $assetId,
+                    'message' => $e->getMessage(),
+                ];
+            } finally {
+                optional($lock)->release();
+            }
+        }
+
+        return $summary;
+    }
+
+    private function processLiveTruck(Truck $truck, array $asset, $assetId, array &$summary): void
+    {
+        $fullAsset = $asset;
+        if ($assetId) {
+            try {
+                $fetched = $this->fleetiService->fetchAssetById($assetId);
+                if ($fetched) {
+                    $fullAsset = $fetched;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Failed to fetch asset details (live).', [
+                    'asset_id' => $assetId,
+                    'truck_id' => $truck->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $telemetry = $this->fleetiService->extractTelemetry($fullAsset);
+        $summary['trucks_matched']++;
+
+        // Live cache + raw snapshot (no kilometer/engine-hour writes — keep it lean)
+        $gatewayId = data_get($fullAsset, 'gateways.0.provider.gatewayId');
+        $truckUpdates = array_filter([
+            'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
+            'fleeti_gateway_id' => $gatewayId ?? $truck->fleeti_gateway_id,
+            'fleeti_last_fuel_level' => $telemetry['fuel_litres'],
+        ], fn ($v) => ! is_null($v));
+        if (! empty($truckUpdates)) {
+            $truck->update($truckUpdates);
+        }
+
+        $snapshot = $this->telemetrySnapshotService->record(
+            $truck->fresh(),
+            $telemetry,
+            $fullAsset,
+            'fleeti'
+        );
+        $summary['snapshots_created']++;
+
+        // Detect refill/drop/theft events (cheap)
+        $fuelEvent = $this->fuelEventDetector->analyze($truck->fresh(), $snapshot);
+        if ($fuelEvent) {
+            $summary['fuel_events_detected']++;
+        }
+
+        // Stops & place classification (also cheap incremental work)
+        $classifiedStops = [];
+        try {
+            $closedStops = $this->stopDetectorService->extendForTruck($truck->fresh(), $snapshot);
+            foreach ($closedStops as $stop) {
+                $classified = $this->placeClassifierService->classify($stop);
+                $classifiedStops[] = $classified;
+                $summary['stops_closed']++;
+
+                $incident = $this->unauthorizedStopDetector->inspect($classified);
+                if ($incident) {
+                    $summary['theft_incidents_opened'] = ($summary['theft_incidents_opened'] ?? 0) + 1;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Stop/place layer failed (live).', [
+                'truck_id' => $truck->id,
+                'snapshot_id' => $snapshot->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Materialise the dispatch event timeline + live status for the
+        // active dispatch on this truck.
+        $this->updateDispatchTimeline($truck, $snapshot, $classifiedStops, $fuelEvent, $summary);
+    }
+
+    private function updateDispatchTimeline(
+        Truck $truck,
+        $snapshot,
+        array $classifiedStops,
+        $fuelEvent,
+        array &$summary
+    ): void {
+        if (! $this->eventDeriver || ! $this->statusResolver) {
+            return; // back-compat: services optional
+        }
+
+        $dispatch = $this->resolveActiveDispatch($truck);
+        if (! $dispatch) {
+            return;
+        }
+
+        $newFuelEvents = $fuelEvent ? [$fuelEvent] : [];
+        $newEvents = $this->eventDeriver->derive($dispatch, $truck, $snapshot, $classifiedStops, $newFuelEvents);
+        $summary['dispatch_events_created'] += count($newEvents);
+
+        // Reload recent events (today) to pass to the status resolver
+        $recentEvents = DailyDispatchEvent::query()
+            ->where('daily_dispatch_id', $dispatch->id)
+            ->where('occurred_at', '>=', now()->subHours(24))
+            ->orderBy('occurred_at')
+            ->get();
+
+        $resolution = $this->statusResolver->resolve($dispatch->fresh(), $snapshot, $recentEvents);
+        $eta = $this->etaEstimator?->estimate($dispatch->fresh(), $recentEvents);
+
+        $dispatch->forceFill([
+            'current_status' => $resolution['status'],
+            'current_status_at' => now(),
+            'current_place_id' => $resolution['place']?->id,
+            'last_event_id' => $recentEvents->last()?->id ?? $dispatch->last_event_id,
+            'eta_at' => $eta,
+        ])->save();
+
+        $summary['dispatches_updated']++;
+    }
+
+    /**
+     * Pick the dispatch this truck is currently executing. Prefers today's
+     * dispatch; falls back to yesterday's if today's hasn't been published
+     * yet and the truck is still on the road.
+     */
+    private function resolveActiveDispatch(Truck $truck): ?DailyDispatch
+    {
+        $today = Carbon::today()->toDateString();
+        $todayDispatch = DailyDispatch::query()
+            ->whereDate('dispatch_date', $today)
+            ->where('truck_id', $truck->id)
+            ->notified()
+            ->orderByDesc('id')
+            ->first();
+
+        if ($todayDispatch && $todayDispatch->current_status !== DailyDispatch::STATUS_LIVE_TERMINE) {
+            return $todayDispatch;
+        }
+
+        // Truck still finishing yesterday's trip?
+        return DailyDispatch::query()
+            ->whereDate('dispatch_date', Carbon::yesterday())
+            ->where('truck_id', $truck->id)
+            ->notified()
+            ->where(function ($q) {
+                $q->whereNull('current_status')
+                    ->orWhere('current_status', '!=', DailyDispatch::STATUS_LIVE_TERMINE);
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function emptyLiveSummary(string $note): array
+    {
+        return [
+            'assets_received' => 0,
+            'trucks_matched' => 0,
+            'snapshots_created' => 0,
+            'fuel_events_detected' => 0,
+            'stops_closed' => 0,
+            'dispatch_events_created' => 0,
+            'dispatches_updated' => 0,
             'assets_skipped' => 0,
             'errors' => [],
             'note' => $note,

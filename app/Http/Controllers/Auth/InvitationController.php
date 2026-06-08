@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Http\Concerns\AssignableRoles;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SendInvitationRequest;
+use App\Http\Requests\UpdateInvitationRequest;
 use App\Mail\InvitationMail;
 use App\Models\Auth\Invitation;
 use App\Models\Auth\User;
@@ -10,12 +13,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
 
 class InvitationController extends Controller
 {
+    use AssignableRoles;
+
+    public function __construct()
+    {
+        $this->middleware('permission:invitation-list', ['only' => ['index']]);
+        $this->middleware('permission:invitation-create', ['only' => ['sendInvitation']]);
+        $this->middleware('permission:invitation-edit', ['only' => ['update']]);
+        $this->middleware('permission:invitation-delete', ['only' => ['destroy']]);
+    }
 
     // index
     public function index()
@@ -33,8 +43,8 @@ class InvitationController extends Controller
                 'created_at' => $inv->created_at?->format('d/m/Y'),
             ]);
 
-        $roles = $this->assignableRoles()->map(fn ($r) => [
-            'name' => $r->name,
+        $roles = $this->assignableRoleNames()->map(fn ($name) => [
+            'name' => $name,
         ])->toArray();
 
         return Inertia::render('invitations/Index', [
@@ -43,48 +53,8 @@ class InvitationController extends Controller
         ]);
     }
 
-    public function create()
+    public function sendInvitation(SendInvitationRequest $request)
     {
-        $roles = $this->assignableRoles();
-        return view('auth.invitations.create', compact('roles'));
-    }
-
-    public function edit($id)
-    {
-        $invitation = Invitation::findOrFail($id);
-        $roles = $this->assignableRoles();
-        return view('auth.invitations.edit', compact('invitation', 'roles'));
-    }
-
-    /**
-     * Roles the current user can assign. Only Super Admin can hand out
-     * "Super Admin"; everyone else gets every role currently defined in
-     * the roles table.
-     */
-    private function assignableRoles()
-    {
-        $query = Role::query();
-
-        if (! auth()->user()->hasRole('Super Admin')) {
-            $query->where('name', '!=', 'Super Admin');
-        }
-
-        return $query->orderBy('name')->get(['name']);
-    }
-
-    public function sendInvitation(Request $request)
-    {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => [
-                'required',
-                'email',
-                Rule::unique('users', 'email')->whereNull('deleted_at'),
-                Rule::unique('invitations', 'email')->whereNull('deleted_at'),
-            ],
-            'role_name' => 'required|string|exists:roles,name',
-        ]);
-
         DB::beginTransaction();
         try {
             $plainPassword = Str::password(12, letters: true, numbers: true, symbols: false, spaces: false);
@@ -129,22 +99,9 @@ class InvitationController extends Controller
         );
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateInvitationRequest $request, $id)
     {
         $invitation = Invitation::findOrFail($id);
-
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => [
-                'required',
-                'email',
-                Rule::unique('users', 'email')->ignore(
-                    optional(User::where('email', $invitation->email)->first())->id
-                )->whereNull('deleted_at'),
-                Rule::unique('invitations', 'email')->ignore($id)->whereNull('deleted_at'),
-            ],
-            'role_name' => 'required|string|exists:roles,name',
-        ]);
 
         DB::beginTransaction();
         try {

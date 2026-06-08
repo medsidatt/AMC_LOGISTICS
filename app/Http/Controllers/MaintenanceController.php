@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\MaintenanceDueExport;
+use App\Models\Document;
 use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\Maintenance;
@@ -12,6 +13,7 @@ use App\Models\TruckMaintenanceProfile;
 use App\Models\Auth\User;
 use App\Notifications\MaintenanceSignedNotification;
 use App\Services\MaintenanceStatusService;
+use App\Services\SharePointStorageService;
 use App\Services\TruckMaintenanceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +30,7 @@ class MaintenanceController extends Controller
     public function __construct(
         private readonly TruckMaintenanceService $truckMaintenanceService,
         private readonly MaintenanceStatusService $maintenanceStatusService,
+        private readonly SharePointStorageService $sharePointStorage,
     ) {
         // Read-only endpoints
         $this->middleware('permission:maintenance-list', [
@@ -38,6 +41,7 @@ class MaintenanceController extends Controller
             'only' => [
                 'create', 'store', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
+                'updateIssueCost',
             ],
         ]);
         $this->middleware('permission:maintenance-approve', ['only' => ['approve']]);
@@ -305,7 +309,7 @@ class MaintenanceController extends Controller
             ->pluck('cnt', 'truck_id');
 
         // Pull the actual flagged inspection issues per truck (preview list for the maintenance modal)
-        $inspectionIssuesByTruck = InspectionChecklistIssue::query()
+        $flaggedIssues = InspectionChecklistIssue::query()
             ->where('flagged', true)
             ->whereNull('resolved_at')
             ->join('inspection_checklists', 'inspection_checklists.id', '=', 'inspection_checklist_issues.inspection_checklist_id')
@@ -315,16 +319,28 @@ class MaintenanceController extends Controller
                 'inspection_checklist_issues.category',
                 'inspection_checklist_issues.severity',
                 'inspection_checklist_issues.issue_notes',
+                'inspection_checklist_issues.parts_cost',
+                'inspection_checklist_issues.labor_cost',
+                'inspection_checklist_issues.total_cost',
                 'inspection_checklists.truck_id',
                 'inspection_checklists.inspection_date',
-            ])
-            ->groupBy('truck_id');
+            ]);
+
+        // Latest devis document per issue (for the preview list).
+        $devisByIssue = Document::query()
+            ->where('type', 'devis')
+            ->whereIn('inspection_checklist_issue_id', $flaggedIssues->pluck('id'))
+            ->orderByDesc('id')
+            ->get()
+            ->keyBy('inspection_checklist_issue_id');
+
+        $inspectionIssuesByTruck = $flaggedIssues->groupBy('truck_id');
 
         $trucks = Truck::with(['maintenanceProfiles' => fn ($q) => $q->active()])
             ->where('is_active', true)
             ->orderBy('matricule')
             ->get()
-            ->map(function (Truck $truck) use ($openIssuesByTruck, $openInspectionIssuesByTruck, $inspectionIssuesByTruck) {
+            ->map(function (Truck $truck) use ($openIssuesByTruck, $openInspectionIssuesByTruck, $inspectionIssuesByTruck, $devisByIssue) {
                 $profiles = $truck->maintenanceProfiles->keyBy('maintenance_type');
                 $general = $profiles->get('general');
                 return [
@@ -342,13 +358,21 @@ class MaintenanceController extends Controller
                     'overall_status' => $general?->status ?? 'green',
                     'open_issues' => $openIssuesByTruck->get($truck->id, 0),
                     'open_inspection_issues' => $openInspectionIssuesByTruck->get($truck->id, 0),
-                    'inspection_issues' => $inspectionIssuesByTruck->get($truck->id, collect())->map(fn ($i) => [
-                        'id' => $i->id,
-                        'category' => $i->category,
-                        'severity' => $i->severity,
-                        'issue_notes' => $i->issue_notes,
-                        'inspection_date' => $i->inspection_date,
-                    ])->values(),
+                    'inspection_issues' => $inspectionIssuesByTruck->get($truck->id, collect())->map(function ($i) use ($devisByIssue) {
+                        $devis = $devisByIssue->get($i->id);
+                        return [
+                            'id' => $i->id,
+                            'category' => $i->category,
+                            'severity' => $i->severity,
+                            'issue_notes' => $i->issue_notes,
+                            'inspection_date' => $i->inspection_date,
+                            'parts_cost' => $i->parts_cost,
+                            'labor_cost' => $i->labor_cost,
+                            'total_cost' => $i->total_cost,
+                            'devis_url' => $devis?->sharepoint_url ?? ($devis ? asset('storage/' . $devis->file_path) : null),
+                            'devis_name' => $devis?->original_name,
+                        ];
+                    })->values(),
                 ];
             });
 
@@ -615,6 +639,81 @@ class MaintenanceController extends Controller
             Log::error('updateMaintenance failed', ['maintenance_id' => $maintenance->id, 'error' => $e->getMessage()]);
             return back()->withInput()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Record the repair cost (parts + labor, FCFA) for a flagged inspection
+     * finding, and optionally attach its devis (quote) document. Usable while
+     * the finding is still open — before any maintenance is approved.
+     */
+    public function updateIssueCost(Request $request, InspectionChecklistIssue $issue)
+    {
+        $data = $request->validate([
+            'parts_cost' => 'nullable|numeric|min:0|max:999999999999',
+            'labor_cost' => 'nullable|numeric|min:0|max:999999999999',
+            'devis' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
+        ]);
+
+        try {
+            $parts = isset($data['parts_cost']) ? (float) $data['parts_cost'] : null;
+            $labor = isset($data['labor_cost']) ? (float) $data['labor_cost'] : null;
+            $total = ($parts === null && $labor === null) ? null : (float) ($parts ?? 0) + (float) ($labor ?? 0);
+
+            $issue->update([
+                'parts_cost' => $parts,
+                'labor_cost' => $labor,
+                'total_cost' => $total,
+                'cost_recorded_by' => auth()->id(),
+                'cost_recorded_at' => now(),
+            ]);
+
+            if ($request->hasFile('devis')) {
+                $file = $request->file('devis');
+                $upload = $this->uploadDocument($file, 'inspection-devis');
+
+                Document::create([
+                    'inspection_checklist_issue_id' => $issue->id,
+                    'type' => 'devis',
+                    'file_path' => $upload['path'],
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'sharepoint_id' => $upload['sharepoint_id'],
+                    'sharepoint_url' => $upload['url'],
+                ]);
+            }
+
+            return back()->with('success', 'Coût enregistré avec succès.');
+        } catch (\Throwable $e) {
+            Log::error('updateIssueCost failed', ['issue_id' => $issue->id, 'error' => $e->getMessage()]);
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Upload a document to SharePoint, falling back to local public storage.
+     * Returns [path, url, sharepoint_id].
+     */
+    private function uploadDocument(\Illuminate\Http\UploadedFile $file, string $folder): array
+    {
+        if ($this->sharePointStorage->isConfigured()) {
+            $result = $this->sharePointStorage->upload($file, $folder);
+            if ($result['success'] ?? false) {
+                return [
+                    'path' => $result['path'],
+                    'url' => $result['url'],
+                    'sharepoint_id' => $result['sharepoint_id'] ?? null,
+                ];
+            }
+        }
+
+        $path = $file->store($folder, 'public');
+
+        return [
+            'path' => $path,
+            'url' => asset('storage/' . $path),
+            'sharepoint_id' => null,
+        ];
     }
 
     private function storeDashboardPhoto(Request $request, Maintenance $maintenance): void

@@ -1,9 +1,12 @@
 import { Head, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
-import { AlertTriangle, Send, Truck as TruckIcon, CheckCircle2, Check } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
+import CameraCapture from '@/components/inspection/CameraCapture';
+import { AlertTriangle, Send, Truck as TruckIcon, CheckCircle2, Check, Receipt, FileText, Wallet, Camera } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface IssueEntry {
@@ -15,6 +18,11 @@ interface IssueEntry {
     reported_at: string | null;
     resolved_at: string | null;
     resolution_notes: string | null;
+    parts_cost: string | null;
+    labor_cost: string | null;
+    total_cost: string | null;
+    devis_url: string | null;
+    devis_name: string | null;
 }
 
 interface Props {
@@ -32,11 +40,12 @@ const CATEGORIES: { key: string; label: string }[] = [
     { key: 'brakes', label: 'Freins' },
     { key: 'lights', label: 'Feux' },
     { key: 'oil', label: 'Huile' },
-    { key: 'fuel', label: 'Carburant' },
     { key: 'general', label: 'Général' },
 ];
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
+
+const DEFAULT_SEVERITY = 'minor';
 
 /* ── Tire diagram ── */
 type Axle = { type: 'steering' | 'dual' | 'single'; tires: number[] };
@@ -188,29 +197,85 @@ function severityBadgeVariant(key: string | null): 'danger' | 'warning' | 'muted
 }
 
 export default function Issues({ driver, truck, recent, options }: Props) {
-    const form = useForm({
+    const form = useForm<Record<string, any>>({
         flagged: [] as string[],
         severity: {} as Record<string, string>,
         positions: {} as Record<string, string[]>,
         notes: {} as Record<string, string>,
+        parts_cost: {} as Record<string, string>,
+        labor_cost: {} as Record<string, string>,
+        attachments: {} as Record<string, File | null>,
     });
+
+    const [costIssue, setCostIssue] = useState<IssueEntry | null>(null);
+    const costForm = useForm<Record<string, any>>({
+        parts_cost: '',
+        labor_cost: '',
+        devis: null as File | null,
+    });
+
+    const fcfa = (v: string | null) =>
+        v == null || v === '' ? null : `${Number(v).toLocaleString('fr-FR')} FCFA`;
+
+    const openCost = (issue: IssueEntry) => {
+        setCostIssue(issue);
+        costForm.setData({
+            parts_cost: issue.parts_cost ?? '',
+            labor_cost: issue.labor_cost ?? '',
+            devis: null,
+        });
+        costForm.clearErrors();
+    };
+
+    const costTotal = () => (Number(costForm.data.parts_cost) || 0) + (Number(costForm.data.labor_cost) || 0);
+
+    const submitCost = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!costIssue) return;
+        costForm.post(`/drivers/issues/${costIssue.id}/cost`, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => setCostIssue(null),
+        });
+    };
 
     const isFlagged = (cat: string) => form.data.flagged.includes(cat);
 
+    const [severityErrors, setSeverityErrors] = useState<Record<string, boolean>>({});
+
     const toggleCategory = (cat: string) => {
-        const next = isFlagged(cat)
-            ? form.data.flagged.filter((c) => c !== cat)
-            : [...form.data.flagged, cat];
+        const turningOn = !isFlagged(cat);
+        const next = turningOn
+            ? [...form.data.flagged, cat]
+            : form.data.flagged.filter((c) => c !== cat);
         form.setData('flagged', next);
+
+        // Default the status to "minor" when a category is checked so a status is
+        // always selected; require an explicit choice but pre-fill the lowest level.
+        if (turningOn && !form.data.severity[cat]) {
+            form.setData('severity', { ...form.data.severity, [cat]: DEFAULT_SEVERITY });
+        }
     };
 
     const setSeverity = (cat: string, value: string) => {
         form.setData('severity', { ...form.data.severity, [cat]: value });
+        setSeverityErrors((prev) => ({ ...prev, [cat]: false }));
     };
 
     const setNotes = (cat: string, value: string) => {
         form.setData('notes', { ...form.data.notes, [cat]: value });
     };
+
+    const setCost = (cat: string, field: 'parts_cost' | 'labor_cost', value: string) => {
+        form.setData(field, { ...form.data[field], [cat]: value });
+    };
+
+    const setAttachment = (cat: string, file: File | null) => {
+        form.setData('attachments', { ...form.data.attachments, [cat]: file });
+    };
+
+    const catTotal = (cat: string) =>
+        (Number(form.data.parts_cost[cat]) || 0) + (Number(form.data.labor_cost[cat]) || 0);
 
     const togglePosition = (cat: string, pos: string) => {
         const current = form.data.positions[cat] ?? [];
@@ -220,8 +285,23 @@ export default function Issues({ driver, truck, recent, options }: Props) {
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // A status is required for every checked category.
+        const missing: Record<string, boolean> = {};
+        for (const cat of form.data.flagged) {
+            if (!form.data.severity[cat]) missing[cat] = true;
+        }
+        if (Object.keys(missing).length > 0) {
+            setSeverityErrors(missing);
+            return;
+        }
+
         form.post('/drivers/issues', {
-            onSuccess: () => form.reset(),
+            forceFormData: true,
+            onSuccess: () => {
+                form.reset();
+                setSeverityErrors({});
+            },
         });
     };
 
@@ -235,6 +315,18 @@ export default function Issues({ driver, truck, recent, options }: Props) {
     };
 
     const flaggedCount = form.data.flagged.length;
+
+    // The form is submittable only when at least one category is checked and every
+    // checked category has a status and its required item(s) selected (pneus/feux).
+    const requiresPositions = (cat: string) => cat === 'tires' || cat === 'lights';
+    const formValid =
+        flaggedCount > 0 &&
+        form.data.flagged.every((cat) => {
+            if (!form.data.severity[cat]) return false;
+            if (requiresPositions(cat) && (form.data.positions[cat]?.length ?? 0) === 0) return false;
+            if (catTotal(cat) <= 0) return false;
+            return true;
+        });
 
     return (
         <AuthenticatedLayout title="Signaler un problème">
@@ -293,8 +385,13 @@ export default function Issues({ driver, truck, recent, options }: Props) {
                                     {flagged && (
                                         <div className="px-3 pb-3 space-y-3 border-t border-[var(--color-border)]/50 pt-3">
                                             <div>
-                                                <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5">Gravité</p>
+                                                <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5">
+                                                    Gravité <span className="text-red-500">*</span>
+                                                </p>
                                                 <SeverityPicker value={severity} options={options.severity} onChange={(v) => setSeverity(cat.key, v)} />
+                                                {severityErrors[cat.key] && (
+                                                    <p className="text-[11px] text-red-500 mt-1">Veuillez sélectionner une gravité.</p>
+                                                )}
                                             </div>
                                             {cat.key === 'tires' && (
                                                 <div>
@@ -316,6 +413,72 @@ export default function Issues({ driver, truck, recent, options }: Props) {
                                                 className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
                                                 maxLength={500}
                                             />
+
+                                            <div className="rounded-lg border border-[var(--color-border)]/70 bg-[var(--color-surface)] p-3 space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Receipt size={14} className="text-[var(--color-primary)]" />
+                                                    <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium">
+                                                        Coût estimé <span className="text-red-500">*</span>
+                                                    </p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="block text-[11px] text-[var(--color-text-muted)] mb-1">Pièces (FCFA)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="any"
+                                                            inputMode="decimal"
+                                                            value={form.data.parts_cost[cat.key] ?? ''}
+                                                            onChange={(e) => setCost(cat.key, 'parts_cost', e.target.value)}
+                                                            placeholder="0"
+                                                            className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[11px] text-[var(--color-text-muted)] mb-1">Main d'œuvre (FCFA)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="any"
+                                                            inputMode="decimal"
+                                                            value={form.data.labor_cost[cat.key] ?? ''}
+                                                            onChange={(e) => setCost(cat.key, 'labor_cost', e.target.value)}
+                                                            placeholder="0"
+                                                            className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                {catTotal(cat.key) > 0 && (
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <span className="text-[var(--color-text-muted)]">Total</span>
+                                                        <span className="font-bold text-[var(--color-text)]">{catTotal(cat.key).toLocaleString('fr-FR')} FCFA</span>
+                                                    </div>
+                                                )}
+
+                                                <div>
+                                                    <p className="text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5 flex items-center gap-1.5">
+                                                        <Camera size={12} /> Photo (optionnel)
+                                                    </p>
+                                                    {form.data.attachments[cat.key] ? (
+                                                        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] text-sm">
+                                                            <span className="flex items-center gap-1.5 min-w-0">
+                                                                <FileText size={14} className="text-[var(--color-primary)] shrink-0" />
+                                                                <span className="truncate">{form.data.attachments[cat.key]!.name}</span>
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setAttachment(cat.key, null)}
+                                                                className="text-red-500 text-xs font-medium shrink-0"
+                                                            >
+                                                                Retirer
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <CameraCapture onCapture={(file) => setAttachment(cat.key, file)} />
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -323,9 +486,13 @@ export default function Issues({ driver, truck, recent, options }: Props) {
                         })}
                     </div>
 
-                    <Button type="submit" loading={form.processing} className="w-full sm:w-auto mt-5" disabled={flaggedCount === 0}>
+                    <Button type="submit" loading={form.processing} className="w-full sm:w-auto mt-5" disabled={!formValid}>
                         <Send size={16} className="mr-2" />
-                        {flaggedCount === 0 ? 'Sélectionnez au moins une catégorie' : `Signaler ${flaggedCount} problème${flaggedCount > 1 ? 's' : ''}`}
+                        {flaggedCount === 0
+                            ? 'Sélectionnez au moins une catégorie'
+                            : !formValid
+                                ? 'Complétez la gravité et les éléments'
+                                : `Signaler ${flaggedCount} problème${flaggedCount > 1 ? 's' : ''}`}
                     </Button>
                 </form>
             </Card>
@@ -364,11 +531,97 @@ export default function Issues({ driver, truck, recent, options }: Props) {
                                         </div>
                                     </div>
                                 )}
+
+                                <div className="mt-2 pt-2 border-t border-[var(--color-border)]/50 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                                    {fcfa(issue.total_cost) ? (
+                                        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--color-text)]">
+                                            <Wallet size={14} className="text-[var(--color-primary)]" />
+                                            {fcfa(issue.total_cost)}
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-[var(--color-text-muted)]">Aucun coût enregistré</span>
+                                    )}
+                                    {issue.devis_url && (
+                                        <a href={issue.devis_url} target="_blank" rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+                                            <FileText size={12} /> Devis
+                                        </a>
+                                    )}
+                                    <Button size="sm" variant="secondary" type="button" className="ml-auto" onClick={() => openCost(issue)}>
+                                        <Receipt size={14} className="mr-1" />
+                                        {fcfa(issue.total_cost) ? 'Modifier coût' : 'Ajouter coût'}
+                                    </Button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </Card>
+
+            <Modal open={!!costIssue} onClose={() => setCostIssue(null)} title="Coût de la réparation">
+                <form onSubmit={submitCost} className="space-y-4">
+                    {costIssue && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="danger">{CATEGORY_LABEL[costIssue.category] ?? costIssue.category}</Badge>
+                            {costIssue.severity && (
+                                <Badge variant={severityBadgeVariant(costIssue.severity)}>{options.severity[costIssue.severity] ?? costIssue.severity}</Badge>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5">Pièces (FCFA)</label>
+                            <input
+                                type="number" min="0" step="0.01" inputMode="decimal"
+                                value={costForm.data.parts_cost}
+                                onChange={(e) => costForm.setData('parts_cost', e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
+                            />
+                            {costForm.errors.parts_cost && <p className="mt-1 text-xs text-red-600">{costForm.errors.parts_cost}</p>}
+                        </div>
+                        <div>
+                            <label className="block text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5">Main d'œuvre (FCFA)</label>
+                            <input
+                                type="number" min="0" step="0.01" inputMode="decimal"
+                                value={costForm.data.labor_cost}
+                                onChange={(e) => costForm.setData('labor_cost', e.target.value)}
+                                placeholder="0"
+                                className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm"
+                            />
+                            {costForm.errors.labor_cost && <p className="mt-1 text-xs text-red-600">{costForm.errors.labor_cost}</p>}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-lg bg-[var(--color-surface-hover)] px-3 py-2">
+                        <span className="text-sm text-[var(--color-text-secondary)]">Total</span>
+                        <span className="text-base font-bold text-[var(--color-text)]">{costTotal().toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium mb-1.5">Devis (PDF ou photo, optionnel)</label>
+                        <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            onChange={(e) => costForm.setData('devis', e.target.files?.[0] ?? null)}
+                            className="block w-full text-sm text-[var(--color-text)] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[var(--color-surface-hover)] file:text-[var(--color-text-secondary)]"
+                        />
+                        {costForm.errors.devis && <p className="mt-1 text-xs text-red-600">{costForm.errors.devis}</p>}
+                        {costIssue?.devis_url && !costForm.data.devis && (
+                            <a href={costIssue.devis_url} target="_blank" rel="noopener noreferrer"
+                                className="mt-1.5 inline-flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
+                                <FileText size={12} /> Devis actuel{costIssue.devis_name ? ` — ${costIssue.devis_name}` : ''}
+                            </a>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="secondary" type="button" onClick={() => setCostIssue(null)}>Annuler</Button>
+                        <Button type="submit" loading={costForm.processing}>Enregistrer</Button>
+                    </div>
+                </form>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

@@ -41,6 +41,7 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
     Route::post('/checklist-submit', [DriverController::class, 'submitChecklist'])->name('checklist-submit');
     Route::get('/issues', [DriverController::class, 'issuesPage'])->name('issues');
     Route::post('/issues', [DriverController::class, 'reportIssue'])->name('issues.store');
+    Route::post('/issues/{issue}/cost', [DriverController::class, 'updateIssueCost'])->name('issues.cost');
 
     // Admin management
     Route::get('/', [DriverController::class, 'index'])->name('index');
@@ -135,6 +136,7 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
     Route::post('/rules/{profile}/deactivate', [MaintenanceController::class, 'deactivateRule'])->name('rules.deactivate');
     Route::post('/{truck}/record', [MaintenanceController::class, 'recordMaintenance'])->name('record');
     Route::post('/{maintenance}/update', [MaintenanceController::class, 'updateMaintenance'])->name('update');
+    Route::post('/issues/{issue}/cost', [MaintenanceController::class, 'updateIssueCost'])->name('issues.cost');
     Route::get('/history', [MaintenanceController::class, 'history'])->name('history');
     Route::post('/{maintenance}/approve', [MaintenanceController::class, 'approve'])->name('approve');
     Route::get('/{maintenance}/pdf', [MaintenanceController::class, 'exportRecordPdf'])->name('record-pdf');

@@ -17,4 +17,14 @@ class Document extends Model
     {
         return $this->belongsTo(TransportTracking::class);
     }
+
+    public function inspectionChecklistIssue(): BelongsTo
+    {
+        return $this->belongsTo(InspectionChecklistIssue::class);
+    }
+
+    public function dailyChecklistIssue(): BelongsTo
+    {
+        return $this->belongsTo(DailyChecklistIssue::class);
+    }
 }

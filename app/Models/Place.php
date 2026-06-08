@@ -14,6 +14,7 @@ class Place extends Model
     public const TYPE_CLIENT_SITE = 'client_site';
     public const TYPE_FUEL_STATION = 'fuel_station';
     public const TYPE_PARKING = 'parking';
+    public const TYPE_BORDER_POST = 'border_post';
     public const TYPE_UNKNOWN = 'unknown';
 
     protected $table = 'places';
@@ -69,6 +70,7 @@ class Place extends Model
             self::TYPE_CLIENT_SITE => 'known_client',
             self::TYPE_FUEL_STATION => 'known_fuel_station',
             self::TYPE_PARKING => 'known_parking',
+            self::TYPE_BORDER_POST => 'known_border_post',
             default => 'unknown',
         };
     }
