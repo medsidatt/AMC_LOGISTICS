@@ -82,7 +82,7 @@ const dataSections: NavSection[] = [
             { label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18} /> },
             // { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
             { label: 'Fournisseurs', href: '/providers', icon: <Factory size={18} /> },
-            { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
+            // { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
         ],
     },
     {
@@ -97,7 +97,7 @@ const dataSections: NavSection[] = [
         header: 'Maintenance',
         items: [
             { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
-            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
+            // { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
         ],
     },
 ];
@@ -108,6 +108,15 @@ const securitySection: NavSection = {
         { label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18} />, match: '/logistics/fleet-map' },
         { label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18} />, match: '/logistics/theft-incidents' },
         { label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18} />, match: '/logistics/places' },
+    ],
+};
+
+const onlySuperAdmin: NavSection = {
+    header: '',
+    items: [
+        { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
+        { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
+
     ],
 };
 
@@ -189,14 +198,14 @@ const logisticsResponsibleSections: NavSection[] = [
             { label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18} />, match: '/logistics/validation/checklists' },
         ],
     },
-    {
-        header: 'Planification',
-        items: [
-            { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
-            { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
-            { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
-        ],
-    },
+    // {
+    //     header: 'Planification',
+    //     items: [
+    //         { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
+    //         { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
+    //         { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
+    //     ],
+    // },
     {
         header: 'Logistique',
         items: [
@@ -225,7 +234,7 @@ export default function Sidebar({ collapsed, onClose, mobileOpen }: SidebarProps
 
     let sections: NavSection[];
     if (isAdmin) {
-        sections = [...dataSections, securitySection, adminSection, accountSection];
+        sections = [...dataSections, securitySection, adminSection, accountSection, onlySuperAdmin];
     } else if (isDriver) {
         sections = [...driverSections, accountSection];
     } else if (isHse) {
