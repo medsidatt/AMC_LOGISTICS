@@ -27,6 +27,26 @@ class Maintenance extends Model
         'trigger_km' => 'decimal:2',
         'assigned_at' => 'datetime',
         'approved_at' => 'datetime',
+        'control_checks' => 'array',
+    ];
+
+    /**
+     * Post-work control checklist ("Fiche de contrôle après travaux").
+     * Each item is recorded as 'bon' | 'mauvais' (or unset).
+     */
+    public const CONTROL_CHECKS = [
+        'oil_leak' => "Vérification fuite d'huile (visible)",
+        'water_leak' => "Vérification fuite d'eau (visible)",
+        'brake_pad_wear' => 'Vérification usure plaquette de frein',
+        'lights_signaling' => 'Vérification Éclairages et signalisation',
+        'fluid_levels' => 'Vérification niveau (Liquide de frein et Liquide de Refroidissement)',
+        'tire_wear_pressure' => 'Vérification usure pneumatique et pression',
+        'battery_terminals' => 'Vérification État batterie et cosses',
+        'belts' => 'Vérification Courroies Alternateur, Compresseur et Pompe',
+        'ac' => 'Vérification fonctionnement Climatiseur',
+        'cardan_bellows' => 'Vérification soufflets de cardan',
+        'steering_bellows' => 'Vérification soufflets de crémaillère et rotule',
+        'startup_noise' => "Vérification Bruit au démarrage et à l'extinction",
     ];
 
     public const TYPE_GENERAL = 'general';
@@ -110,6 +130,20 @@ class Maintenance extends Model
     public function inspectionIssues(): HasMany
     {
         return $this->hasMany(InspectionChecklistIssue::class);
+    }
+
+    /**
+     * Custom facture line items (parts / oil / labour) recorded during the
+     * maintenance — mirrors the "BON AMC TRAVAUX" work order table.
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(MaintenanceItem::class)->orderBy('position');
+    }
+
+    public function itemsTotal(): float
+    {
+        return (float) $this->items->sum('line_total');
     }
 
     public function assignedTo(): BelongsTo

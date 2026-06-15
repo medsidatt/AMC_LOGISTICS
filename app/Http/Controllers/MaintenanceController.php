@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\Maintenance;
+use App\Models\MaintenanceItem;
 use App\Models\Transporter;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
@@ -39,7 +40,7 @@ class MaintenanceController extends Controller
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
             'only' => [
-                'create', 'store', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
+                'create', 'store', 'recordForm', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
                 'updateIssueCost',
             ],
@@ -394,6 +395,8 @@ class MaintenanceController extends Controller
             'oilTypes' => Maintenance::OIL_TYPES,
             'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
             'componentStatuses' => Maintenance::COMPONENT_STATUSES,
+            'itemCategories' => MaintenanceItem::CATEGORIES,
+            'itemUnits' => MaintenanceItem::UNITS,
         ]);
     }
 
@@ -489,10 +492,131 @@ class MaintenanceController extends Controller
             'filter_fuel_changed' => 'sometimes|boolean',
 
             'dashboard_photo' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'facture' => 'nullable|file|mimes:pdf,jpg,jpeg,png,webp|max:10240',
 
             'linked_inspection_issue_ids' => 'nullable|array',
             'linked_inspection_issue_ids.*' => 'integer|exists:inspection_checklist_issues,id',
+
+            // Post-work control checklist (Fiche de contrôle après travaux).
+            'control_checks' => 'nullable|array',
+            'control_checks.*' => 'nullable|string|in:bon,mauvais,na',
+
+            // Custom facture line items (BON AMC TRAVAUX): désignation / réf / qté / prix u.
+            'items' => 'nullable|array',
+            'items.*.designation' => 'required_with:items|string|max:255',
+            'items.*.reference' => 'nullable|string|max:120',
+            'items.*.category' => 'nullable|string|in:' . implode(',', array_keys(MaintenanceItem::CATEGORIES)),
+            'items.*.unit' => 'nullable|string|in:' . implode(',', array_keys(MaintenanceItem::UNITS)),
+            'items.*.quantity' => 'required_with:items|numeric|min:0|max:999999',
+            'items.*.unit_price' => 'required_with:items|numeric|min:0|max:9999999999',
         ];
+    }
+
+    /**
+     * Replace a maintenance's line items with the submitted set. Blank rows
+     * (no designation) are dropped; line totals are computed server-side so the
+     * client can't tamper with them.
+     */
+    private function syncMaintenanceItems(Maintenance $maintenance, array $items): void
+    {
+        $maintenance->items()->delete();
+
+        $rows = [];
+        $position = 0;
+        foreach ($items as $item) {
+            $designation = trim((string) ($item['designation'] ?? ''));
+            if ($designation === '') {
+                continue;
+            }
+
+            $category = $item['category'] ?? 'piece';
+            if (!array_key_exists($category, MaintenanceItem::CATEGORIES)) {
+                $category = 'piece';
+            }
+
+            $unit = $item['unit'] ?? 'piece';
+            if (!array_key_exists($unit, MaintenanceItem::UNITS)) {
+                $unit = 'piece';
+            }
+
+            $quantity = (float) ($item['quantity'] ?? 0);
+            $unitPrice = (float) ($item['unit_price'] ?? 0);
+
+            $rows[] = [
+                'designation' => $designation,
+                'reference' => ($item['reference'] ?? null) ?: null,
+                'category' => $category,
+                'unit' => $unit,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'line_total' => round($quantity * $unitPrice, 2),
+                'position' => $position++,
+            ];
+        }
+
+        if ($rows) {
+            $maintenance->items()->createMany($rows);
+        }
+    }
+
+    /**
+     * Keep only known checklist keys with a valid bon/mauvais value.
+     */
+    private function sanitizeControlChecks(?array $checks): array
+    {
+        $allowed = array_intersect_key($checks ?? [], Maintenance::CONTROL_CHECKS);
+
+        return array_filter($allowed, fn ($v) => in_array($v, ['bon', 'mauvais', 'na'], true));
+    }
+
+    /**
+     * Full-page maintenance record form for a single truck (replaces the
+     * cramped modal). Submits to recordMaintenance (POST same URI).
+     */
+    public function recordForm(Truck $truck)
+    {
+        $truck->load(['maintenanceProfiles' => fn ($q) => $q->active()]);
+
+        $inspectionIssues = InspectionChecklistIssue::query()
+            ->where('flagged', true)
+            ->whereNull('resolved_at')
+            ->join('inspection_checklists', 'inspection_checklists.id', '=', 'inspection_checklist_issues.inspection_checklist_id')
+            ->where('inspection_checklists.truck_id', $truck->id)
+            ->orderByDesc('inspection_checklists.inspection_date')
+            ->get([
+                'inspection_checklist_issues.id',
+                'inspection_checklist_issues.category',
+                'inspection_checklist_issues.severity',
+                'inspection_checklist_issues.issue_notes',
+                'inspection_checklists.inspection_date',
+            ])
+            ->map(fn ($i) => [
+                'id' => $i->id,
+                'category' => $i->category,
+                'severity' => $i->severity,
+                'issue_notes' => $i->issue_notes,
+                'inspection_date' => $i->inspection_date,
+            ])
+            ->values();
+
+        return Inertia::render('maintenance/Record', [
+            'truck' => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'total_kilometers' => $truck->total_kilometers,
+                'profiles' => $truck->maintenanceProfiles->map(fn ($p) => [
+                    'type' => $p->maintenance_type,
+                    'interval_km' => $p->interval_km,
+                ])->values(),
+                'inspection_issues' => $inspectionIssues,
+            ],
+            'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
+            'itemCategories' => MaintenanceItem::CATEGORIES,
+            'itemUnits' => MaintenanceItem::UNITS,
+            'controlChecks' => Maintenance::CONTROL_CHECKS,
+        ]);
     }
 
     public function recordMaintenance(Request $request, Truck $truck)
@@ -535,9 +659,13 @@ class MaintenanceController extends Controller
                     $extras[$flag] = (bool) ($extras[$flag] ?? false);
                 }
 
+                $extras['control_checks'] = $this->sanitizeControlChecks($data['control_checks'] ?? []);
+
                 if (!empty($extras)) {
                     $maintenance->update($extras);
                 }
+
+                $this->syncMaintenanceItems($maintenance, $data['items'] ?? []);
 
                 $issueIds = $data['linked_inspection_issue_ids'] ?? [];
                 if (!empty($issueIds)) {
@@ -561,13 +689,14 @@ class MaintenanceController extends Controller
             }
 
             $this->storeDashboardPhoto($request, $maintenance);
+            $this->storeFactureAttachment($request, $maintenance);
 
             LogisticsAlert::where('truck_id', $truck->id)
                 ->where('type', 'due_engine')
                 ->whereNull('resolved_at')
                 ->update(['resolved_at' => now()]);
 
-            return redirect()->back()->with('success', 'Maintenance enregistrée avec succès.');
+            return redirect()->route('maintenance.index')->with('success', 'Maintenance enregistrée avec succès.');
         } catch (\Throwable $e) {
             Log::error('recordMaintenance failed', ['truck_id' => $truck->id, 'error' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -615,7 +744,11 @@ class MaintenanceController extends Controller
                     $editable[$flag] = (bool) ($editable[$flag] ?? false);
                 }
 
+                $editable['control_checks'] = $this->sanitizeControlChecks($data['control_checks'] ?? []);
+
                 $maintenance->update($editable);
+
+                $this->syncMaintenanceItems($maintenance, $data['items'] ?? []);
 
                 $issueIds = $data['linked_inspection_issue_ids'] ?? [];
                 if (!empty($issueIds)) {
@@ -633,6 +766,7 @@ class MaintenanceController extends Controller
             });
 
             $this->storeDashboardPhoto($request, $maintenance);
+            $this->storeFactureAttachment($request, $maintenance);
 
             return back()->with('success', 'Maintenance mise à jour avec succès.');
         } catch (\Throwable $e) {
@@ -716,6 +850,26 @@ class MaintenanceController extends Controller
         ];
     }
 
+    /**
+     * Store the facture document (PDF/image) attached to the maintenance,
+     * reusing the SharePoint-with-local-fallback uploader.
+     */
+    private function storeFactureAttachment(Request $request, Maintenance $maintenance): void
+    {
+        if (!$request->hasFile('facture')) {
+            return;
+        }
+
+        $file = $request->file('facture');
+        $upload = $this->uploadDocument($file, 'maintenance-factures');
+
+        $maintenance->update([
+            'attachment_path' => $upload['path'],
+            'attachment_url' => $upload['url'],
+            'attachment_filename' => $file->getClientOriginalName(),
+        ]);
+    }
+
     private function storeDashboardPhoto(Request $request, Maintenance $maintenance): void
     {
         if (!$request->hasFile('dashboard_photo')) {
@@ -740,7 +894,7 @@ class MaintenanceController extends Controller
 
     public function history(Request $request)
     {
-        $query = Maintenance::with(['truck.maintenanceProfiles' => fn ($q) => $q->active()->where('maintenance_type', 'general'), 'profile', 'approvedBy:id,name'])
+        $query = Maintenance::with(['truck.maintenanceProfiles' => fn ($q) => $q->active()->where('maintenance_type', 'general'), 'profile', 'approvedBy:id,name', 'items'])
             ->orderByDesc('maintenance_date');
 
         if ($request->truck_id) {
@@ -772,6 +926,8 @@ class MaintenanceController extends Controller
             'battery_status' => $m->battery_status,
             'oil_quantity_liters' => $m->oil_quantity_liters,
             'dashboard_photo_url' => $m->dashboard_photo_path ? Storage::disk('public')->url($m->dashboard_photo_path) : null,
+            'attachment_url' => $m->attachment_url ?: ($m->attachment_path ? asset('storage/' . $m->attachment_path) : null),
+            'attachment_filename' => $m->attachment_filename,
             'filter_oil_changed' => (bool) $m->filter_oil_changed,
             'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
             'filter_air_changed' => (bool) $m->filter_air_changed,
@@ -781,6 +937,16 @@ class MaintenanceController extends Controller
             'truck_interval_km' => $m->truck?->maintenanceProfiles?->firstWhere('maintenance_type', 'general')?->interval_km
                 ?? $m->profile?->interval_km,
             'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
+            'items' => $m->items->map(fn (MaintenanceItem $i) => [
+                'designation' => $i->designation,
+                'reference' => $i->reference,
+                'category' => $i->category,
+                'unit' => $i->unit,
+                'quantity' => (float) $i->quantity,
+                'unit_price' => (float) $i->unit_price,
+                'line_total' => (float) $i->line_total,
+            ])->values(),
+            'control_checks' => $m->control_checks ?? [],
         ]);
 
         $trucks = Truck::orderBy('matricule')->get(['id', 'matricule']);
@@ -804,6 +970,9 @@ class MaintenanceController extends Controller
             'oilTypes' => Maintenance::OIL_TYPES,
             'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
             'componentStatuses' => Maintenance::COMPONENT_STATUSES,
+            'itemCategories' => MaintenanceItem::CATEGORIES,
+            'itemUnits' => MaintenanceItem::UNITS,
+            'controlChecks' => Maintenance::CONTROL_CHECKS,
         ]);
     }
 
@@ -883,6 +1052,7 @@ class MaintenanceController extends Controller
             'truck:id,matricule',
             'profile',
             'approvedBy:id,name',
+            'items',
         ]);
 
         $logoPath = file_exists(public_path('images/logo.png'))
