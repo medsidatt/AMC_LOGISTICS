@@ -12,6 +12,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Invitation {
     id: number;
@@ -32,6 +33,10 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
     const [modal, setModal] = useState<'create' | 'edit' | null>(null);
     const [selected, setSelected] = useState<Invitation | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('invitation-create');
+    const canEdit = can('invitation-edit');
+    const canDelete = can('invitation-delete');
 
     const roleOpts = roles.map((r) => ({ value: r.name, label: r.name }));
 
@@ -61,9 +66,11 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
         <AuthenticatedLayout title="Invitations">
             <Head title="Invitations" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Inviter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Inviter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -86,8 +93,8 @@ export default function InvitationsIndex({ invitations, roles }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        onEdit={() => openEdit(r)}
-                                        onDelete={() => setDeleteUrl(`/auth/invitations/destroy/${r.id}`)}
+                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/auth/invitations/destroy/${r.id}`) : undefined}
                                     />
                                 ),
                             },

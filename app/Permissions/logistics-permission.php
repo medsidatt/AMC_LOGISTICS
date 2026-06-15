@@ -60,4 +60,6 @@ return [
     'daily-dispatch-edit',
 
     'objective-history-list',
+
+    'report-view',
 ];

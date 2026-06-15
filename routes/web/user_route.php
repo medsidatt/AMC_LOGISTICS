@@ -24,7 +24,9 @@ Route::group(['prefix' => 'users', 'middleware' => ['auth']], function () {
     Route::put('suspend/{id}', [UserController::class, 'suspend'])->name('users.suspend');
 });
 
+// Public: rate-limited to blunt invitation-token enumeration/brute force.
 Route::get('auth/invitations/{token}/accept', [InvitationController::class, 'accept'])
+    ->middleware('throttle:10,1')
     ->name('invitation.accept');
 
 Route::group(['prefix' => 'auth/invitations', 'middleware' => [

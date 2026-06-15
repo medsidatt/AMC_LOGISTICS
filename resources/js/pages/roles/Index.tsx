@@ -9,6 +9,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Permission {
     id: number;
@@ -28,14 +29,21 @@ interface Props {
 
 export default function RolesIndex({ roles }: Props) {
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+    const { can } = usePermission();
+    const canCreate = can('role-create');
+    const canEdit = can('role-edit');
+    const canDelete = can('role-delete');
+    const canView = can('role-show');
 
     return (
         <AuthenticatedLayout title="Rôles">
             <Head title="Rôles" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => window.location.href = '/roles/create'}>Ajouter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => window.location.href = '/roles/create'}>Ajouter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -53,9 +61,9 @@ export default function RolesIndex({ roles }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        viewHref={`/roles/show/${r.id}`}
-                                        editHref={`/roles/edit/${r.id}`}
-                                        onDelete={() => setDeleteUrl(`/roles/destroy/${r.id}`)}
+                                        viewHref={canView ? `/roles/show/${r.id}` : undefined}
+                                        editHref={canEdit ? `/roles/edit/${r.id}` : undefined}
+                                        onDelete={canDelete ? () => setDeleteUrl(`/roles/destroy/${r.id}`) : undefined}
                                     />
                                 ),
                             },
