@@ -101,7 +101,7 @@ const mainSections: NavSection[] = [
             {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>, permission: 'transport-tracking-list'},
             {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/', permission: 'transport-tracking-list'},
             {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>, permission: 'provider-list'},
-            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', role: ['Admin', 'Super Admin', 'Logistics Responsible']},
+            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', permission: 'report-view'},
         ],
     },
     {
@@ -151,7 +151,7 @@ const mainSections: NavSection[] = [
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
             {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', role: ['Admin', 'Super Admin']},
             {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', role: ['Admin', 'Super Admin']},
-            {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', role: ['Admin', 'Super Admin']},
+            {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],
     },
 ];

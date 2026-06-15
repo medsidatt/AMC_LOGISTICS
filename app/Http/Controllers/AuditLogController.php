@@ -5,8 +5,6 @@
 // Hors scope (prochaines itérations) :
 //   - Page détail (show) par entrée d'audit avec lien profond vers le sujet.
 //   - Politique de rétention/purge : commande planifiée + champ dans FleetSettings.
-//   - Remplacer le contrôle de rôle codé en dur par une permission `audit-log-view`
-//     (créer app/Permissions/audit-log-permission.php sur le modèle des autres).
 //   - Onglet "Historique" sur chaque ressource (Truck/Driver/User/Project)
 //     branché sur AuditLog via (subject_type, subject_id).
 //   - Couverture étendue : signature inspection/maintenance, uploads SharePoint,
@@ -39,11 +37,7 @@ class AuditLogController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware(function ($request, $next) {
-            $user = auth()->user();
-            abort_unless($user && $user->hasAnyRole(['Admin', 'Super Admin']), 403);
-            return $next($request);
-        });
+        $this->middleware('permission:audit-log-view');
     }
 
     public function index(Request $request)
