@@ -31,7 +31,7 @@ class RoleAndPermissionSeeder extends Seeder
             'transport-tracking-list', 'transport-tracking-create', 'transport-tracking-edit', 'transport-tracking-delete',
             'provider-list', 'provider-create', 'provider-edit', 'provider-delete',
             'transporter-list', 'transporter-create', 'transporter-edit', 'transporter-delete',
-            'maintenance-list', 'maintenance-create',
+            'maintenance-list', 'maintenance-create', 'maintenance-edit',
             'logistics-dashboard',
             'entity-list', 'entity-show', 'entity-create', 'entity-edit', 'entity-delete',
             'project-list', 'project-show', 'project-create', 'project-edit', 'project-delete',
