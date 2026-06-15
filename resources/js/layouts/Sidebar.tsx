@@ -180,6 +180,7 @@ const hseSections: NavSection[] = [
         header: 'HSE',
         items: [
             {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections'},
+            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>},
         ],
     },
     {
@@ -219,13 +220,6 @@ const hseSections: NavSection[] = [
 
 const logisticsResponsibleSections: NavSection[] = [
     {
-        header: 'Inspections',
-        items: [
-            {label: 'Liste', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections'},
-            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>},
-        ],
-    },
-    {
         header: 'Validation',
         items: [
             {
@@ -236,14 +230,14 @@ const logisticsResponsibleSections: NavSection[] = [
             },
         ],
     },
-    // {
-    //     header: 'Planification',
-    //     items: [
-    //         { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
-    //         { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
-    //         { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
-    //     ],
-    // },
+    {
+        header: 'Planification',
+        items: [
+            { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
+            { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
+            { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
+        ],
+    },
     {
         header: 'Logistique',
         items: [
@@ -256,7 +250,6 @@ const logisticsResponsibleSections: NavSection[] = [
             {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
             {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
             {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
-            {label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance'},
             {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports'},
         ],
     },

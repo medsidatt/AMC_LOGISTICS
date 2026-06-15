@@ -28,11 +28,18 @@ return [
 
     'maintenance-list',
     'maintenance-create',
+    'maintenance-edit',
+    'maintenance-delete',
     'maintenance-assign',
     'maintenance-approve',
     'maintenance-rule-create',
     'maintenance-rule-deactivate',
     'rotation-validate',
+
+    'inspection-list',
+    'inspection-create',
+    'inspection-edit',
+    'inspection-delete',
 
     'logistics-dashboard',
 
