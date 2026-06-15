@@ -78,7 +78,8 @@ export default function MaintenanceRecord({ truck, oilIntervals, componentStatus
         linked_inspection_issue_ids: [] as number[],
         items: [] as LineItem[],
         facture: null as File | null,
-        control_checks: {} as Record<string, string>,
+        // Default every post-work control line to "Bon"; the operator flags exceptions.
+        control_checks: Object.fromEntries(Object.keys(controlChecks).map((k) => [k, 'bon'])) as Record<string, string>,
     });
 
     const truckInterval = general?.interval_km ?? null;
