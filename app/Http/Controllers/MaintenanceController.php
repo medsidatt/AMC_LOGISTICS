@@ -40,11 +40,12 @@ class MaintenanceController extends Controller
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
             'only' => [
-                'create', 'store', 'recordForm', 'recordMaintenance', 'updateMaintenance', 'bulkStore',
+                'create', 'store', 'recordForm', 'recordMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
                 'updateIssueCost',
             ],
         ]);
+        $this->middleware('permission:maintenance-edit', ['only' => ['updateMaintenance']]);
         $this->middleware('permission:maintenance-approve', ['only' => ['approve']]);
         $this->middleware('permission:maintenance-rule-create', ['only' => ['storeRule']]);
         $this->middleware('permission:maintenance-rule-deactivate', ['only' => ['deactivateRule']]);
@@ -957,7 +958,7 @@ class MaintenanceController extends Controller
 
         $user = auth()->user();
         $canApprove = $user?->can('maintenance-approve') ?? false;
-        $canEdit = $user?->can('maintenance-create') ?? false;
+        $canEdit = $user?->can('maintenance-edit') ?? false;
 
         return Inertia::render('maintenance/History', [
             'maintenances' => $maintenances,
