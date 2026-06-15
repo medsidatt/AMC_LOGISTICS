@@ -100,6 +100,17 @@
         .status-grid tr:last-child td { border-bottom: none; }
         .status-grid td:last-child { border-right: none; }
 
+        /* Facture items table */
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+        .items-table th { background: #b91c1c; color: #fff; font-size: 8px; text-transform: uppercase; letter-spacing: 0.2px; padding: 3px 6px; text-align: left; }
+        .items-table td { padding: 3px 6px; border-bottom: 1px solid #f1f5f9; font-size: 9px; color: #1f2937; vertical-align: top; }
+        .items-table th.num, .items-table td.num, .items-table th.qty, .items-table td.qty { text-align: right; }
+        .items-table td.d { font-weight: 600; }
+        .items-table td.cat { display: block; font-weight: 400; color: #6b7280; font-size: 7.5px; }
+        .items-table tfoot td { border-top: 1px solid #e5e7eb; border-bottom: none; }
+        .items-table tfoot tr.subtotal td { color: #6b7280; font-weight: 600; font-size: 8.5px; }
+        .items-table tfoot tr.grand td { background: #fef3c7; font-weight: bold; font-size: 9.5px; color: #92400e; }
+
         /* Notes */
         .notes-block { padding: 4px 8px; border: 1px solid #e5e7eb; min-height: 22px; font-size: 9px; white-space: pre-wrap; background: #f9fafb; }
 
@@ -110,6 +121,14 @@
 
         /* Body e-sign line */
         .body-esign { margin-top: 6px; padding-top: 4px; border-top: 1px dashed #b91c1c; text-align: center; font-style: italic; font-size: 8px; color: #4b5563; }
+
+        /* Fiche de contrôle (page 2) */
+        .fiche-page { page-break-before: always; }
+        .fiche-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+        .fiche-table th { background: #b91c1c; color: #fff; font-size: 8px; text-transform: uppercase; letter-spacing: 0.2px; padding: 4px 6px; text-align: left; }
+        .fiche-table th.c, .fiche-table td.c { text-align: center; width: 64px; }
+        .fiche-table td { padding: 4px 6px; border: 1px solid #e5e7eb; font-size: 9px; color: #1f2937; }
+        .fiche-table .mark { font-weight: bold; font-size: 11px; color: #b91c1c; }
 
         /* Footer */
         .footer { position: fixed; bottom: 4mm; left: 10mm; right: 10mm; font-size: 7px; color: #6b7280; }
@@ -299,6 +318,61 @@
     <span class="unit">Km</span>
 </div>
 
+{{-- Facture — custom line items (BON AMC TRAVAUX) --}}
+@if ($maintenance->items->isNotEmpty())
+    @php
+        $itemCategories = \App\Models\MaintenanceItem::CATEGORIES;
+        $itemUnits = \App\Models\MaintenanceItem::UNITS;
+        $fmtMoney = fn ($v) => number_format((float) $v, 0, ',', ' ');
+        $totalsByCat = $maintenance->items->groupBy('category')->map(fn ($g) => $g->sum('line_total'));
+        $grandTotal = $maintenance->items->sum('line_total');
+    @endphp
+    <div class="section-header">Facture — pièces, huile &amp; main d'œuvre</div>
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th class="d">Désignation</th>
+                <th class="r">Référence</th>
+                <th class="qty">Qté / Unité</th>
+                <th class="num">Prix U.</th>
+                <th class="num">Prix Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($maintenance->items as $item)
+                <tr>
+                    <td class="d">
+                        {{ $item->designation }}
+                        <span class="cat">{{ $itemCategories[$item->category] ?? $item->category }}</span>
+                    </td>
+                    <td class="r">{{ $item->reference ?: '—' }}</td>
+                    <td class="qty">{{ rtrim(rtrim(number_format((float) $item->quantity, 2, ',', ' '), '0'), ',') }} {{ $itemUnits[$item->unit] ?? '' }}</td>
+                    <td class="num">{{ $fmtMoney($item->unit_price) }}</td>
+                    <td class="num">{{ $fmtMoney($item->line_total) }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+        <tfoot>
+            @foreach ($totalsByCat as $cat => $sum)
+                <tr class="subtotal">
+                    <td colspan="4" class="num">Total {{ $itemCategories[$cat] ?? $cat }}</td>
+                    <td class="num">{{ $fmtMoney($sum) }}</td>
+                </tr>
+            @endforeach
+            <tr class="grand">
+                <td colspan="4" class="num">TOTAL GÉNÉRAL (FCFA)</td>
+                <td class="num">{{ $fmtMoney($grandTotal) }}</td>
+            </tr>
+        </tfoot>
+    </table>
+@endif
+
+@if (!empty($maintenance->attachment_filename))
+    <div style="font-size: 8px; color: #6b7280; margin-bottom: 5px;">
+        Facture jointe : <b>{{ $maintenance->attachment_filename }}</b>
+    </div>
+@endif
+
 {{-- Notes (only when present, compact) --}}
 @if (!empty($maintenance->notes))
     <div class="section-header">Notes</div>
@@ -323,6 +397,50 @@
     </div>
 @else
     <div class="body-esign">Ce document est signé électroniquement lorsqu'il est approuvé.</div>
+@endif
+
+{{-- Fiche de contrôle après travaux (page 2) --}}
+@php
+    $controlChecks = \App\Models\Maintenance::CONTROL_CHECKS;
+    $checks = $maintenance->control_checks ?? [];
+    $hasChecks = !empty(array_filter(array_intersect_key($checks, $controlChecks)));
+@endphp
+@if ($hasChecks)
+    <div class="fiche-page">
+        <table class="title-bar">
+            <tr><td class="t-left">FICHE DE CONTRÔLE APRÈS TRAVAUX</td></tr>
+        </table>
+        <table class="info-grid header-row" style="margin-bottom:6px;">
+            <tr>
+                <td class="k">Camion</td>
+                <td class="v">{{ $maintenance->truck?->matricule ?? '—' }}</td>
+                <td class="k">Date</td>
+                <td class="v">{{ $maintenance->maintenance_date?->format('d/m/Y') ?? '—' }}</td>
+                <td class="k">Distance</td>
+                <td class="v">{{ $maintenance->kilometers_at_maintenance ? $fmtKm($maintenance->kilometers_at_maintenance) . ' km' : '—' }}</td>
+            </tr>
+        </table>
+        <table class="fiche-table">
+            <thead>
+                <tr>
+                    <th>Désignation</th>
+                    <th class="c">Bon</th>
+                    <th class="c">Mauvais</th>
+                    <th class="c">N/A</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($controlChecks as $key => $label)
+                    <tr>
+                        <td>{{ $label }}</td>
+                        <td class="c"><span class="mark">{{ ($checks[$key] ?? null) === 'bon' ? '✗' : '' }}</span></td>
+                        <td class="c"><span class="mark">{{ ($checks[$key] ?? null) === 'mauvais' ? '✗' : '' }}</span></td>
+                        <td class="c"><span class="mark">{{ ($checks[$key] ?? null) === 'na' ? '✗' : '' }}</span></td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
 @endif
 
 {{-- Footer (company info only) --}}

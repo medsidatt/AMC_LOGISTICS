@@ -126,9 +126,6 @@ export default function CameraCapture({ onCapture, existingPhotoUrl, existingPho
                     {(cameraError || error) && (
                         <p className="text-xs text-[var(--color-danger)] mt-1">{cameraError ?? error}</p>
                     )}
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                        La photo doit être prise en direct sur le véhicule (pas d'upload depuis la galerie).
-                    </p>
                 </div>
             )}
 
