@@ -131,7 +131,7 @@ class RoleController extends Controller
 
         $role = Role::findOrFail($id);
         $role->name = $request->input('name');
-        $role->guard_name = $request->input('guard');
+        $role->guard_name = $request->input('guard', 'web'); // Added 'web' as default
         $role->save();
 
         // Fetch permission names based on the provided IDs
