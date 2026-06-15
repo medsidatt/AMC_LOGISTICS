@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import FormSelect from '@/components/ui/FormSelect';
@@ -21,8 +21,22 @@ import {
     Camera,
 } from 'lucide-react';
 import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
+import MaintenanceItemsField, { LineItem } from '@/components/maintenance/MaintenanceItemsField';
+import ControlChecklist from '@/components/maintenance/ControlChecklist';
+import ComponentStatusList from '@/components/maintenance/ComponentStatusList';
+import SectionTitle from '@/components/ui/SectionTitle';
 
 type MaintenanceStatus = 'pending' | 'assigned' | 'completed' | 'approved';
+
+interface MaintenanceLineItem {
+    designation: string;
+    reference: string | null;
+    category: string;
+    unit: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+}
 
 interface MaintenanceRecord {
     id: number;
@@ -50,10 +64,14 @@ interface MaintenanceRecord {
     filter_air_changed?: boolean;
     filter_fuel_changed?: boolean;
     dashboard_photo_url?: string | null;
+    attachment_url?: string | null;
+    attachment_filename?: string | null;
     status: MaintenanceStatus;
     signed_by: string | null;
     approved_at: string | null;
     truck_interval_km?: number | null;
+    items?: MaintenanceLineItem[];
+    control_checks?: Record<string, string>;
 }
 
 interface Props {
@@ -67,6 +85,9 @@ interface Props {
     oilTypes: Record<string, string>;
     oilIntervals: Record<string, number>;
     componentStatuses: Record<string, string>;
+    itemCategories: Record<string, string>;
+    itemUnits: Record<string, string>;
+    controlChecks: Record<string, string>;
 }
 
 const STATUS_META: Record<MaintenanceStatus, { label: string; pill: string; Icon: typeof Clock }> = {
@@ -99,7 +120,11 @@ function ViewRow({ label, children }: { label: string; children: React.ReactNode
     );
 }
 
-function ViewMaintenanceDetails({ m, oilTypes }: { m: MaintenanceRecord; oilTypes: Record<string, string> }) {
+function ViewMaintenanceDetails({ m, oilTypes, itemCategories, itemUnits, controlChecks }: { m: MaintenanceRecord; oilTypes: Record<string, string>; itemCategories: Record<string, string>; itemUnits: Record<string, string>; controlChecks: Record<string, string> }) {
+    const items = m.items ?? [];
+    const itemsTotal = items.reduce((s, it) => s + (it.line_total ?? 0), 0);
+    const checks = m.control_checks ?? {};
+    const checkedEntries = Object.entries(controlChecks).filter(([key]) => checks[key]);
     const filters: Array<[string, boolean | undefined]> = [
         ['Huile', m.filter_oil_changed],
         ['Hydraulique', m.filter_hydraulic_changed],
@@ -126,7 +151,6 @@ function ViewMaintenanceDetails({ m, oilTypes }: { m: MaintenanceRecord; oilType
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-1.5 border-l-2 border-amber-500 pl-2">Huile moteur</h3>
                     <ViewRow label="Type d'huile">{m.oil_type ? (oilTypes[m.oil_type] ?? m.oil_type) : '—'}</ViewRow>
                     <ViewRow label="Quantité">{m.oil_quantity_liters != null ? `${Number(m.oil_quantity_liters).toLocaleString('fr-FR')} L` : '—'}</ViewRow>
-                    <ViewRow label="Vidange effectuée à">{formatKm(m.oil_change_km)}</ViewRow>
                     <ViewRow label="Prochaine vidange à"><span className="text-red-600 font-semibold">{formatKm(m.next_oil_change_km)}</span></ViewRow>
                 </section>
 
@@ -155,6 +179,77 @@ function ViewMaintenanceDetails({ m, oilTypes }: { m: MaintenanceRecord; oilType
                     ))}
                 </div>
             </section>
+
+            {/* Facture line items */}
+            {items.length > 0 && (
+                <section>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-1.5 border-l-2 border-emerald-500 pl-2">Facture — pièces & main d'œuvre</h3>
+                    <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-[var(--color-surface-hover)] text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
+                                    <th className="px-3 py-2 text-left font-semibold">Désignation</th>
+                                    <th className="px-3 py-2 text-left font-semibold">Réf.</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Qté</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Prix U.</th>
+                                    <th className="px-3 py-2 text-right font-semibold">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--color-border)]">
+                                {items.map((it, i) => (
+                                    <tr key={i}>
+                                        <td className="px-3 py-2 text-[var(--color-text)]">
+                                            {it.designation}
+                                            <span className="block text-xs text-[var(--color-text-muted)]">{itemCategories[it.category] ?? it.category}</span>
+                                        </td>
+                                        <td className="px-3 py-2 text-[var(--color-text-muted)]">{it.reference || '—'}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{Number(it.quantity).toLocaleString('fr-FR')} {itemUnits[it.unit] ?? ''}</td>
+                                        <td className="px-3 py-2 text-right font-mono">{Math.round(it.unit_price).toLocaleString('fr-FR')}</td>
+                                        <td className="px-3 py-2 text-right font-mono font-semibold">{Math.round(it.line_total).toLocaleString('fr-FR')}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr className="bg-[var(--color-surface-hover)] font-semibold text-[var(--color-text)]">
+                                    <td className="px-3 py-2" colSpan={4}>Total général</td>
+                                    <td className="px-3 py-2 text-right font-mono">{Math.round(itemsTotal).toLocaleString('fr-FR')} FCFA</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </section>
+            )}
+
+            {/* Facture document */}
+            {m.attachment_url && (
+                <section>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-1.5 border-l-2 border-emerald-500 pl-2">Facture jointe</h3>
+                    <a href={m.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-[var(--color-primary)] hover:underline">
+                        <FileText size={14} /> {m.attachment_filename ?? 'Ouvrir la facture'}
+                    </a>
+                </section>
+            )}
+
+            {/* Post-work control checklist */}
+            {checkedEntries.length > 0 && (
+                <section>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-1.5 border-l-2 border-blue-500 pl-2">Fiche de contrôle après travaux</h3>
+                    <div className="rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)]">
+                        {checkedEntries.map(([key, label]) => (
+                            <div key={key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm">
+                                <span className="text-[var(--color-text)]">{label}</span>
+                                {checks[key] === 'bon' ? (
+                                    <span className="font-semibold text-emerald-600">Bon</span>
+                                ) : checks[key] === 'mauvais' ? (
+                                    <span className="font-semibold text-red-600">Mauvais</span>
+                                ) : (
+                                    <span className="font-semibold text-gray-500">N/A</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* Notes */}
             {m.notes && (
@@ -201,11 +296,9 @@ function ViewMaintenanceDetails({ m, oilTypes }: { m: MaintenanceRecord; oilType
 export default function MaintenanceHistory({
     maintenances, trucks, maintenanceTypes, filters,
     canApprove, canEdit, currentUserName,
-    oilTypes, oilIntervals, componentStatuses,
+    oilTypes, oilIntervals, componentStatuses, itemCategories, itemUnits, controlChecks,
 }: Props) {
     const truckOpts = trucks.map((t) => ({ value: t.id, label: t.matricule }));
-    const statusOpts = Object.entries(componentStatuses ?? {}).map(([k, l]) => ({ value: k, label: l }));
-    const oilTypeOpts = useMemo(() => [{ value: '', label: '—' }, ...Object.entries(oilTypes ?? {}).map(([k, l]) => ({ value: k, label: l }))], [oilTypes]);
 
     const applyFilter = (key: string, value: string | number | null) => {
         const newFilters = { ...filters, [key]: value ? String(value) : '' };
@@ -246,7 +339,8 @@ export default function MaintenanceHistory({
             kilometers_at_maintenance: m.kilometers_at_maintenance != null ? String(m.kilometers_at_maintenance) : '',
             notes: m.notes ?? '',
             oil_type: m.oil_type ?? '',
-            oil_change_km: m.oil_change_km != null ? String(m.oil_change_km) : '',
+            // Vidange km mirrors the odometer — no separate field, keep them equal.
+            oil_change_km: m.kilometers_at_maintenance != null ? String(m.kilometers_at_maintenance) : '',
             next_oil_change_km: m.next_oil_change_km != null ? String(m.next_oil_change_km) : '',
             oil_quantity_liters: m.oil_quantity_liters != null ? String(m.oil_quantity_liters) : '',
             gearbox_status: m.gearbox_status ?? 'NORMAL',
@@ -261,7 +355,17 @@ export default function MaintenanceHistory({
             filter_air_changed: !!m.filter_air_changed,
             filter_fuel_changed: !!m.filter_fuel_changed,
             dashboard_photo: null as File | null,
+            facture: null as File | null,
             _truck_interval_km: m.truck_interval_km ?? null,
+            items: (m.items ?? []).map((it): LineItem => ({
+                designation: it.designation,
+                reference: it.reference ?? '',
+                category: it.category ?? 'piece',
+                unit: it.unit ?? 'piece',
+                quantity: it.quantity != null ? String(it.quantity) : '',
+                unit_price: it.unit_price != null ? String(it.unit_price) : '',
+            })),
+            control_checks: { ...(m.control_checks ?? {}) },
         });
     };
 
@@ -275,26 +379,10 @@ export default function MaintenanceHistory({
     };
 
     const onEditKmChange = (val: string) => {
-        editForm.setData((d) => {
-            const next: Record<string, any> = { ...d, kilometers_at_maintenance: val };
-            if (!d.oil_change_km || d.oil_change_km === d.kilometers_at_maintenance) {
-                next.oil_change_km = val;
-                next.next_oil_change_km = computeNextOilKm(d.oil_type, val, d._truck_interval_km);
-            }
-            return next;
-        });
-    };
-    const onEditOilTypeChange = (val: string | number | null) => {
-        const v = (val as string) ?? '';
+        // Vidange km mirrors the odometer reading; recompute the next change from it.
         editForm.setData((d) => ({
             ...d,
-            oil_type: v,
-            next_oil_change_km: computeNextOilKm(v, d.oil_change_km || d.kilometers_at_maintenance, d._truck_interval_km),
-        }));
-    };
-    const onEditOilChangeKmChange = (val: string) => {
-        editForm.setData((d) => ({
-            ...d,
+            kilometers_at_maintenance: val,
             oil_change_km: val,
             next_oil_change_km: computeNextOilKm(d.oil_type, val, d._truck_interval_km),
         }));
@@ -312,7 +400,6 @@ export default function MaintenanceHistory({
     };
 
     const rows = maintenances.data;
-    const oilFieldsRequired = !!editForm.data.oil_type;
 
     return (
         <AuthenticatedLayout title="Historique maintenance">
@@ -464,7 +551,7 @@ export default function MaintenanceHistory({
 
             {/* View modal */}
             <Modal open={viewTarget !== null} onClose={() => setViewTarget(null)} title={viewTarget ? `Maintenance N° ${viewTarget.id} — ${viewTarget.truck}` : ''} size="xl">
-                {viewTarget && <ViewMaintenanceDetails m={viewTarget} oilTypes={oilTypes} />}
+                {viewTarget && <ViewMaintenanceDetails m={viewTarget} oilTypes={oilTypes} itemCategories={itemCategories} itemUnits={itemUnits} controlChecks={controlChecks} />}
             </Modal>
 
             {/* Sign modal */}
@@ -508,107 +595,86 @@ export default function MaintenanceHistory({
 
             {/* Edit modal */}
             <Modal open={editTarget !== null} onClose={closeEdit} title={`Modifier la maintenance — ${editTarget?.truck}`} size="xl">
-                <form onSubmit={submitEdit} className="space-y-4">
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
-                        <legend className="text-sm font-semibold px-1">Informations générales</legend>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <FormInput
-                                label="Date"
-                                type="date"
-                                value={editForm.data.maintenance_date}
-                                onChange={(e) => editForm.setData('maintenance_date', e.target.value)}
-                                error={editForm.errors.maintenance_date as string}
-                                required
-                            />
-                            <FormInput
-                                label="Distance actuelle (Km au compteur)"
-                                type="number"
-                                value={editForm.data.kilometers_at_maintenance}
-                                onChange={(e) => onEditKmChange(e.target.value)}
-                                error={editForm.errors.kilometers_at_maintenance as string}
-                                required
-                            />
-                        </div>
-                        {editForm.data._truck_interval_km != null && (
-                            <p className="text-xs text-[var(--color-text-muted)] -mt-2">
-                                Intervalle du camion (BDD) :
-                                <b> {Number(editForm.data._truck_interval_km).toLocaleString('fr-FR')} km</b>.
-                                Prochaine vidange = distance actuelle + intervalle.
-                            </p>
-                        )}
-                        <div>
-                            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1 flex items-center gap-1">
-                                <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
-                            </label>
-                            <CameraCapture
-                                onCapture={onEditDashboardCapture}
-                                existingPhotoUrl={editTarget?.dashboard_photo_url ?? null}
-                                error={editForm.errors.dashboard_photo as string | null | undefined}
-                            />
-                        </div>
-                    </fieldset>
+                <form onSubmit={submitEdit} className="space-y-5">
+                    <SectionTitle>Informations générales</SectionTitle>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <FormInput
+                            label="Date"
+                            type="date"
+                            wrapperClass="mb-0"
+                            value={editForm.data.maintenance_date}
+                            onChange={(e) => editForm.setData('maintenance_date', e.target.value)}
+                            error={editForm.errors.maintenance_date as string}
+                            required
+                        />
+                        <FormInput
+                            label="Distance actuelle (Km au compteur)"
+                            type="number"
+                            wrapperClass="mb-0"
+                            value={editForm.data.kilometers_at_maintenance}
+                            onChange={(e) => onEditKmChange(e.target.value)}
+                            error={editForm.errors.kilometers_at_maintenance as string}
+                            required
+                        />
+                    </div>
+                    {editForm.data._truck_interval_km != null && (
+                        <p className="text-xs text-[var(--color-text-muted)] -mt-3">
+                            Intervalle du camion (BDD) :
+                            <b> {Number(editForm.data._truck_interval_km).toLocaleString('fr-FR')} km</b>.
+                            Prochaine vidange = distance actuelle + intervalle.
+                        </p>
+                    )}
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5 flex items-center gap-1">
+                            <Camera size={14} /> Photo du tableau de bord (preuve du kilométrage)
+                        </label>
+                        <CameraCapture
+                            onCapture={onEditDashboardCapture}
+                            existingPhotoUrl={editTarget?.dashboard_photo_url ?? null}
+                            error={editForm.errors.dashboard_photo as string | null | undefined}
+                        />
+                    </div>
 
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
-                        <legend className="text-sm font-semibold px-1">Huile moteur</legend>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <FormSelect
-                                label="Type d'huile"
-                                value={editForm.data.oil_type}
-                                onChange={onEditOilTypeChange}
-                                options={oilTypeOpts}
-                            />
-                            <FormInput
-                                label={`Quantité (litres)${oilFieldsRequired ? ' *' : ''}`}
-                                type="number"
-                                step="0.1"
-                                value={editForm.data.oil_quantity_liters}
-                                onChange={(e) => editForm.setData('oil_quantity_liters', e.target.value)}
-                                error={editForm.errors.oil_quantity_liters as string}
-                            />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <FormInput
-                                label={`Vidange effectuée à (Km)${oilFieldsRequired ? ' *' : ''}`}
-                                type="number"
-                                value={editForm.data.oil_change_km}
-                                onChange={(e) => onEditOilChangeKmChange(e.target.value)}
-                                error={editForm.errors.oil_change_km as string}
-                            />
-                            <FormInput
-                                label={`Prochaine vidange à (Km) — calculée${oilFieldsRequired ? ' *' : ''}`}
-                                type="number"
-                                value={editForm.data.next_oil_change_km}
-                                onChange={(e) => editForm.setData('next_oil_change_km', e.target.value)}
-                                error={editForm.errors.next_oil_change_km as string}
-                            />
-                        </div>
-                    </fieldset>
+                    <SectionTitle>État des organes mécaniques</SectionTitle>
+                    <ComponentStatusList
+                        statuses={componentStatuses}
+                        value={editForm.data}
+                        onChange={(k, v) => editForm.setData(k, v)}
+                    />
 
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3 space-y-3">
-                        <legend className="text-sm font-semibold px-1">État des organes mécaniques</legend>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <FormSelect label="Boîte de vitesse" value={editForm.data.gearbox_status} onChange={(v) => editForm.setData('gearbox_status', v)} options={statusOpts} />
-                            <FormSelect label="Différentiel (pont)" value={editForm.data.differential_status} onChange={(v) => editForm.setData('differential_status', v)} options={statusOpts} />
-                            <FormSelect label="Circuit hydraulique" value={editForm.data.hydraulic_status} onChange={(v) => editForm.setData('hydraulic_status', v)} options={statusOpts} />
-                            <FormSelect label="Graissage" value={editForm.data.greasing_status} onChange={(v) => editForm.setData('greasing_status', v)} options={statusOpts} />
-                            <FormSelect label="Freins" value={editForm.data.brake_status} onChange={(v) => editForm.setData('brake_status', v)} options={statusOpts} />
-                            <FormSelect label="Liquide de refroidissement" value={editForm.data.coolant_status} onChange={(v) => editForm.setData('coolant_status', v)} options={statusOpts} />
-                            <FormSelect label="Batterie" value={editForm.data.battery_status} onChange={(v) => editForm.setData('battery_status', v)} options={statusOpts} />
-                        </div>
-                    </fieldset>
-
-                    <fieldset className="border border-[var(--color-border)] rounded-lg p-3">
-                        <legend className="text-sm font-semibold px-1">Filtres changés</legend>
+                    <SectionTitle>Filtres changés</SectionTitle>
+                    <div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                             <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_oil_changed} onChange={(e) => editForm.setData('filter_oil_changed', e.target.checked)} /> Huile</label>
                             <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_hydraulic_changed} onChange={(e) => editForm.setData('filter_hydraulic_changed', e.target.checked)} /> Hydraulique</label>
                             <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_air_changed} onChange={(e) => editForm.setData('filter_air_changed', e.target.checked)} /> Air</label>
                             <label className="flex items-center gap-2"><input type="checkbox" checked={!!editForm.data.filter_fuel_changed} onChange={(e) => editForm.setData('filter_fuel_changed', e.target.checked)} /> Carburant</label>
                         </div>
-                    </fieldset>
+                    </div>
 
+                    <MaintenanceItemsField
+                        items={(editForm.data.items as LineItem[]) ?? []}
+                        onChange={(items) => editForm.setData('items', items)}
+                        categories={itemCategories}
+                        units={itemUnits}
+                        errors={editForm.errors as Record<string, string | undefined>}
+                        facture={editForm.data.facture as File | null}
+                        onFactureChange={(f) => editForm.setData('facture', f)}
+                        factureUrl={editTarget?.attachment_url ?? null}
+                        factureName={editTarget?.attachment_filename ?? null}
+                        factureError={editForm.errors.facture as string | undefined}
+                    />
+
+                    <SectionTitle>Fiche de contrôle après travaux</SectionTitle>
+                    <ControlChecklist
+                        items={controlChecks}
+                        value={(editForm.data.control_checks as Record<string, string>) ?? {}}
+                        onChange={(v) => editForm.setData('control_checks', v)}
+                    />
+
+                    <SectionTitle>Notes / Observations</SectionTitle>
                     <FormTextarea
-                        label="Notes / Observations"
+                        wrapperClass="mb-0"
                         value={editForm.data.notes ?? ''}
                         onChange={(e) => editForm.setData('notes', e.target.value)}
                         error={editForm.errors.notes as string}
