@@ -16,6 +16,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
@@ -53,7 +54,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::query()
-            ->with('roles')
+            ->with(['roles.permissions', 'permissions'])
             ->orderBy('name')
             ->paginate(15)
             ->through(fn (User $user) => [
@@ -65,14 +66,20 @@ class UserController extends Controller
                     'id' => $r->id,
                     'name' => $r->name,
                 ])->toArray(),
+                // Permissions the user holds directly (the editable "extras").
+                'direct_permissions' => $user->getDirectPermissions()->pluck('name')->values()->toArray(),
+                // Permissions inherited from roles (shown locked in the editor).
+                'role_permissions' => $user->getPermissionsViaRoles()->pluck('name')->unique()->values()->toArray(),
                 'created_at' => $user->created_at?->format('d/m/Y'),
             ]);
 
         $roles = Role::orderBy('name')->get(['id', 'name'])->toArray();
+        $allPermissions = Permission::orderBy('name')->get(['id', 'name'])->toArray();
 
         return Inertia::render('users/Index', [
             'users' => $users,
             'roles' => $roles,
+            'allPermissions' => $allPermissions,
         ]);
     }
 
@@ -133,6 +140,16 @@ class UserController extends Controller
         $roles = Role::whereIn('id', $request->roles)->get();
 
         $user->syncRoles($roles);
+
+        // Direct permissions ("extras" on top of the role). syncPermissions
+        // replaces the user's direct permissions with exactly this set; role
+        // permissions are unaffected.
+        $permissionNames = Permission::whereIn('id', $request->input('permissions', []))
+            ->where('guard_name', 'web')
+            ->pluck('name')
+            ->toArray();
+
+        $user->syncPermissions($permissionNames);
 
         return redirect()->back()->with('success', 'User updated successfully.');
     }

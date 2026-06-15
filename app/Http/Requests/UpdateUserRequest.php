@@ -26,6 +26,8 @@ class UpdateUserRequest extends FormRequest
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($id)->whereNull('deleted_at')],
             'roles' => ['required', 'array'],
             'roles.*' => ['integer', Rule::in($this->assignableRoleIds())],
+            'permissions' => ['sometimes', 'array'],
+            'permissions.*' => ['integer', Rule::exists('permissions', 'id')],
         ];
     }
 }
