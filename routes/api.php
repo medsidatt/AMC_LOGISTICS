@@ -35,7 +35,8 @@ Route::prefix('v1')->group(function () {
      *     @OA\Response(response=401, description="Unauthorized")
      * )
      */
-    Route::post('/login', [AuthController::class, 'login']);
+    // Rate-limited to blunt credential brute-force attempts.
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
 
     // ------------------------
     // Authenticated routes
