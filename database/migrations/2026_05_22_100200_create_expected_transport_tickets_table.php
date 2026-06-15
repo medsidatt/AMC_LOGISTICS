@@ -20,9 +20,9 @@ return new class extends Migration
             $table->foreignId('truck_id')->constrained('trucks')->cascadeOnDelete();
             $table->foreignId('provider_id')->constrained('providers')->cascadeOnDelete();
 
-            $table->timestamp('loaded_at');
-            $table->timestamp('left_at')->nullable();
-            $table->timestamp('deadline_at');
+            $table->dateTime('loaded_at');
+            $table->dateTime('left_at')->nullable();
+            $table->dateTime('deadline_at');
 
             // expected | matched | missing | dismissed
             $table->string('status', 16)->default('expected');
