@@ -11,6 +11,7 @@ import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus, Ban, CheckCircle2 } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
 
 interface Role {
     id: number;
@@ -35,6 +36,11 @@ export default function UsersIndex({ users, roles }: Props) {
     const page = usePage().props as unknown as { auth: { user: { id: number } | null; roles: string[] } };
     const currentUserId = page.auth?.user?.id ?? null;
     const isSuperAdmin = (page.auth?.roles ?? []).includes('Super Admin');
+    const { can } = usePermission();
+    const canCreate = can('user-create');
+    const canEdit = can('user-edit');
+    const canDelete = can('user-delete');
+    const canSuspend = can('user-suspend');
 
     // A row can be managed (edit/suspend/delete) unless it's the current user's
     // own account, or a Super Admin account being viewed by a non-Super-Admin.
@@ -92,9 +98,11 @@ export default function UsersIndex({ users, roles }: Props) {
         <AuthenticatedLayout title="Utilisateurs">
             <Head title="Utilisateurs" />
 
-            <div className="flex justify-end mb-4">
-                <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
-            </div>
+            {canCreate && (
+                <div className="flex justify-end mb-4">
+                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>Ajouter</Button>
+                </div>
+            )}
 
             <Card padding={false}>
                 <div className="p-5">
@@ -119,10 +127,10 @@ export default function UsersIndex({ users, roles }: Props) {
                                     <div className="flex items-center gap-1">
                                         <ActionButtons
                                             onView={() => openShow(r)}
-                                            onEdit={manageable ? () => openEdit(r) : undefined}
-                                            onDelete={manageable ? () => setDeleteUrl(`/users/destroy/${r.id}`) : undefined}
+                                            onEdit={manageable && canEdit ? () => openEdit(r) : undefined}
+                                            onDelete={manageable && canDelete ? () => setDeleteUrl(`/users/destroy/${r.id}`) : undefined}
                                         />
-                                        {manageable && (
+                                        {manageable && canSuspend && (
                                             <button
                                                 onClick={() => {
                                                     if (confirm(r.is_suspended ? `Réactiver ${r.name} ?` : `Suspendre ${r.name} ?`)) {

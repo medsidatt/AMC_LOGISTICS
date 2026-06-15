@@ -7,17 +7,30 @@ import {
 } from 'lucide-react';
 import {type ReactNode} from 'react';
 import {clsx} from 'clsx';
+import {usePermission} from '@/hooks/usePermission';
 
 interface NavItem {
     label: string;
     href: string;
     icon: ReactNode;
     match?: string;
+    /** Any-of these permissions reveals the item. Omit for always-visible. */
+    permission?: string | string[];
+    /** Any-of these roles reveals the item (for routes gated by role, not permission). */
+    role?: string | string[];
 }
 
 interface NavSection {
     header: string;
     items: NavItem[];
+}
+
+type PermCheck = (p: string | string[]) => boolean;
+
+function itemVisible(item: NavItem, can: PermCheck, hasRole: PermCheck): boolean {
+    const passPerm = item.permission === undefined || can(item.permission);
+    const passRole = item.role === undefined || hasRole(item.role);
+    return passPerm && passRole;
 }
 
 function pathFor(item: NavItem): string {
@@ -75,60 +88,70 @@ function SectionHeader({label, collapsed}: { label: string; collapsed: boolean }
     );
 }
 
-const dataSections: NavSection[] = [
+/**
+ * Single source of truth for navigation. Each item declares the permission
+ * (or role, for the handful of role-gated routes) that reveals it. Items the
+ * user can't access are filtered out and empty sections collapse. Permission
+ * names mirror the controller `__construct` middleware exactly.
+ */
+const mainSections: NavSection[] = [
     {
         header: 'Transport',
         items: [
-            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
-            // { label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18} />, match: '/dashboard/' },
-            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>},
-            // { label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18} />, match: '/reports' },
+            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>, permission: 'transport-tracking-list'},
+            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/', permission: 'transport-tracking-list'},
+            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>, permission: 'provider-list'},
+            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', role: ['Admin', 'Super Admin', 'Logistics Responsible']},
         ],
     },
     {
         header: 'Flotte',
         items: [
-            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
-            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
-            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>},
+            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>, permission: 'truck-list'},
+            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>, permission: 'driver-list'},
+            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>, permission: 'transporter-list'},
         ],
-    },
-
-];
-
-const securitySection: NavSection = {
-    header: 'Sécurité',
-    items: [
-        {
-            label: 'Cartographie flotte',
-            href: '/logistics/fleet-map',
-            icon: <Map size={18}/>,
-            match: '/logistics/fleet-map'
-        },
-        {
-            label: 'Incidents de vol',
-            href: '/logistics/theft-incidents',
-            icon: <ShieldAlert size={18}/>,
-            match: '/logistics/theft-incidents'
-        },
-        {label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18}/>, match: '/logistics/places'},
-    ],
-};
-
-const onlySuperAdmin: NavSection[] = [
-    {
-        header: '',
-        items: [
-            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports'},
-            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/'},
-
-        ]
     },
     {
         header: 'Maintenance',
         items: [
-            { label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18} />, match: '/maintenance' },
-            { label: 'Logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18} />, match: '/logistics/dashboard' },
+            {label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance', permission: 'maintenance-list'},
+            {label: 'Tableau logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18}/>, match: '/logistics/dashboard', permission: 'logistics-dashboard'},
+        ],
+    },
+    {
+        header: 'Inspections',
+        items: [
+            {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections', permission: 'inspection-list'},
+            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>, permission: 'inspection-create'},
+            {label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18}/>, match: '/logistics/validation/checklists', permission: 'weekly-checklist-validate'},
+        ],
+    },
+    {
+        header: 'Planification',
+        items: [
+            {label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
+            {label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18}/>, match: '/logistics/fleet-roster', permission: 'fleet-roster-plan'},
+            {label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
+        ],
+    },
+    {
+        header: 'Sécurité',
+        items: [
+            {label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18}/>, match: '/logistics/fleet-map', role: ['Admin', 'Super Admin']},
+            {label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18}/>, match: '/logistics/theft-incidents', permission: 'logistics-dashboard'},
+            {label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18}/>, match: '/logistics/places', permission: 'logistics-dashboard'},
+        ],
+    },
+    {
+        header: 'Administration',
+        items: [
+            {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
+            {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
+            {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
+            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', role: ['Admin', 'Super Admin']},
+            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', role: ['Admin', 'Super Admin']},
+            {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', role: ['Admin', 'Super Admin']},
         ],
     },
 ];
@@ -140,29 +163,8 @@ const accountSection: NavSection = {
     ],
 };
 
-const adminSection: NavSection = {
-    header: 'Administration',
-    items: [
-        {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>},
-        {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations'},
-        {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>},
-        {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet'},
-        {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import'},
-        {
-            label: 'Journal d\'activité',
-            href: '/admin/audit-logs',
-            icon: <Activity size={18}/>,
-            match: '/admin/audit-logs'
-        },
-        {
-            label: 'Historique objectifs',
-            href: '/logistics/objective-history',
-            icon: <History size={18}/>,
-            match: '/logistics/objective-history'
-        },
-    ],
-};
-
+// Driver self-service space. These routes are gated by the Driver role (not
+// permissions), so the whole block is shown only to drivers.
 const driverSections: NavSection[] = [
     {
         header: 'Mon espace',
@@ -175,86 +177,6 @@ const driverSections: NavSection[] = [
     },
 ];
 
-const hseSections: NavSection[] = [
-    {
-        header: 'HSE',
-        items: [
-            {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections'},
-            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>},
-        ],
-    },
-    {
-        header: 'Opérations',
-        items: [
-            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
-            {label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance'},
-        ],
-    },
-    {
-        header: 'Flotte',
-        items: [
-            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
-            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
-            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>},
-            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>},
-        ],
-    },
-    {
-        header: 'Sécurité',
-        items: [
-            {
-                label: 'Incidents de vol',
-                href: '/logistics/theft-incidents',
-                icon: <ShieldAlert size={18}/>,
-                match: '/logistics/theft-incidents'
-            },
-            {
-                label: 'Lieux (géofences)',
-                href: '/logistics/places',
-                icon: <MapPin size={18}/>,
-                match: '/logistics/places'
-            },
-        ],
-    },
-];
-
-const logisticsResponsibleSections: NavSection[] = [
-    {
-        header: 'Validation',
-        items: [
-            {
-                label: 'Checklists hebdo',
-                href: '/logistics/validation/checklists',
-                icon: <ClipboardCheck size={18}/>,
-                match: '/logistics/validation/checklists'
-            },
-        ],
-    },
-    {
-        header: 'Planification',
-        items: [
-            { label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18} />, match: '/logistics/planning' },
-            { label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18} />, match: '/logistics/fleet-roster' },
-            { label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18} />, match: '/logistics/objective-history' },
-        ],
-    },
-    {
-        header: 'Logistique',
-        items: [
-            {
-                label: 'Tableau logistique',
-                href: '/logistics/dashboard',
-                icon: <BarChart3 size={18}/>,
-                match: '/logistics/dashboard'
-            },
-            {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>},
-            {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>},
-            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>},
-            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports'},
-        ],
-    },
-];
-
 interface SidebarProps {
     collapsed: boolean;
     onClose: () => void;
@@ -262,24 +184,19 @@ interface SidebarProps {
 }
 
 export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) {
-    const {auth} = usePage().props;
-    const isDriver = auth.roles.includes('Driver');
-    const isAdmin = auth.roles.includes('Admin') || auth.roles.includes('Super Admin');
-    const isHse = auth.roles.includes('HSE Agent');
-    const isLogisticsResp = auth.roles.includes('Logistics Responsible');
+    const {url} = usePage();
+    const {can, hasRole} = usePermission();
 
-    let sections: NavSection[];
-    if (isAdmin) {
-        sections = [...dataSections, securitySection, adminSection, accountSection, ...onlySuperAdmin];
-    } else if (isDriver) {
-        sections = [...driverSections, accountSection];
-    } else if (isHse) {
-        sections = [...hseSections, accountSection];
-    } else if (isLogisticsResp) {
-        sections = [...logisticsResponsibleSections, accountSection];
-    } else {
-        sections = [...dataSections, accountSection];
-    }
+    // Drivers get a dedicated self-service space; everyone else gets the
+    // permission-filtered main navigation (admins see all, custom roles see
+    // exactly what their permissions allow).
+    const rawSections: NavSection[] = hasRole('Driver')
+        ? [...driverSections, accountSection]
+        : [...mainSections, accountSection];
+
+    const sections: NavSection[] = rawSections
+        .map((s) => ({...s, items: s.items.filter((i) => itemVisible(i, can, hasRole))}))
+        .filter((s) => s.items.length > 0);
 
     const dashboardItem: NavItem = {
         label: 'Dashboard',
@@ -287,7 +204,6 @@ export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) 
         icon: <LayoutDashboard size={18}/>,
     };
     const allItems: NavItem[] = [dashboardItem, ...sections.flatMap((s) => s.items)];
-    const {url} = usePage();
     const activeHref = pickActiveHref(url, allItems);
 
     return (
