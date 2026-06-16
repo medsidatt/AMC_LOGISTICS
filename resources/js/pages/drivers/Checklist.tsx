@@ -8,6 +8,7 @@ import {
     ClipboardCheck, CheckCircle2,
     ChevronDown, ChevronUp, Truck as TruckIcon,
 } from 'lucide-react';
+import StatusIcon from '@/components/drivers/StatusIcon';
 import { clsx } from 'clsx';
 
 interface ChecklistEntry {
@@ -77,10 +78,11 @@ function ChipSelect({ label, value, options, onChange }: {
                             type="button"
                             onClick={() => onChange(key)}
                             className={clsx(
-                                'px-3 py-2 rounded-xl text-sm font-medium transition-all border-2 min-h-[40px]',
+                                'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all border-2 min-h-[44px]',
                                 classes,
                             )}
                         >
+                            {isActive && <StatusIcon variant={color} size={16} />}
                             {lbl}
                         </button>
                     );
