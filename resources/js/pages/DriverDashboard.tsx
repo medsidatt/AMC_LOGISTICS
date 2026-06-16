@@ -9,6 +9,7 @@ import {
     Route, Weight, ClipboardCheck, Truck, Fuel, Gauge,
     Activity, Timer, ArrowRight, AlertTriangle, Wrench, Calendar,
 } from 'lucide-react';
+import StatusIcon from '@/components/drivers/StatusIcon';
 
 interface TruckInfo {
     id: number;
@@ -160,6 +161,53 @@ export default function DriverDashboard(props: Props) {
                         )}
                     </div>
                 </Card>
+
+                {/* ── Task-first quick actions ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Link
+                        href="/drivers/checklist-page"
+                        className="flex items-center gap-3 p-4 rounded-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)] hover:shadow-sm transition min-h-[76px]"
+                    >
+                        <div className="w-11 h-11 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
+                            <ClipboardCheck size={22} className="text-[var(--color-primary)]" />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="font-semibold text-[var(--color-text)]">Checklist de la semaine</div>
+                            <div className="flex items-center gap-1.5 text-xs mt-0.5">
+                                <StatusIcon variant={props.weekChecklistDone ? 'success' : 'warning'} size={14} />
+                                <span className="text-[var(--color-text-muted)]">{props.weekChecklistDone ? 'Faite' : 'À faire'}</span>
+                            </div>
+                        </div>
+                    </Link>
+
+                    <Link
+                        href="/drivers/issues"
+                        className="flex items-center gap-3 p-4 rounded-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] hover:border-amber-400 hover:shadow-sm transition min-h-[76px]"
+                    >
+                        <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                            <AlertTriangle size={22} className="text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="font-semibold text-[var(--color-text)]">Signaler un problème</div>
+                            <div className="text-xs mt-0.5 text-[var(--color-text-muted)]">
+                                {props.openIssuesCount > 0 ? `${props.openIssuesCount} en cours` : 'Tout va bien'}
+                            </div>
+                        </div>
+                    </Link>
+
+                    <Link
+                        href="/drivers/my-truck"
+                        className="flex items-center gap-3 p-4 rounded-xl border-2 border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-primary)] hover:shadow-sm transition min-h-[76px]"
+                    >
+                        <div className="w-11 h-11 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
+                            <Truck size={22} className="text-[var(--color-primary)]" />
+                        </div>
+                        <div className="min-w-0">
+                            <div className="font-semibold text-[var(--color-text)]">Mon camion</div>
+                            <div className="text-xs mt-0.5 text-[var(--color-text-muted)] truncate">{t ? t.matricule : 'Aucun camion'}</div>
+                        </div>
+                    </Link>
+                </div>
 
                 {/* ── Telemetry strip (live truck data) ── */}
                 {t && (
