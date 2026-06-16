@@ -63,6 +63,14 @@ class Driver extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * The truck this driver is currently assigned to ("camion assigné").
+     */
+    public function currentTruck(): BelongsTo
+    {
+        return $this->belongsTo(Truck::class, 'current_truck_id');
+    }
+
     public function transportTrackings(): HasMany
     {
         return $this->hasMany(TransportTracking::class);

@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import FormInput from '@/components/ui/FormInput';
+import FormSelect from '@/components/ui/FormSelect';
 import FormCheckbox from '@/components/ui/FormCheckbox';
 import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -21,15 +22,23 @@ interface Driver {
     phone: string | null;
     address: string | null;
     is_active: boolean;
+    current_truck_id: number | null;
     created_at: string | null;
+}
+
+interface TruckOption {
+    id: number;
+    matricule: string;
 }
 
 interface Props {
     drivers: { data: Driver[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
     totals: { active: number; total: number };
+    trucks: TruckOption[];
 }
 
-export default function DriversIndex({ drivers, totals }: Props) {
+export default function DriversIndex({ drivers, totals, trucks }: Props) {
+    const truckOpts = [{ value: '', label: '— Aucun —' }, ...trucks.map((t) => ({ value: t.id, label: t.matricule }))];
     const [modal, setModal] = useState<'create' | 'edit' | null>(null);
     const [selected, setSelected] = useState<Driver | null>(null);
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
@@ -38,12 +47,12 @@ export default function DriversIndex({ drivers, totals }: Props) {
     const canEdit = can('driver-edit');
     const canDelete = can('driver-delete');
 
-    const createForm = useForm({ name: '', email: '', phone: '', address: '', is_active: true });
-    const editForm = useForm({ name: '', email: '', phone: '', address: '', is_active: true });
+    const createForm = useForm<Record<string, any>>({ name: '', email: '', phone: '', address: '', is_active: true, current_truck_id: '' });
+    const editForm = useForm<Record<string, any>>({ name: '', email: '', phone: '', address: '', is_active: true, current_truck_id: '' });
 
     const openEdit = (d: Driver) => {
         setSelected(d);
-        editForm.setData({ name: d.name, email: d.email ?? '', phone: d.phone ?? '', address: d.address ?? '', is_active: d.is_active });
+        editForm.setData({ name: d.name, email: d.email ?? '', phone: d.phone ?? '', address: d.address ?? '', is_active: d.is_active, current_truck_id: d.current_truck_id ?? '' });
         setModal('edit');
     };
 
@@ -126,6 +135,7 @@ export default function DriversIndex({ drivers, totals }: Props) {
                     <FormInput label="Email" type="email" name="email" value={createForm.data.email} onChange={(e) => createForm.setData('email', e.target.value)} error={createForm.errors.email} />
                     <FormInput label="Téléphone" name="phone" value={createForm.data.phone} onChange={(e) => createForm.setData('phone', e.target.value)} error={createForm.errors.phone} />
                     <FormInput label="Adresse" name="address" value={createForm.data.address} onChange={(e) => createForm.setData('address', e.target.value)} error={createForm.errors.address} />
+                    <FormSelect label="Camion assigné" value={createForm.data.current_truck_id} onChange={(v) => createForm.setData('current_truck_id', v)} options={truckOpts} error={createForm.errors.current_truck_id} />
                     <FormCheckbox label="Actif (apparaît dans les dropdowns de rotation)" name="is_active" checked={createForm.data.is_active} onChange={(e) => createForm.setData('is_active', e.target.checked)} error={createForm.errors.is_active} />
                     <div className="flex justify-end gap-2 mt-6">
                         <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>
@@ -140,6 +150,7 @@ export default function DriversIndex({ drivers, totals }: Props) {
                     <FormInput label="Email" type="email" name="email" value={editForm.data.email} onChange={(e) => editForm.setData('email', e.target.value)} error={editForm.errors.email} />
                     <FormInput label="Téléphone" name="phone" value={editForm.data.phone} onChange={(e) => editForm.setData('phone', e.target.value)} error={editForm.errors.phone} />
                     <FormInput label="Adresse" name="address" value={editForm.data.address} onChange={(e) => editForm.setData('address', e.target.value)} error={editForm.errors.address} />
+                    <FormSelect label="Camion assigné" value={editForm.data.current_truck_id} onChange={(v) => editForm.setData('current_truck_id', v)} options={truckOpts} error={editForm.errors.current_truck_id} />
                     <FormCheckbox label="Actif" name="is_active" checked={editForm.data.is_active} onChange={(e) => editForm.setData('is_active', e.target.checked)} error={editForm.errors.is_active} />
                     <div className="flex justify-end gap-2 mt-6">
                         <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>

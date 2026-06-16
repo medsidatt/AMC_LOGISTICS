@@ -122,13 +122,6 @@ export default function FleetRosterIndex({
                     <h1 className="text-xl font-semibold">Planning de la flotte</h1>
                 </div>
 
-                <Card>
-                    <div className="text-sm text-[var(--color-text-muted)]">
-                        Choisis une période et l'objectif tonnage. L'application calcule combien de camions sont nécessaires
-                        au minimum, propose ceux à garder en service et programme automatiquement un repos pour les autres.
-                    </div>
-                </Card>
-
                 {/* Period + objective */}
                 <SectionLabel>Période et objectif</SectionLabel>
                 <Card>
@@ -159,10 +152,6 @@ export default function FleetRosterIndex({
                             <Calendar size={14} className="mr-1" /> Appliquer la période
                         </Button>
                     </div>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                        Cible par défaut sur la période : <strong>{objective.default_target_tons.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t</strong> ({objective.weekly_target_tons.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t/semaine × {period.weeks} semaines).
-                        Tu peux la modifier ci-dessus.
-                    </p>
                 </Card>
 
                 {periodChanged && (
@@ -294,7 +283,7 @@ export default function FleetRosterIndex({
                 {canEdit && (
                     <Card>
                         <FormTextarea
-                            label="Note (optionnel) — ajoutée à chaque fenêtre de repos créée"
+                            label="Note (optionnel)"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={2}
@@ -306,9 +295,6 @@ export default function FleetRosterIndex({
                                 Programmer le repos de {rested.size} camion{rested.size > 1 ? 's' : ''}
                             </Button>
                         </div>
-                        <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                            Les fenêtres de repos précédentes pour la même période (source : capacité excédentaire) seront remplacées par cette sélection.
-                        </p>
                     </Card>
                 )}
             </div>

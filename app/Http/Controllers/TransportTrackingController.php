@@ -138,20 +138,13 @@ class TransportTrackingController extends Controller
             'filters' => array_filter($filters ?? []),
             'sort' => ['by' => $sortColumn, 'dir' => $sortDirection],
             'transporters' => Transporter::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
-            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get()->map(fn ($t) => ['id' => $t->id, 'matricule' => $t->matricule])->toArray(),
+            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule'])->toArray(),
             'drivers' => Driver::where('is_active', true)
-                ->when(!empty($filters['truck_id']), function ($q) use ($filters) {
-                    $q->whereIn('id', function ($sub) use ($filters) {
-                        $sub->select('driver_id')
-                            ->from('transport_trackings')
-                            ->where('truck_id', $filters['truck_id'])
-                            ->whereNotNull('driver_id')
-                            ->distinct();
-                    });
-                })
+                // Filter to drivers assigned to the selected truck (indexed FK,
+                // replaces the old distinct scan over transport_trackings).
+                ->when(!empty($filters['truck_id']), fn ($q) => $q->where('current_truck_id', $filters['truck_id']))
                 ->orderBy('name')
-                ->get()
-                ->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])
+                ->get(['id', 'name'])
                 ->toArray(),
             'providers' => Provider::all()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
             'products' => [
@@ -173,28 +166,24 @@ class TransportTrackingController extends Controller
     public function createPage()
     {
         $transporters = Transporter::all();
-        // Fetch last driver per truck in a single query to avoid N+1
-        $lastDriverMap = DB::table('transport_trackings')
-            ->select('truck_id', 'driver_id')
-            ->whereIn('id', function ($sub) {
-                $sub->selectRaw('MAX(id)')
-                    ->from('transport_trackings')
-                    ->whereNotNull('truck_id')
-                    ->whereNull('deleted_at')
-                    ->groupBy('truck_id');
-            })
-            ->pluck('driver_id', 'truck_id');
+        // Assigned driver per truck — direct indexed FK (replaces the old scan
+        // over transport_trackings for the last driver per truck).
+        $driverByTruck = Driver::query()
+            ->where('is_active', true)
+            ->whereNotNull('current_truck_id')
+            ->orderBy('name')
+            ->pluck('id', 'current_truck_id');
 
-        $trucks = Truck::where('is_active', true)->orderBy('matricule')->get()
-            ->map(function ($truck) use ($lastDriverMap) {
+        $trucks = Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule', 'transporter_id'])
+            ->map(function ($truck) use ($driverByTruck) {
                 return [
                     'id' => $truck->id,
                     'matricule' => $truck->matricule,
-                    'last_driver_id' => $lastDriverMap[$truck->id] ?? null,
+                    'last_driver_id' => $driverByTruck[$truck->id] ?? null,
                     'transporter_id' => $truck?->transporter_id,
                 ];
             });
-        $drivers = Driver::where('is_active', true)->orderBy('name')->get();
+        $drivers = Driver::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $providers = Provider::all();
         $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
             return [
@@ -545,26 +534,22 @@ class TransportTrackingController extends Controller
         $transportTracking->load('documents');
 
         $transporters = Transporter::withTrashed()->orderBy('name')->get();
-        // Fetch last driver per truck in a single query to avoid N+1
-        $lastDriverMap = DB::table('transport_trackings')
-            ->select('truck_id', 'driver_id')
-            ->whereIn('id', function ($sub) {
-                $sub->selectRaw('MAX(id)')
-                    ->from('transport_trackings')
-                    ->whereNotNull('truck_id')
-                    ->whereNull('deleted_at')
-                    ->groupBy('truck_id');
-            })
-            ->pluck('driver_id', 'truck_id');
+        // Assigned driver per truck — direct indexed FK (replaces the old scan
+        // over transport_trackings for the last driver per truck).
+        $driverByTruck = Driver::query()
+            ->where('is_active', true)
+            ->whereNotNull('current_truck_id')
+            ->orderBy('name')
+            ->pluck('id', 'current_truck_id');
 
-        $trucks = Truck::withTrashed()->orderBy('matricule')->get()
+        $trucks = Truck::withTrashed()->orderBy('matricule')->get(['id', 'matricule', 'transporter_id', 'deleted_at'])
             ->map(fn ($truck) => [
                 'id' => $truck->id,
                 'matricule' => $truck->matricule,
-                'last_driver_id' => $lastDriverMap[$truck->id] ?? null,
+                'last_driver_id' => $driverByTruck[$truck->id] ?? null,
                 'transporter_id' => $truck->transporter_id,
             ]);
-        $drivers = Driver::withTrashed()->orderBy('name')->get();
+        $drivers = Driver::withTrashed()->orderBy('name')->get(['id', 'name']);
         $providers = Provider::withTrashed()->orderBy('name')->get();
         $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
             return [
@@ -963,9 +948,9 @@ EOT;
             'filters' => $filters,
             'filterOptions' => [
                 'transporters' => Transporter::whereHas('trucks.transportTrackings')->get()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]),
-                'trucks' => Truck::whereHas('transportTrackings')->get()->map(fn ($t) => ['value' => $t->id, 'label' => $t->matricule]),
-                'drivers' => Driver::whereHas('transportTrackings')->get()->map(fn ($d) => ['value' => $d->id, 'label' => $d->name]),
-                'providers' => Provider::whereHas('transportTrackings')->get()->map(fn ($p) => ['value' => $p->id, 'label' => $p->name]),
+                'trucks' => Truck::whereHas('transportTrackings')->orderBy('matricule')->get(['id', 'matricule'])->map(fn ($t) => ['value' => $t->id, 'label' => $t->matricule]),
+                'drivers' => Driver::whereHas('transportTrackings')->orderBy('name')->get(['id', 'name'])->map(fn ($d) => ['value' => $d->id, 'label' => $d->name]),
+                'providers' => Provider::whereHas('transportTrackings')->get(['id', 'name'])->map(fn ($p) => ['value' => $p->id, 'label' => $p->name]),
             ],
             'kpis' => [
                 'totalTransported' => round($totalTransported, 2),
