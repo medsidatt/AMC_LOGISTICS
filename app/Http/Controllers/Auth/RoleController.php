@@ -38,6 +38,7 @@ class RoleController extends Controller
 
         return Inertia::render('roles/Index', [
             'roles' => $roles,
+            'roleDescriptions' => config('permissions_meta.roles', []),
         ]);
     }
 
@@ -58,6 +59,7 @@ class RoleController extends Controller
 
         return Inertia::render('roles/Create', [
             'permissions' => $permissions,
+            'permissionMeta' => config('permissions_meta'),
         ]);
     }
 
@@ -96,6 +98,7 @@ class RoleController extends Controller
                     'name' => $p->name,
                 ])->toArray(),
             ],
+            'permissionMeta' => config('permissions_meta'),
         ]);
     }
 
@@ -118,6 +121,7 @@ class RoleController extends Controller
                 ])->toArray(),
             ],
             'allPermissions' => $allPermissions,
+            'permissionMeta' => config('permissions_meta'),
         ]);
     }
 

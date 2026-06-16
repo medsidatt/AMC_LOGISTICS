@@ -12,6 +12,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
 import { Plus, Ban, CheckCircle2 } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
+import PermissionMatrix, { PermissionMeta } from '@/components/permissions/PermissionMatrix';
 
 interface Role {
     id: number;
@@ -38,13 +39,10 @@ interface Props {
     users: { data: User[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
     roles: Role[];
     allPermissions: Permission[];
+    permissionMeta: PermissionMeta;
 }
 
-// Group permissions by module: everything before the last dash.
-// e.g. "transport-tracking-list" -> "transport-tracking", "role-show" -> "role".
-const moduleOf = (name: string) => (name.includes('-') ? name.slice(0, name.lastIndexOf('-')) : name);
-
-export default function UsersIndex({ users, roles, allPermissions }: Props) {
+export default function UsersIndex({ users, roles, allPermissions, permissionMeta }: Props) {
     const page = usePage().props as unknown as { auth: { user: { id: number } | null; roles: string[] } };
     const currentUserId = page.auth?.user?.id ?? null;
     const isSuperAdmin = (page.auth?.roles ?? []).includes('Super Admin');
@@ -67,31 +65,17 @@ export default function UsersIndex({ users, roles, allPermissions }: Props) {
     const createForm = useForm({ name: '', email: '', roles: [] as number[] });
     const editForm = useForm({ name: '', email: '', roles: [] as number[], permissions: [] as number[] });
 
-    // Permissions grouped by module, computed once.
-    const permissionGroups = useMemo(() => {
-        const groups: Record<string, Permission[]> = {};
-        for (const p of allPermissions) {
-            (groups[moduleOf(p.name)] ??= []).push(p);
-        }
-        return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-    }, [allPermissions]);
-
-    // Names inherited from the selected user's saved roles — locked in the editor.
-    const inheritedPermissions = useMemo(
-        () => new Set(selected?.role_permissions ?? []),
-        [selected],
-    );
+    // Ids inherited from the selected user's saved roles — shown locked.
+    const lockedIds = useMemo(() => {
+        const names = new Set(selected?.role_permissions ?? []);
+        return allPermissions.filter((p) => names.has(p.name)).map((p) => p.id);
+    }, [selected, allPermissions]);
 
     const openEdit = (u: User) => {
         setSelected(u);
         const directIds = allPermissions.filter((p) => u.direct_permissions.includes(p.name)).map((p) => p.id);
         editForm.setData({ name: u.name, email: u.email, roles: u.roles.map((r) => r.id), permissions: directIds });
         setModal('edit');
-    };
-
-    const togglePermission = (id: number) => {
-        const current = editForm.data.permissions;
-        editForm.setData('permissions', current.includes(id) ? current.filter((p) => p !== id) : [...current, id]);
     };
 
     const openShow = (u: User) => { setSelected(u); setModal('show'); };
@@ -210,41 +194,18 @@ export default function UsersIndex({ users, roles, allPermissions }: Props) {
                     <RoleCheckboxes form={editForm} />
 
                     <div className="mb-2">
-                        <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Permissions supplémentaires</label>
+                        <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Accès supplémentaires</label>
                         <p className="text-xs text-[var(--color-text-muted)] mb-2">
-                            Les permissions héritées du rôle sont verrouillées. Cochez-en d'autres pour les accorder à cet utilisateur uniquement.
+                            Les accès hérités du rôle sont verrouillés (marqués « rôle »). Cochez-en d'autres pour les accorder à cet utilisateur uniquement.
                         </p>
-                        <div className="max-h-64 overflow-y-auto rounded-lg border border-[var(--color-border)] p-3 space-y-3">
-                            {permissionGroups.map(([module, perms]) => (
-                                <div key={module}>
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1">{module}</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {perms.map((p) => {
-                                            const inherited = inheritedPermissions.has(p.name);
-                                            const checked = inherited || editForm.data.permissions.includes(p.id);
-                                            return (
-                                                <label
-                                                    key={p.id}
-                                                    className={
-                                                        'flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs transition ' +
-                                                        (inherited ? 'opacity-60 cursor-not-allowed bg-[var(--color-surface-hover)]' : 'cursor-pointer hover:bg-[var(--color-surface-hover)]')
-                                                    }
-                                                    title={inherited ? 'Hérité du rôle' : undefined}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked}
-                                                        disabled={inherited}
-                                                        onChange={() => togglePermission(p.id)}
-                                                        className="rounded"
-                                                    />
-                                                    <span className="text-[var(--color-text)]">{p.name}</span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
+                        <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)] p-3">
+                            <PermissionMatrix
+                                allPermissions={allPermissions}
+                                selected={editForm.data.permissions}
+                                onChange={(ids) => editForm.setData('permissions', ids)}
+                                meta={permissionMeta}
+                                lockedIds={lockedIds}
+                            />
                         </div>
                         {editForm.errors.permissions && <p className="mt-1 text-xs text-[var(--color-danger)]">{editForm.errors.permissions}</p>}
                     </div>
