@@ -7,7 +7,7 @@ import Badge from '@/components/ui/Badge';
 import FormInput from '@/components/ui/FormInput';
 import FormTextarea from '@/components/ui/FormTextarea';
 import { usePermission } from '@/hooks/usePermission';
-import { BedDouble, Check, AlertTriangle, Calendar, Sparkles } from 'lucide-react';
+import { BedDouble, Check, AlertTriangle, Calendar, Sparkles, History } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface TruckRow {
@@ -94,6 +94,7 @@ export default function FleetRosterIndex({
             end_date: end,
             rested_truck_ids: [...rested],
             notes,
+            target_tons: target,
         }, { onFinish: () => setSaving(false) });
     };
 
@@ -106,14 +107,19 @@ export default function FleetRosterIndex({
         <AuthenticatedLayout>
             <Head title="Planning de la flotte" />
             <div className="space-y-5">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <BedDouble size={22} className="text-emerald-500" />
-                        <h1 className="text-xl font-semibold">Planning de la flotte</h1>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <BedDouble size={22} className="text-emerald-500" />
+                            <h1 className="text-xl font-semibold">Planning de la flotte</h1>
+                        </div>
+                        <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                            Sélectionnez les camions en service pour la période. Les autres seront mis au repos.
+                        </p>
                     </div>
-                    <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                        Sélectionnez les camions en service pour la période. Les autres seront mis au repos.
-                    </p>
+                    <Button variant="secondary" onClick={() => router.visit('/logistics/fleet-roster/history')}>
+                        <History size={14} className="mr-1" /> Historique des objectifs
+                    </Button>
                 </div>
 
                 {/* Période et objectif */}

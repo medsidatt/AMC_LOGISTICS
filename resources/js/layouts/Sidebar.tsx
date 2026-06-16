@@ -149,7 +149,7 @@ const mainSections: NavSection[] = [
             {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
             {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
-            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', role: ['Admin', 'Super Admin']},
+            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', role: ['Admin', 'Super Admin', 'Logistics Responsible']},
             {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', role: ['Admin', 'Super Admin']},
             {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],

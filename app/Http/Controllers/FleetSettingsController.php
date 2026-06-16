@@ -16,7 +16,7 @@ class FleetSettingsController extends Controller
         $this->middleware('auth');
         $this->middleware(function ($request, $next) {
             $user = auth()->user();
-            abort_unless($user && $user->hasAnyRole(['Admin', 'Super Admin']), 403);
+            abort_unless($user && $user->hasAnyRole(['Admin', 'Super Admin', 'Logistics Responsible']), 403);
             return $next($request);
         });
     }
