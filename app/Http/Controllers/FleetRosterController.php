@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FleetObjective;
+use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Models\TruckRestWindow;
 use App\Services\FleetCapacityService;
@@ -104,6 +106,7 @@ class FleetRosterController extends Controller
             'rested_truck_ids' => 'array',
             'rested_truck_ids.*' => 'integer|exists:trucks,id',
             'notes' => 'nullable|string|max:500',
+            'target_tons' => 'nullable|numeric|min:0',
         ]);
 
         $start = Carbon::parse($data['start_date']);
@@ -111,7 +114,14 @@ class FleetRosterController extends Controller
         $userId = auth()->id();
         $restedIds = array_unique($data['rested_truck_ids'] ?? []);
 
-        DB::transaction(function () use ($start, $end, $restedIds, $userId, $data) {
+        // Snapshot the objective for this period (tonnage + rotations target).
+        $targetTons = (float) ($data['target_tons'] ?? 0);
+        $capacityPerRotation = max(0.01, $this->capacity->defaultCapacityTonnage());
+        $targetRotations = (int) round($targetTons / $capacityPerRotation);
+        $activeTruckCount = Truck::where('is_active', true)->count();
+        $restedCount = count($restedIds);
+
+        DB::transaction(function () use ($start, $end, $restedIds, $userId, $data, $targetTons, $targetRotations, $activeTruckCount, $restedCount) {
             // Wipe previous surplus-capacity windows that exactly match this period
             TruckRestWindow::query()
                 ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
@@ -129,6 +139,18 @@ class FleetRosterController extends Controller
                     'created_by' => $userId,
                 ]);
             }
+
+            FleetObjective::updateOrCreate(
+                ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
+                [
+                    'target_tons' => $targetTons,
+                    'target_rotations' => $targetRotations,
+                    'working_trucks' => max(0, $activeTruckCount - $restedCount),
+                    'rested_trucks' => $restedCount,
+                    'notes' => $data['notes'] ?? null,
+                    'created_by' => $userId,
+                ],
+            );
         });
 
         return redirect()
@@ -142,5 +164,52 @@ class FleetRosterController extends Controller
                 $start->format('d/m/Y'),
                 $end->format('d/m/Y'),
             ));
+    }
+
+    /**
+     * Objective history per planning period: target vs achieved (effectuée)
+     * and remaining (restante), in both tonnage and rotations. "Effectuée" is
+     * measured from the delivered trips (client_net_weight / count) within the
+     * objective's date range.
+     */
+    public function history()
+    {
+        $objectives = FleetObjective::with('creator:id,name')
+            ->orderByDesc('start_date')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get();
+
+        $rows = $objectives->map(function (FleetObjective $o) {
+            $agg = TransportTracking::query()
+                ->whereBetween('client_date', [$o->start_date->toDateString(), $o->end_date->toDateString()])
+                ->selectRaw('COALESCE(SUM(client_net_weight), 0) as tons, COUNT(*) as rotations')
+                ->first();
+
+            $achievedTons = round((float) ($agg->tons ?? 0), 2);
+            $achievedRotations = (int) ($agg->rotations ?? 0);
+            $targetTons = (float) $o->target_tons;
+
+            return [
+                'id' => $o->id,
+                'start_date' => $o->start_date->format('d/m/Y'),
+                'end_date' => $o->end_date->format('d/m/Y'),
+                'target_tons' => $targetTons,
+                'target_rotations' => $o->target_rotations,
+                'achieved_tons' => $achievedTons,
+                'achieved_rotations' => $achievedRotations,
+                'remaining_tons' => round(max(0, $targetTons - $achievedTons), 2),
+                'remaining_rotations' => max(0, $o->target_rotations - $achievedRotations),
+                'pct' => $targetTons > 0 ? min(100, (int) round($achievedTons / $targetTons * 100)) : null,
+                'working_trucks' => $o->working_trucks,
+                'rested_trucks' => $o->rested_trucks,
+                'notes' => $o->notes,
+                'created_by' => $o->creator?->name,
+            ];
+        });
+
+        return Inertia::render('logistics/fleet-roster/History', [
+            'objectives' => $rows,
+        ]);
     }
 }
