@@ -25,9 +25,10 @@ interface Role {
 
 interface Props {
     roles: { data: Role[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
+    roleDescriptions: Record<string, string>;
 }
 
-export default function RolesIndex({ roles }: Props) {
+export default function RolesIndex({ roles, roleDescriptions }: Props) {
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const { can } = usePermission();
     const canCreate = can('role-create');
@@ -50,12 +51,16 @@ export default function RolesIndex({ roles }: Props) {
                     <DataTable
                         data={roles.data}
                         columns={[
-                            { key: 'name', label: 'Nom' },
-                            { key: 'permissions', label: 'Permissions', render: (r) => (
-                                <div className="flex flex-wrap gap-1 max-w-md">
-                                    {r.permissions.slice(0, 5).map((p) => <Badge key={p.id} variant="muted">{p.name}</Badge>)}
-                                    {r.permissions.length > 5 && <Badge variant="info">+{r.permissions.length - 5}</Badge>}
+                            { key: 'name', label: 'Rôle', render: (r) => (
+                                <div>
+                                    <div className="font-medium text-[var(--color-text)]">{r.name}</div>
+                                    {roleDescriptions[r.name] && (
+                                        <div className="text-xs text-[var(--color-text-muted)]">{roleDescriptions[r.name]}</div>
+                                    )}
                                 </div>
+                            )},
+                            { key: 'permissions', label: 'Accès', render: (r) => (
+                                <Badge variant="muted">{r.permissions.length} permission{r.permissions.length > 1 ? 's' : ''}</Badge>
                             )},
                             {
                                 key: 'actions', label: 'Actions', sortable: false,
