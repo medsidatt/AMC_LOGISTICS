@@ -23,14 +23,7 @@ class FuelImportController extends Controller
         private readonly FleetiFuelParser $fleetiParser,
     ) {
         $this->middleware('auth');
-        $this->middleware(function ($request, $next) {
-            $user = auth()->user();
-            abort_unless(
-                $user && $user->hasAnyRole(['Admin', 'Super Admin']),
-                403,
-            );
-            return $next($request);
-        });
+        $this->middleware('permission:fuel-import');
     }
 
     public function showPage()

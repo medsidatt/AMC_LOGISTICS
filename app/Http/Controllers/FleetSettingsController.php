@@ -14,11 +14,7 @@ class FleetSettingsController extends Controller
     public function __construct(private readonly ObjectiveHistoryService $objectiveHistory)
     {
         $this->middleware('auth');
-        $this->middleware(function ($request, $next) {
-            $user = auth()->user();
-            abort_unless($user && $user->hasAnyRole(['Admin', 'Super Admin', 'Logistics Responsible']), 403);
-            return $next($request);
-        });
+        $this->middleware('permission:fleet-settings-edit');
     }
 
     public function edit()
