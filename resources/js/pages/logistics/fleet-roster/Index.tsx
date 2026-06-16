@@ -56,6 +56,34 @@ export default function FleetRosterIndex({
         }, { preserveState: false });
     };
 
+    // Quick period presets (local-date safe).
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const mondayOf = (base: Date) => {
+        const d = new Date(base);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return d;
+    };
+    const weekRange = (offsetWeeks: number): [string, string] => {
+        const mon = mondayOf(new Date());
+        mon.setDate(mon.getDate() + offsetWeeks * 7);
+        const sat = new Date(mon);
+        sat.setDate(mon.getDate() + 5);
+        return [ymd(mon), ymd(sat)];
+    };
+    const monthRange = (): [string, string] => {
+        const n = new Date();
+        return [ymd(new Date(n.getFullYear(), n.getMonth(), 1)), ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0))];
+    };
+    const presets: { label: string; range: () => [string, string] }[] = [
+        { label: 'Cette semaine', range: () => weekRange(0) },
+        { label: 'Semaine prochaine', range: () => weekRange(1) },
+        { label: 'Ce mois-ci', range: monthRange },
+    ];
+    const isActivePreset = (range: () => [string, string]) => {
+        const [s, e] = range();
+        return start === s && end === e;
+    };
+
     const toggle = (id: number) => {
         if (!canEdit) return;
         setRested((prev) => {
@@ -124,6 +152,26 @@ export default function FleetRosterIndex({
 
                 {/* Période et objectif */}
                 <Card>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {presets.map((p) => {
+                            const active = isActivePreset(p.range);
+                            return (
+                                <button
+                                    key={p.label}
+                                    type="button"
+                                    onClick={() => { const [s, e] = p.range(); goto(s, e); }}
+                                    className={clsx(
+                                        'px-3 py-1.5 rounded-full text-xs font-medium border transition',
+                                        active
+                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                                            : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]',
+                                    )}
+                                >
+                                    {p.label}
+                                </button>
+                            );
+                        })}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                         <FormInput label="Date début" type="date" value={start} onChange={(e) => setStart(e.target.value)} wrapperClass="mb-0" />
                         <FormInput label="Date fin" type="date" value={end} onChange={(e) => setEnd(e.target.value)} wrapperClass="mb-0" />
