@@ -12,14 +12,8 @@ class DriverDisciplineController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware(function ($request, $next) {
-            $user = auth()->user();
-            abort_unless(
-                $user && $user->hasAnyRole(['Admin', 'Super Admin', 'Logistics Responsible']),
-                403,
-            );
-            return $next($request);
-        });
+        $this->middleware('permission:driver-discipline-view', ['only' => ['index']]);
+        $this->middleware('permission:driver-discipline-manage', ['only' => ['store', 'destroy']]);
     }
 
     public function index(Driver $driver)

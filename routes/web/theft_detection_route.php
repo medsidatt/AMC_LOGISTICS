@@ -28,11 +28,14 @@ Route::middleware(['auth', 'permission:logistics-dashboard'])->group(function ()
     Route::get('/logistics/places', [PlaceController::class, 'index'])->name('places.index');
 });
 
-// ---------- Live GPS / surveillance routes (Admin / Super Admin only) ----------
-Route::middleware(['auth', 'role:Admin|Super Admin'])->group(function () {
+// ---------- Fleet map (assignable permission) ----------
+Route::middleware(['auth', 'permission:fleet-map-view'])->group(function () {
     Route::get('/logistics/fleet-map', [TruckController::class, 'mapPage'])
         ->name('fleet-map');
+});
 
+// ---------- Live GPS / surveillance routes (Admin / Super Admin only) ----------
+Route::middleware(['auth', 'role:Admin|Super Admin'])->group(function () {
     Route::get('/transport_tracking/{transportTracking}/replay', [TransportTrackingController::class, 'replayPage'])
         ->name('transport-tracking.replay');
     Route::get('/api/trip-replay/{transportTracking}', [TripReplayController::class, 'data'])
