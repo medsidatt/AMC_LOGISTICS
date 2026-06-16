@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import CameraCapture from '@/components/inspection/CameraCapture';
 import BigChoice, { BigChoiceOption } from '@/components/drivers/BigChoice';
+import HelpHint from '@/components/drivers/HelpHint';
 import { AlertTriangle, Send, Truck as TruckIcon, CheckCircle2, Check, FileText, Wallet, Camera } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -232,6 +233,10 @@ export default function Issues({ driver, truck, recent, options }: Props) {
     return (
         <AuthenticatedLayout title="Signaler un problème">
             <Head title="Signaler un problème" />
+
+            <HelpHint id="driver-issues">
+                Cochez ce qui ne va pas, choisissez la gravité, et ajoutez une photo si possible. Pas besoin d'indiquer un coût.
+            </HelpHint>
 
             <Card className="mb-4">
                 <div className="flex flex-wrap items-center gap-3">
