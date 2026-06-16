@@ -27,12 +27,13 @@ class FleetRosterController extends Controller
 
     public function index(Request $request)
     {
+        // Default period = the current work week, Monday → Saturday.
         $start = $request->query('start')
             ? Carbon::parse($request->query('start'))->startOfDay()
-            : Carbon::now()->startOfMonth();
+            : Carbon::now()->startOfWeek(Carbon::MONDAY);
         $end = $request->query('end')
             ? Carbon::parse($request->query('end'))->endOfDay()
-            : Carbon::now()->endOfMonth();
+            : Carbon::now()->startOfWeek(Carbon::MONDAY)->addDays(5)->endOfDay();
 
         $days = $start->diffInDays($end) + 1;
         $weeks = max(1, round($days / 7, 2));
