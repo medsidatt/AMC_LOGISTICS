@@ -9,6 +9,7 @@ import {
     ChevronDown, ChevronUp, Truck as TruckIcon,
 } from 'lucide-react';
 import StatusIcon from '@/components/drivers/StatusIcon';
+import HelpHint from '@/components/drivers/HelpHint';
 import { clsx } from 'clsx';
 
 interface ChecklistEntry {
@@ -115,6 +116,10 @@ export default function Checklist({ driver, truck, currentWeekStart, currentChec
             <Head title="Checklist hebdomadaire" />
 
             <div className="space-y-4 max-w-3xl">
+                <HelpHint id="driver-checklist">
+                    Une fois par semaine, indiquez l'état du camion. Vert = bon, orange = à surveiller, rouge = problème.
+                </HelpHint>
+
                 {/* Compact header */}
                 <Card>
                     <div className="flex flex-wrap items-center gap-3">
