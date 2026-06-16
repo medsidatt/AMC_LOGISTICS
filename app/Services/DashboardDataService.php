@@ -216,13 +216,10 @@ class DashboardDataService
         $checklistHistory = collect();
 
         if ($driver) {
-            $latestTracking = TransportTracking::where('driver_id', $driver->id)
-                ->whereNotNull('truck_id')
-                ->orderByDesc('client_date')
-                ->first();
-
-            if ($latestTracking) {
-                $truck = Truck::where('id', $latestTracking->truck_id)->where('is_active', true)->first();
+            // A driver's truck is the explicit assignment only (indexed FK).
+            // Unassigned drivers have no truck — no scan over trackings.
+            if ($driver->current_truck_id) {
+                $truck = Truck::where('id', $driver->current_truck_id)->where('is_active', true)->first();
             }
 
             if ($truck) {
