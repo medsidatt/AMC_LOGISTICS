@@ -113,16 +113,9 @@ class FleetRosterController extends Controller
         $start = Carbon::parse($data['start_date']);
         $end = Carbon::parse($data['end_date']);
         $userId = auth()->id();
-        $restedIds = array_unique($data['rested_truck_ids'] ?? []);
+        $restedIds = array_values(array_unique($data['rested_truck_ids'] ?? []));
 
-        // Snapshot the objective for this period (tonnage + rotations target).
-        $targetTons = (float) ($data['target_tons'] ?? 0);
-        $capacityPerRotation = max(0.01, $this->capacity->defaultCapacityTonnage());
-        $targetRotations = (int) round($targetTons / $capacityPerRotation);
-        $activeTruckCount = Truck::where('is_active', true)->count();
-        $restedCount = count($restedIds);
-
-        DB::transaction(function () use ($start, $end, $restedIds, $userId, $data, $targetTons, $targetRotations, $activeTruckCount, $restedCount) {
+        DB::transaction(function () use ($start, $end, $restedIds, $userId, $data) {
             // Wipe previous surplus-capacity windows that exactly match this period
             TruckRestWindow::query()
                 ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
@@ -141,17 +134,7 @@ class FleetRosterController extends Controller
                 ]);
             }
 
-            FleetObjective::updateOrCreate(
-                ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
-                [
-                    'target_tons' => $targetTons,
-                    'target_rotations' => $targetRotations,
-                    'working_trucks' => max(0, $activeTruckCount - $restedCount),
-                    'rested_trucks' => $restedCount,
-                    'notes' => $data['notes'] ?? null,
-                    'created_by' => $userId,
-                ],
-            );
+            $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), $userId, $data['notes'] ?? null, $restedIds);
         });
 
         return redirect()
@@ -165,6 +148,70 @@ class FleetRosterController extends Controller
                 $start->format('d/m/Y'),
                 $end->format('d/m/Y'),
             ));
+    }
+
+    /**
+     * Persist the objective for a period as soon as the user clicks "Appliquer",
+     * without touching rest windows. Idempotent on (start_date, end_date).
+     */
+    public function apply(Request $request)
+    {
+        $data = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'target_tons' => 'nullable|numeric|min:0',
+        ]);
+
+        $start = Carbon::parse($data['start_date']);
+        $end = Carbon::parse($data['end_date']);
+
+        DB::transaction(function () use ($start, $end, $data) {
+            // restedIds null → derived from existing rest windows for the period.
+            $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), auth()->id(), null);
+        });
+
+        return redirect()
+            ->route('logistics.fleet-roster.index', [
+                'start' => $start->toDateString(),
+                'end' => $end->toDateString(),
+                'target_tons' => $data['target_tons'] ?? null,
+            ])
+            ->with('success', 'Objectif enregistré pour la période.');
+    }
+
+    /**
+     * Upsert the FleetObjective header for a period (and, from Phase 2, its
+     * per-truck target snapshot). When $restedIds is null the rested set is
+     * derived from the existing surplus rest windows for the period.
+     */
+    private function upsertObjective(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null): FleetObjective
+    {
+        if ($restedIds === null) {
+            $restedIds = TruckRestWindow::query()
+                ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
+                ->where('start_date', $start->toDateString())
+                ->where('end_date', $end->toDateString())
+                ->pluck('truck_id')
+                ->all();
+        }
+
+        $restedIds = array_values(array_unique($restedIds));
+        $capacityPerRotation = max(0.01, $this->capacity->defaultCapacityTonnage());
+        $targetRotations = (int) round($targetTons / $capacityPerRotation);
+        $activeTruckCount = Truck::where('is_active', true)->count();
+        $restedCount = count($restedIds);
+
+        return FleetObjective::updateOrCreate(
+            ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
+            [
+                'target_tons' => $targetTons,
+                'target_rotations' => $targetRotations,
+                'working_trucks' => max(0, $activeTruckCount - $restedCount),
+                'rested_trucks' => $restedCount,
+                'notes' => $notes,
+                'created_by' => $userId,
+            ],
+        );
     }
 
     /**

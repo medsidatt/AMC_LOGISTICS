@@ -56,6 +56,15 @@ export default function FleetRosterIndex({
         }, { preserveState: false });
     };
 
+    // "Appliquer" persists the objective for the period+target, then reloads.
+    const applyObjective = () => {
+        router.post('/logistics/fleet-roster/apply', {
+            start_date: start,
+            end_date: end,
+            target_tons: Number(targetTons) || 0,
+        }, { preserveScroll: true });
+    };
+
     // Quick period presets (local-date safe).
     const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const mondayOf = (base: Date) => {
@@ -176,7 +185,7 @@ export default function FleetRosterIndex({
                         <FormInput label="Date début" type="date" value={start} onChange={(e) => setStart(e.target.value)} wrapperClass="mb-0" />
                         <FormInput label="Date fin" type="date" value={end} onChange={(e) => setEnd(e.target.value)} wrapperClass="mb-0" />
                         <FormInput label="Objectif tonnage (t)" type="number" step="0.1" value={targetTons} onChange={(e) => setTargetTons(e.target.value)} wrapperClass="mb-0" />
-                        <Button variant="secondary" onClick={() => goto(start, end, targetTons)}>
+                        <Button variant="secondary" onClick={applyObjective}>
                             <Calendar size={14} className="mr-1" /> Appliquer
                         </Button>
                     </div>
