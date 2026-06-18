@@ -7,8 +7,8 @@ import FormInput from '@/components/ui/FormInput';
 import FormSelect from '@/components/ui/FormSelect';
 import { usePermission } from '@/hooks/usePermission';
 import {
-    Users, ChevronLeft, ChevronRight, Check,
-    Search, Calendar, RotateCcw, Copy,
+    Users, ChevronLeft, ChevronRight, Check, X,
+    Search, Calendar, RotateCcw, Copy, Truck as TruckIcon,
     PhoneOff, ShieldOff, AlertTriangle, Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -383,87 +383,99 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                     </div>
                 </Card>
 
-                {/* Programmés */}
+                {/* Programmés — table éditable */}
                 {scheduledRows.length > 0 && (
                     <div>
                         <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-2 mb-1 flex items-center gap-2">
                             <Check size={12} className="text-emerald-500" /> Programmés ({scheduledRows.length})
                         </div>
                         <Card padding={false}>
-                            <div className="divide-y divide-[var(--color-border)]">
-                                {scheduledRows.map((r) => {
-                                    const orig = driversById[r.driver_id];
-                                    return (
-                                        <div key={r.driver_id} className="p-3 flex flex-wrap items-center gap-3 bg-emerald-50/40 dark:bg-emerald-900/10">
-                                            <button
-                                                type="button"
-                                                disabled={!canEdit}
-                                                onClick={() => setRow(r.driver_id, { dispatched: false, wish_provider_id: null })}
-                                                className={clsx(
-                                                    'w-6 h-6 rounded border-2 flex items-center justify-center transition shrink-0',
-                                                    'border-emerald-500 bg-emerald-500 text-white',
-                                                    !canEdit && 'opacity-50 cursor-not-allowed',
-                                                )}
-                                                title="Retirer de la programmation"
-                                            >
-                                                <Check size={14} strokeWidth={3} />
-                                            </button>
-                                            <div className="font-semibold min-w-0 flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="truncate">{orig?.name ?? '—'}</span>
-                                                    {orig?.truck && <span className="text-xs font-normal text-[var(--color-text-muted)]">· {orig.truck}</span>}
-                                                    {orig && (orig.done_today ?? 0) > 0 ? (
-                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-xs font-medium">
-                                                            <Check size={10} /> {orig.done_today} rot. aujourd'hui
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-[var(--color-surface-hover)] text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
+                                            <th className="px-4 py-3 text-left font-semibold">Camion</th>
+                                            <th className="px-4 py-3 text-left font-semibold">Chauffeur</th>
+                                            <th className="px-4 py-3 text-left font-semibold">Carrière</th>
+                                            <th className="px-4 py-3 text-left font-semibold">Note</th>
+                                            <th className="px-4 py-3 text-left font-semibold">Aujourd'hui</th>
+                                            <th className="px-4 py-3"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[var(--color-border)]">
+                                        {scheduledRows.map((r) => {
+                                            const orig = driversById[r.driver_id];
+                                            return (
+                                                <tr key={r.driver_id} className="hover:bg-[var(--color-surface-hover)]/40 align-top">
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        <span className="inline-flex items-center gap-1.5 font-semibold">
+                                                            <TruckIcon size={14} className="text-[var(--color-text-muted)]" />
+                                                            {orig?.truck ?? '—'}
                                                         </span>
-                                                    ) : (
-                                                        <span className="rounded-full bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] px-2 py-0.5 text-xs font-medium">Pas encore</span>
-                                                    )}
-                                                    {orig?.ticket_manquant && (
-                                                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
-                                                            <AlertTriangle size={10} /> ticket manquant
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {orig && (
-                                                    <NotificationStatusLine
-                                                        driver={orig}
-                                                        isPast={isPast}
-                                                        canEdit={canEdit}
-                                                    />
-                                                )}
-                                            </div>
-                                            <div className="w-full sm:w-48">
-                                                {canEdit ? (
-                                                    <FormSelect
-                                                        options={providerOptions}
-                                                        value={r.wish_provider_id ?? null}
-                                                        onChange={(v) => setRow(r.driver_id, { wish_provider_id: v === '' || v == null ? null : Number(v) })}
-                                                        wrapperClass=""
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs text-[var(--color-text-muted)] block truncate">
-                                                        {r.wish_provider_id ? `Carrière : ${providersById[r.wish_provider_id] ?? '—'}` : 'sans carrière'}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="w-full sm:w-44">
-                                                {canEdit ? (
-                                                    <input
-                                                        type="text"
-                                                        value={r.note}
-                                                        onChange={(e) => setRow(r.driver_id, { note: e.target.value })}
-                                                        placeholder="Note (ex: n'a pas pu changer)"
-                                                        maxLength={200}
-                                                        className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
-                                                    />
-                                                ) : (
-                                                    r.note ? <span className="text-xs text-[var(--color-text-muted)] block truncate">{r.note}</span> : null
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                                    </td>
+                                                    <td className="px-4 py-3 min-w-[10rem]">
+                                                        <div className="font-medium">{orig?.name ?? '—'}</div>
+                                                        {orig && <NotificationStatusLine driver={orig} isPast={isPast} canEdit={canEdit} />}
+                                                    </td>
+                                                    <td className="px-4 py-3 min-w-[11rem]">
+                                                        {canEdit ? (
+                                                            <FormSelect
+                                                                options={providerOptions}
+                                                                value={r.wish_provider_id ?? null}
+                                                                onChange={(v) => setRow(r.driver_id, { wish_provider_id: v === '' || v == null ? null : Number(v) })}
+                                                                wrapperClass="mb-0"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs text-[var(--color-text-muted)]">
+                                                                {r.wish_provider_id ? providersById[r.wish_provider_id] ?? '—' : 'sans carrière'}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 min-w-[11rem]">
+                                                        {canEdit ? (
+                                                            <input
+                                                                type="text"
+                                                                value={r.note}
+                                                                onChange={(e) => setRow(r.driver_id, { note: e.target.value })}
+                                                                placeholder="ex: n'a pas pu changer"
+                                                                maxLength={200}
+                                                                className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
+                                                            />
+                                                        ) : (
+                                                            <span className="text-xs text-[var(--color-text-muted)]">{r.note || '—'}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 whitespace-nowrap">
+                                                        {(orig?.done_today ?? 0) > 0 ? (
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-xs font-medium">
+                                                                <Check size={10} /> {orig?.done_today} rot.
+                                                            </span>
+                                                        ) : (
+                                                            <span className="rounded-full bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] px-2 py-0.5 text-xs font-medium">Pas encore</span>
+                                                        )}
+                                                        {orig?.ticket_manquant && (
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-xs font-medium ml-1">
+                                                                <AlertTriangle size={10} /> ticket
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {canEdit && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setRow(r.driver_id, { dispatched: false, wish_provider_id: null, note: '' })}
+                                                                title="Retirer de la programmation"
+                                                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                            >
+                                                                <X size={16} />
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </Card>
                     </div>
