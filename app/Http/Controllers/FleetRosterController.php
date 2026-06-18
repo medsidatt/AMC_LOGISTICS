@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetObjective;
+use App\Models\FleetObjectiveTruck;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Models\TruckRestWindow;
@@ -198,20 +199,48 @@ class FleetRosterController extends Controller
         $restedIds = array_values(array_unique($restedIds));
         $capacityPerRotation = max(0.01, $this->capacity->defaultCapacityTonnage());
         $targetRotations = (int) round($targetTons / $capacityPerRotation);
-        $activeTruckCount = Truck::where('is_active', true)->count();
+        $restedSet = array_flip($restedIds);
+
+        $activeTrucks = Truck::where('is_active', true)->get(['id', 'capacity_tonnage', 'target_rotations_per_week']);
         $restedCount = count($restedIds);
 
-        return FleetObjective::updateOrCreate(
+        $objective = FleetObjective::updateOrCreate(
             ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
             [
                 'target_tons' => $targetTons,
                 'target_rotations' => $targetRotations,
-                'working_trucks' => max(0, $activeTruckCount - $restedCount),
+                'working_trucks' => max(0, $activeTrucks->count() - $restedCount),
                 'rested_trucks' => $restedCount,
                 'notes' => $notes,
                 'created_by' => $userId,
             ],
         );
+
+        // Snapshot per-truck targets (frozen). Rested trucks get a 0-target row
+        // so they still appear in the breakdown. Re-applying re-snapshots cleanly.
+        $weeks = max(1.0, round(($start->diffInDays($end) + 1) / 7, 2));
+        $objective->truckTargets()->delete();
+
+        $now = now();
+        $rows = $activeTrucks->map(function (Truck $truck) use ($objective, $restedSet, $weeks, $capacityPerRotation, $now) {
+            $cap = (float) ($truck->capacity_tonnage ?: $capacityPerRotation);
+            $rot = isset($restedSet[$truck->id]) ? 0 : (int) round($this->capacity->targetRotationsForTruck($truck) * $weeks);
+            return [
+                'fleet_objective_id' => $objective->id,
+                'truck_id' => $truck->id,
+                'target_rotations' => $rot,
+                'target_tons' => round($rot * $cap, 2),
+                'capacity_tonnage' => round($cap, 2),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->all();
+
+        if ($rows) {
+            FleetObjectiveTruck::insert($rows);
+        }
+
+        return $objective;
     }
 
     /**
