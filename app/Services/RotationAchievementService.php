@@ -145,6 +145,42 @@ class RotationAchievementService
         ];
     }
 
+    /**
+     * Per-truck "done today" for a single day, used by the daily planning board.
+     * Returns ['by_truck' => [truck_id => [ticketed, gps_only, done, tons, missing]], 'gps_available' => bool].
+     */
+    public function forDay(Carbon $day): array
+    {
+        $dayStr = $day->toDateString();
+
+        $tickets = TransportTracking::query()
+            ->whereDate('client_date', $dayStr)
+            ->selectRaw('truck_id, COUNT(*) as rotations, COALESCE(SUM(client_net_weight),0) as tons')
+            ->groupBy('truck_id')
+            ->get()
+            ->keyBy('truck_id');
+
+        $loops = $this->loops->loopsForPeriod($day->copy()->startOfDay(), $day->copy()->endOfDay());
+        $gpsOnlyByTruck = $loops->filter(fn ($l) => empty($l['transport_tracking_id']))->groupBy('truck_id')->map->count();
+
+        $byTruck = [];
+        $truckIds = collect($tickets->keys())->merge($gpsOnlyByTruck->keys())->unique();
+        foreach ($truckIds as $id) {
+            $tk = $tickets->get($id);
+            $tRot = (int) ($tk->rotations ?? 0);
+            $gRot = (int) ($gpsOnlyByTruck->get($id) ?? 0);
+            $byTruck[(int) $id] = [
+                'ticketed' => $tRot,
+                'gps_only' => $gRot,
+                'done' => $tRot + $gRot,
+                'tons' => round((float) ($tk->tons ?? 0), 2),
+                'missing' => $gRot > 0,
+            ];
+        }
+
+        return ['by_truck' => $byTruck, 'gps_available' => $loops->isNotEmpty()];
+    }
+
     private function pct(float $doneTons, float $targetTons, int $doneRot, int $targetRot): ?int
     {
         if ($targetTons > 0) return min(100, (int) round($doneTons / $targetTons * 100));
