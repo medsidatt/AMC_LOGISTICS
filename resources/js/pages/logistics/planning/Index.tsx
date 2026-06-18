@@ -8,7 +8,7 @@ import FormSelect from '@/components/ui/FormSelect';
 import { usePermission } from '@/hooks/usePermission';
 import {
     Users, ChevronLeft, ChevronRight, Check,
-    Search, Calendar, RotateCcw,
+    Search, Calendar, RotateCcw, Copy,
     PhoneOff, ShieldOff, AlertTriangle, Clock,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -27,6 +27,7 @@ interface DriverRow {
     notification_status: NotificationStatus;
     notification_error: string | null;
     current_status: string | null;
+    note: string | null;
     truck: string | null;
     done_today: number;
     ticket_manquant: boolean;
@@ -43,7 +44,7 @@ interface Props {
     dispatchedCount: number;
 }
 
-type FormRow = { driver_id: number; dispatched: boolean; wish_provider_id: number | null };
+type FormRow = { driver_id: number; dispatched: boolean; wish_provider_id: number | null; note: string };
 
 function shiftDate(iso: string, days: number): string {
     const d = new Date(iso + 'T00:00:00');
@@ -183,8 +184,10 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
             driver_id: d.id,
             dispatched: d.dispatched,
             wish_provider_id: d.wish_provider_id,
+            note: d.note ?? '',
         })),
     );
+    const [copied, setCopied] = useState(false);
 
     const providerOptions = useMemo(
         () => [{ value: '', label: '— sans préférence —' }, ...providers.map((p) => ({ value: p.id, label: p.name }))],
@@ -232,9 +235,41 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
             if (!orig) continue;
             if (orig.dispatched !== r.dispatched) return true;
             if ((orig.wish_provider_id ?? null) !== (r.wish_provider_id ?? null)) return true;
+            if ((orig.note ?? '') !== (r.note ?? '')) return true;
         }
         return false;
     }, [rows, driversById]);
+
+    // Build the WhatsApp-style program: grouped by carrière, listing trucks.
+    const buildProgram = (): string => {
+        const dateLabel = isTomorrow ? 'de demain' : `du ${formatLongDate(date)}`;
+        const groups = new Map<string, string[]>();
+        for (const r of rows.filter((x) => x.dispatched)) {
+            const orig = driversById[r.driver_id];
+            const label = orig?.truck ?? orig?.name ?? '—';
+            const note = (r.note ?? '').trim();
+            const provider = r.wish_provider_id ? (providersById[r.wish_provider_id] ?? 'Autres') : 'Autres';
+            if (!groups.has(provider)) groups.set(provider, []);
+            groups.get(provider)!.push(`-${label}${note ? ' ' + note : ''}`);
+        }
+        const lines: string[] = ['Bonsoir à tous,', `Pour le programme ${dateLabel} merci de vous organiser selon la répartition suivante :`, ''];
+        for (const [provider, items] of groups) {
+            lines.push(`${provider} :`);
+            lines.push(...items);
+            lines.push('');
+        }
+        return lines.join('\n').trim();
+    };
+
+    const copyProgram = async () => {
+        try {
+            await navigator.clipboard.writeText(buildProgram());
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            // Clipboard blocked — no-op; the user can retry.
+        }
+    };
 
     const relativeLabel = dayRelativeLabel(date, isTomorrow, isPast);
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -249,9 +284,15 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                         <Users size={22} className="text-emerald-500" />
                         <h1 className="text-xl font-semibold">Programmation des rotations</h1>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={() => router.visit('/logistics/planning/weekly')}>
-                        <Calendar size={14} className="mr-1" /> Tableau hebdomadaire
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={copyProgram} disabled={selectedCount === 0}>
+                            {copied ? <Check size={14} className="mr-1 text-emerald-500" /> : <Copy size={14} className="mr-1" />}
+                            {copied ? 'Copié !' : 'Copier le programme'}
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => router.visit('/logistics/planning/weekly')}>
+                            <Calendar size={14} className="mr-1" /> Tableau hebdomadaire
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Date hero */}
@@ -392,7 +433,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                                                     />
                                                 )}
                                             </div>
-                                            <div className="w-full sm:w-52">
+                                            <div className="w-full sm:w-48">
                                                 {canEdit ? (
                                                     <FormSelect
                                                         options={providerOptions}
@@ -402,8 +443,22 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                                                     />
                                                 ) : (
                                                     <span className="text-xs text-[var(--color-text-muted)] block truncate">
-                                                        {r.wish_provider_id ? `Souhait : ${providersById[r.wish_provider_id] ?? '—'}` : 'sans préférence'}
+                                                        {r.wish_provider_id ? `Carrière : ${providersById[r.wish_provider_id] ?? '—'}` : 'sans carrière'}
                                                     </span>
+                                                )}
+                                            </div>
+                                            <div className="w-full sm:w-44">
+                                                {canEdit ? (
+                                                    <input
+                                                        type="text"
+                                                        value={r.note}
+                                                        onChange={(e) => setRow(r.driver_id, { note: e.target.value })}
+                                                        placeholder="Note (ex: n'a pas pu changer)"
+                                                        maxLength={200}
+                                                        className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition"
+                                                    />
+                                                ) : (
+                                                    r.note ? <span className="text-xs text-[var(--color-text-muted)] block truncate">{r.note}</span> : null
                                                 )}
                                             </div>
                                         </div>
