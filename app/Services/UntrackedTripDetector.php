@@ -23,7 +23,10 @@ use Illuminate\Support\Facades\DB;
  */
 class UntrackedTripDetector
 {
-    public function __construct(private TheftIncidentService $incidents) {}
+    public function __construct(
+        private TheftIncidentService $incidents,
+        private FreightLoopService $loops,
+    ) {}
 
     /**
      * Scan trip segments ended within the look-back window and flag any
@@ -74,7 +77,7 @@ class UntrackedTripDetector
             $b = $segments[$i + 1];
             $c = $segments[$i + 2];
 
-            if (! $this->matchesFreightLoop($a, $b, $c)) {
+            if (! $this->loops->matchesFreightLoop($a, $b, $c)) {
                 continue;
             }
 
@@ -91,20 +94,6 @@ class UntrackedTripDetector
         }
 
         return $opened;
-    }
-
-    private function matchesFreightLoop(TripSegment $a, TripSegment $b, TripSegment $c): bool
-    {
-        if (! $a->originPlace || ! $a->destinationPlace) return false;
-        if (! $b->originPlace || ! $b->destinationPlace) return false;
-        if (! $c->originPlace || ! $c->destinationPlace) return false;
-
-        return $a->originPlace->type === Place::TYPE_PARKING
-            && $a->destinationPlace->type === Place::TYPE_PROVIDER_SITE
-            && $b->originPlace->id === $a->destinationPlace->id
-            && $b->destinationPlace->type === Place::TYPE_CLIENT_SITE
-            && $c->originPlace->id === $b->destinationPlace->id
-            && $c->destinationPlace->type === Place::TYPE_PARKING;
     }
 
     private function openIncident(?Truck $truck, TripSegment $a, TripSegment $b, TripSegment $c): TheftIncident
