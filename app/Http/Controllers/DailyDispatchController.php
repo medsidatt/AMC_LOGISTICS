@@ -59,6 +59,7 @@ class DailyDispatchController extends Controller
                         ? mb_substr($dispatch->notification_error, 0, 120)
                         : null,
                     'current_status' => $dispatch?->current_status,
+                    'note' => $dispatch?->notes,
                     'truck' => $truckId ? ($trucks->get($truckId)->matricule ?? null) : null,
                     'done_today' => $ach['done'] ?? 0,
                     'ticket_manquant' => $ach['missing'] ?? false,
@@ -105,6 +106,7 @@ class DailyDispatchController extends Controller
             'dispatches.*.driver_id' => 'required|exists:drivers,id',
             'dispatches.*.dispatched' => 'required|boolean',
             'dispatches.*.wish_provider_id' => 'nullable|exists:providers,id',
+            'dispatches.*.note' => 'nullable|string|max:200',
         ]);
 
         $date = Carbon::parse($data['date'])->toDateString();
@@ -113,6 +115,11 @@ class DailyDispatchController extends Controller
         $removed = 0;
         $updated = 0;
         $toNotify = [];
+
+        // Each driver is linked to a truck — record it on the dispatch so the
+        // plan (and the copyable program message) is expressed in trucks.
+        $driverTrucks = Driver::whereIn('id', collect($data['dispatches'])->pluck('driver_id'))
+            ->pluck('current_truck_id', 'id');
 
         // Don't notify on past dates — those rows are read-only in the UI but
         // a stale POST could still bypass that.
@@ -132,17 +139,21 @@ class DailyDispatchController extends Controller
             }
 
             $incomingWish = $row['wish_provider_id'] ?? null;
+            $note = $row['note'] ?? null;
+            $truckId = $driverTrucks[$row['driver_id']] ?? null;
 
             if ($existing) {
-                // wish_provider_id may change between saves — it isn't part
-                // of the WhatsApp message so we don't re-notify on change.
-                $existing->update(['wish_provider_id' => $incomingWish]);
+                // wish_provider_id / note / truck may change between saves — none
+                // are part of the WhatsApp message, so we don't re-notify.
+                $existing->update(['wish_provider_id' => $incomingWish, 'notes' => $note, 'truck_id' => $truckId]);
                 $updated++;
             } else {
                 $created = DailyDispatch::create([
                     'driver_id' => $row['driver_id'],
                     'dispatch_date' => $date,
                     'wish_provider_id' => $incomingWish,
+                    'truck_id' => $truckId,
+                    'notes' => $note,
                     'created_by' => $userId,
                     'notification_status' => DailyDispatch::STATUS_PENDING,
                 ]);
