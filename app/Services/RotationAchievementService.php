@@ -212,7 +212,7 @@ class RotationAchievementService
 
     private function projection(Carbon $start, Carbon $end, int $doneRot, float $doneTons, int $targetRot, float $targetTons): array
     {
-        $daysTotal = $start->diffInDays($end) + 1;
+        $daysTotal = (int) $start->copy()->startOfDay()->diffInDays($end->copy()->startOfDay()) + 1;
         $today = Carbon::now();
 
         if ($today->lt($start)) {
@@ -220,7 +220,7 @@ class RotationAchievementService
         } elseif ($today->gt($end)) {
             $daysElapsed = $daysTotal;
         } else {
-            $daysElapsed = $start->diffInDays($today) + 1;
+            $daysElapsed = (int) $start->copy()->startOfDay()->diffInDays($today->copy()->startOfDay()) + 1;
         }
 
         $paceRot = $daysElapsed > 0 ? $doneRot / $daysElapsed : 0.0;
