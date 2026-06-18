@@ -166,8 +166,8 @@ class TrackingDashboardController extends Controller
             ->appends($req->query());
 
         // Filter lists
-        $drivers   = Driver::orderBy('name')->get();
-        $trucks    = Truck::orderBy('matricule')->get();
+        $drivers   = Driver::orderBy('name')->get(['id', 'name']);
+        $trucks    = Truck::orderBy('matricule')->get(['id', 'matricule']);
         $providers = Provider::orderBy('name')->get();
 
         // ── Fleeti Fleet Data ──

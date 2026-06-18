@@ -7,10 +7,7 @@ import Badge from '@/components/ui/Badge';
 import FormInput from '@/components/ui/FormInput';
 import FormTextarea from '@/components/ui/FormTextarea';
 import { usePermission } from '@/hooks/usePermission';
-import {
-    Truck as TruckIcon, BedDouble, Target, Activity,
-    Sparkles, Check, AlertTriangle, Calendar,
-} from 'lucide-react';
+import { BedDouble, Check, AlertTriangle, Calendar, Sparkles, History } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface TruckRow {
@@ -39,16 +36,8 @@ interface Props {
     currently_rested_truck_ids: number[];
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-2 mb-1">
-            {children}
-        </div>
-    );
-}
-
 export default function FleetRosterIndex({
-    period, objective, trucks, total_capacity_t, min_trucks_needed, avg_capacity_per_truck_t, currently_rested_truck_ids,
+    period, objective, trucks, min_trucks_needed, currently_rested_truck_ids,
 }: Props) {
     const { can } = usePermission();
     const canEdit = can('fleet-roster-plan');
@@ -67,7 +56,36 @@ export default function FleetRosterIndex({
         }, { preserveState: false });
     };
 
+    // Quick period presets (local-date safe).
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const mondayOf = (base: Date) => {
+        const d = new Date(base);
+        d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return d;
+    };
+    const weekRange = (offsetWeeks: number): [string, string] => {
+        const mon = mondayOf(new Date());
+        mon.setDate(mon.getDate() + offsetWeeks * 7);
+        const sat = new Date(mon);
+        sat.setDate(mon.getDate() + 5);
+        return [ymd(mon), ymd(sat)];
+    };
+    const monthRange = (): [string, string] => {
+        const n = new Date();
+        return [ymd(new Date(n.getFullYear(), n.getMonth(), 1)), ymd(new Date(n.getFullYear(), n.getMonth() + 1, 0))];
+    };
+    const presets: { label: string; range: () => [string, string] }[] = [
+        { label: 'Cette semaine', range: () => weekRange(0) },
+        { label: 'Semaine prochaine', range: () => weekRange(1) },
+        { label: 'Ce mois-ci', range: monthRange },
+    ];
+    const isActivePreset = (range: () => [string, string]) => {
+        const [s, e] = range();
+        return start === s && end === e;
+    };
+
     const toggle = (id: number) => {
+        if (!canEdit) return;
         setRested((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
@@ -77,26 +95,25 @@ export default function FleetRosterIndex({
     };
 
     const autoSuggest = () => {
-        // Keep the top N performers (highest period_capacity), rest the others.
-        // Sort by empirical_weekly_capacity (real productivity), fallback to target.
+        // Keep the most productive trucks in service, rest the rest.
         const sorted = [...trucks].sort((a, b) => {
             const ea = a.empirical_weekly_capacity_t > 0 ? a.empirical_weekly_capacity_t : a.target_weekly_capacity_t;
             const eb = b.empirical_weekly_capacity_t > 0 ? b.empirical_weekly_capacity_t : b.target_weekly_capacity_t;
             return eb - ea;
         });
         const workingSet = new Set(sorted.slice(0, min_trucks_needed).map((t) => t.id));
-        const restedSet = new Set(trucks.filter((t) => !workingSet.has(t.id)).map((t) => t.id));
-        setRested(restedSet);
+        setRested(new Set(trucks.filter((t) => !workingSet.has(t.id)).map((t) => t.id)));
     };
 
     const restAll = () => setRested(new Set(trucks.map((t) => t.id)));
     const restNone = () => setRested(new Set());
 
+    // Internal capacity check — drives the covered/insufficient status only.
+    // No raw tonnage figures are shown to the user.
     const workingTrucks = trucks.filter((t) => !rested.has(t.id));
     const workingCapacity = workingTrucks.reduce((s, t) => s + t.period_capacity_t, 0);
     const target = Number(targetTons) || 0;
-    const coverage = target > 0 ? Math.min(100, (workingCapacity / target) * 100) : 0;
-    const isCovered = workingCapacity >= target;
+    const isCovered = target <= 0 || workingCapacity >= target;
 
     const save = () => {
         setSaving(true);
@@ -105,6 +122,7 @@ export default function FleetRosterIndex({
             end_date: end,
             rested_truck_ids: [...rested],
             notes,
+            target_tons: target,
         }, { onFinish: () => setSaving(false) });
     };
 
@@ -116,199 +134,141 @@ export default function FleetRosterIndex({
     return (
         <AuthenticatedLayout>
             <Head title="Planning de la flotte" />
-            <div className="space-y-4">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <BedDouble size={22} className="text-emerald-500" />
-                    <h1 className="text-xl font-semibold">Planning de la flotte</h1>
+            <div className="space-y-5">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <BedDouble size={22} className="text-emerald-500" />
+                            <h1 className="text-xl font-semibold">Planning de la flotte</h1>
+                        </div>
+                        <p className="text-sm text-[var(--color-text-muted)] mt-1">
+                            Sélectionnez les camions en service pour la période. Les autres seront mis au repos.
+                        </p>
+                    </div>
+                    <Button variant="secondary" onClick={() => router.visit('/logistics/fleet-roster/history')}>
+                        <History size={14} className="mr-1" /> Historique des objectifs
+                    </Button>
                 </div>
 
+                {/* Période et objectif */}
                 <Card>
-                    <div className="text-sm text-[var(--color-text-muted)]">
-                        Choisis une période et l'objectif tonnage. L'application calcule combien de camions sont nécessaires
-                        au minimum, propose ceux à garder en service et programme automatiquement un repos pour les autres.
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {presets.map((p) => {
+                            const active = isActivePreset(p.range);
+                            return (
+                                <button
+                                    key={p.label}
+                                    type="button"
+                                    onClick={() => { const [s, e] = p.range(); goto(s, e); }}
+                                    className={clsx(
+                                        'px-3 py-1.5 rounded-full text-xs font-medium border transition',
+                                        active
+                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                                            : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]',
+                                    )}
+                                >
+                                    {p.label}
+                                </button>
+                            );
+                        })}
                     </div>
-                </Card>
-
-                {/* Period + objective */}
-                <SectionLabel>Période et objectif</SectionLabel>
-                <Card>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                        <FormInput
-                            label="Date début"
-                            type="date"
-                            value={start}
-                            onChange={(e) => setStart(e.target.value)}
-                            wrapperClass="mb-0"
-                        />
-                        <FormInput
-                            label="Date fin"
-                            type="date"
-                            value={end}
-                            onChange={(e) => setEnd(e.target.value)}
-                            wrapperClass="mb-0"
-                        />
-                        <FormInput
-                            label="Objectif tonnage (t)"
-                            type="number"
-                            step="0.1"
-                            value={targetTons}
-                            onChange={(e) => setTargetTons(e.target.value)}
-                            wrapperClass="mb-0"
-                        />
+                        <FormInput label="Date début" type="date" value={start} onChange={(e) => setStart(e.target.value)} wrapperClass="mb-0" />
+                        <FormInput label="Date fin" type="date" value={end} onChange={(e) => setEnd(e.target.value)} wrapperClass="mb-0" />
+                        <FormInput label="Objectif tonnage (t)" type="number" step="0.1" value={targetTons} onChange={(e) => setTargetTons(e.target.value)} wrapperClass="mb-0" />
                         <Button variant="secondary" onClick={() => goto(start, end, targetTons)}>
-                            <Calendar size={14} className="mr-1" /> Appliquer la période
+                            <Calendar size={14} className="mr-1" /> Appliquer
                         </Button>
                     </div>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                        Cible par défaut sur la période : <strong>{objective.default_target_tons.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t</strong> ({objective.weekly_target_tons.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t/semaine × {period.weeks} semaines).
-                        Tu peux la modifier ci-dessus.
-                    </p>
                 </Card>
 
                 {periodChanged && (
                     <div className="rounded-xl border border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10 p-3 text-sm text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                        <AlertTriangle size={14} /> Période modifiée — clique "Appliquer la période" pour recalculer les capacités.
+                        <AlertTriangle size={14} /> Période modifiée — cliquez « Appliquer » pour rafraîchir.
                     </div>
                 )}
 
-                {/* Math summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><Target size={18} /></div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase text-[var(--color-text-muted)]">Objectif période</div>
-                                <div className="text-2xl font-bold leading-tight">{target.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}<span className="text-sm font-normal ml-1">t</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">{period.days} jours</div>
-                            </div>
+                {/* Status — result only, no figures */}
+                {target > 0 && (
+                    <div className={clsx(
+                        'rounded-xl border p-4 flex items-center justify-between flex-wrap gap-3',
+                        isCovered
+                            ? 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/10'
+                            : 'border-red-300 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10',
+                    )}>
+                        <div className="flex items-center gap-2">
+                            {isCovered
+                                ? <Check size={18} className="text-emerald-600 dark:text-emerald-400" />
+                                : <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />}
+                            <span className={clsx('font-semibold', isCovered ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300')}>
+                                {isCovered ? 'Objectif couvert par la sélection' : 'Capacité insuffisante — ajoutez des camions en service'}
+                            </span>
                         </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><TruckIcon size={18} /></div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase text-[var(--color-text-muted)]">Capacité totale flotte</div>
-                                <div className="text-2xl font-bold leading-tight">{total_capacity_t.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}<span className="text-sm font-normal ml-1">t</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">{trucks.length} camions × {avg_capacity_per_truck_t.toFixed(0)} t en moyenne</div>
-                            </div>
+                        <div className="text-sm text-[var(--color-text-secondary)]">
+                            <strong>{workingTrucks.length}</strong> au travail · <strong>{rested.size}</strong> au repos · {trucks.length} camions
                         </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"><Sparkles size={18} /></div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase text-[var(--color-text-muted)]">Camions nécessaires (min)</div>
-                                <div className="text-2xl font-bold leading-tight">{min_trucks_needed}</div>
-                                <div className="text-xs text-[var(--color-text-muted)]">{trucks.length - min_trucks_needed} au repos possible</div>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-lg ${isCovered ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                <Activity size={18} />
-                            </div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase text-[var(--color-text-muted)]">Couverture sélection</div>
-                                <div className="text-2xl font-bold leading-tight">{coverage.toFixed(0)}<span className="text-sm font-normal">%</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">
-                                    {workingCapacity.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} / {target.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
-
-                {!isCovered && target > 0 && (
-                    <div className="rounded-xl border border-red-300 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 p-3 text-sm text-red-800 dark:text-red-300 flex items-center gap-2">
-                        <AlertTriangle size={14} />
-                        Capacité insuffisante : il manque {(target - workingCapacity).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t. Ajoute des camions en service.
                     </div>
                 )}
 
-                {/* Truck checklist */}
-                <SectionLabel>Sélection des camions</SectionLabel>
+                {/* Sélection des camions */}
                 <Card>
-                    <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-                        <div className="flex items-center gap-2 text-sm">
-                            {canEdit && (
-                                <>
-                                    <Button size="sm" variant="secondary" onClick={autoSuggest}>
-                                        <Sparkles size={14} className="mr-1" /> Suggérer ({min_trucks_needed} camions)
-                                    </Button>
-                                    <button type="button" onClick={restNone} className="text-[var(--color-primary)] hover:underline">Tous au travail</button>
-                                    <span className="text-[var(--color-text-muted)]">·</span>
-                                    <button type="button" onClick={restAll} className="text-[var(--color-primary)] hover:underline">Tous au repos</button>
-                                </>
-                            )}
+                    {canEdit && (
+                        <div className="flex items-center gap-2 flex-wrap mb-4">
+                            <Button size="sm" variant="secondary" onClick={autoSuggest}>
+                                <Sparkles size={14} className="mr-1" /> Suggestion automatique
+                            </Button>
+                            <button type="button" onClick={restNone} className="text-sm text-[var(--color-primary)] hover:underline">Tous au travail</button>
+                            <span className="text-[var(--color-text-muted)]">·</span>
+                            <button type="button" onClick={restAll} className="text-sm text-[var(--color-primary)] hover:underline">Tous au repos</button>
                         </div>
-                        <div className="text-sm">
-                            <span className="text-[var(--color-text-muted)]">Au travail : </span>
-                            <strong>{workingTrucks.length}</strong>
-                            <span className="text-[var(--color-text-muted)]"> · Au repos : </span>
-                            <strong>{rested.size}</strong>
-                        </div>
-                    </div>
+                    )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {trucks.map((t) => {
                             const isResting = rested.has(t.id);
                             return (
                                 <button
                                     key={t.id}
                                     type="button"
-                                    onClick={() => canEdit && toggle(t.id)}
+                                    onClick={() => toggle(t.id)}
                                     disabled={!canEdit}
                                     className={clsx(
-                                        'p-3 rounded-xl border-2 text-left transition',
+                                        'flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition',
                                         isResting
-                                            ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10'
-                                            : 'border-emerald-400 bg-emerald-50/40 dark:bg-emerald-900/10',
-                                        !canEdit && 'opacity-70 cursor-not-allowed',
+                                            ? 'border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10'
+                                            : 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10',
+                                        canEdit ? 'hover:shadow-sm' : 'opacity-80 cursor-not-allowed',
                                     )}
                                 >
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                        <div className="font-semibold text-sm">{t.matricule}</div>
-                                        {isResting ? (
-                                            <Badge variant="warning"><BedDouble size={10} className="mr-1" /> Repos</Badge>
-                                        ) : (
-                                            <Badge variant="success"><Check size={10} className="mr-1" /> Travail</Badge>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-[var(--color-text-muted)]">
-                                        {t.target_rotations_per_week} rot/sem × {t.capacity_tonnage.toFixed(0)} t = <strong className="text-[var(--color-text)]">{t.target_weekly_capacity_t.toFixed(0)} t/sem</strong>
-                                    </div>
-                                    <div className="text-xs text-[var(--color-text-muted)]">
-                                        Sur la période : <strong className="text-[var(--color-text)]">{t.period_capacity_t.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t</strong>
-                                        {t.empirical_weekly_capacity_t > 0 && (
-                                            <span> · Réel ~ {(t.empirical_weekly_capacity_t * period.weeks).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} t</span>
-                                        )}
-                                    </div>
+                                    <span className="font-semibold text-sm truncate">{t.matricule}</span>
+                                    {isResting ? (
+                                        <Badge variant="warning"><BedDouble size={10} className="mr-1" /> Repos</Badge>
+                                    ) : (
+                                        <Badge variant="success"><Check size={10} className="mr-1" /> Travail</Badge>
+                                    )}
                                 </button>
                             );
                         })}
                     </div>
                 </Card>
 
-                {/* Notes + save */}
+                {/* Note + enregistrement */}
                 {canEdit && (
                     <Card>
                         <FormTextarea
-                            label="Note (optionnel) — ajoutée à chaque fenêtre de repos créée"
+                            label="Note (optionnel)"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={2}
                             maxLength={500}
+                            wrapperClass="mb-0"
                         />
-                        <div className="flex justify-end gap-2 mt-3">
-                            <Button onClick={save} loading={saving} disabled={target > 0 && !isCovered}>
+                        <div className="flex justify-end mt-3">
+                            <Button onClick={save} loading={saving} disabled={!isCovered}>
                                 <BedDouble size={14} className="mr-1" />
                                 Programmer le repos de {rested.size} camion{rested.size > 1 ? 's' : ''}
                             </Button>
                         </div>
-                        <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                            Les fenêtres de repos précédentes pour la même période (source : capacité excédentaire) seront remplacées par cette sélection.
-                        </p>
                     </Card>
                 )}
             </div>

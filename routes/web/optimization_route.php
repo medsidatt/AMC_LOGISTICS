@@ -33,6 +33,7 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
 
     Route::group(['prefix' => 'fleet-roster', 'as' => 'logistics.fleet-roster.'], function () {
         Route::get('/', [\App\Http\Controllers\FleetRosterController::class, 'index'])->name('index');
+        Route::get('/history', [\App\Http\Controllers\FleetRosterController::class, 'history'])->name('history');
         Route::post('/', [\App\Http\Controllers\FleetRosterController::class, 'store'])->name('store');
     });
 

@@ -138,7 +138,7 @@ const mainSections: NavSection[] = [
     {
         header: 'Sécurité',
         items: [
-            {label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18}/>, match: '/logistics/fleet-map', role: ['Admin', 'Super Admin']},
+            {label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18}/>, match: '/logistics/fleet-map', permission: 'fleet-map-view'},
             {label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18}/>, match: '/logistics/theft-incidents', permission: 'logistics-dashboard'},
             {label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18}/>, match: '/logistics/places', permission: 'logistics-dashboard'},
         ],
@@ -149,8 +149,8 @@ const mainSections: NavSection[] = [
             {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
             {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
-            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', role: ['Admin', 'Super Admin']},
-            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', role: ['Admin', 'Super Admin']},
+            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
+            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', permission: 'fuel-import'},
             {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],
     },

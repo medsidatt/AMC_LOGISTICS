@@ -11,19 +11,30 @@ interface Permission {
     name: string;
 }
 
-interface Props {
-    role: { id: number; name: string; guard_name: string; permissions: Permission[] };
+interface PermissionMeta {
+    groups: Record<string, string[]>;
+    labels: Record<string, string>;
 }
 
-export default function RolesShow({ role }: Props) {
+interface Props {
+    role: { id: number; name: string; guard_name: string; permissions: Permission[] };
+    permissionMeta: PermissionMeta;
+}
+
+export default function RolesShow({ role, permissionMeta }: Props) {
     const grouped = useMemo(() => {
-        const groups: Record<string, Permission[]> = {};
-        role.permissions.forEach((p) => {
-            const prefix = p.name.split('-')[0] ?? 'other';
-            (groups[prefix] ??= []).push(p);
-        });
-        return groups;
-    }, [role.permissions]);
+        const have = new Set(role.permissions.map((p) => p.name));
+        const out: { label: string; names: string[] }[] = [];
+        const seen = new Set<string>();
+        for (const [label, codes] of Object.entries(permissionMeta.groups)) {
+            const names = codes.filter((c) => have.has(c));
+            names.forEach((n) => seen.add(n));
+            if (names.length) out.push({ label, names });
+        }
+        const rest = role.permissions.filter((p) => !seen.has(p.name)).map((p) => p.name);
+        if (rest.length) out.push({ label: 'Autres', names: rest });
+        return out;
+    }, [role.permissions, permissionMeta.groups]);
 
     return (
         <AuthenticatedLayout title={role.name}>
@@ -50,11 +61,11 @@ export default function RolesShow({ role }: Props) {
             <Card>
                 <h4 className="font-semibold text-[var(--color-text)] mb-4">Permissions</h4>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(grouped).map(([group, perms]) => (
-                        <div key={group} className="rounded-lg border border-[var(--color-border)] p-3">
-                            <p className="text-sm font-semibold text-[var(--color-text)] capitalize mb-2">{group}</p>
+                    {grouped.map((group) => (
+                        <div key={group.label} className="rounded-lg border border-[var(--color-border)] p-3">
+                            <p className="text-sm font-semibold text-[var(--color-text)] mb-2">{group.label}</p>
                             <div className="flex flex-wrap gap-1">
-                                {perms.map((p) => <Badge key={p.id} variant="muted">{p.name.split('-').slice(1).join('-')}</Badge>)}
+                                {group.names.map((name) => <Badge key={name} variant="muted">{permissionMeta.labels[name] ?? name}</Badge>)}
                             </div>
                         </div>
                     ))}

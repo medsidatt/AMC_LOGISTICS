@@ -76,20 +76,14 @@ class DriverController extends Controller
 
     private function resolveAssignedTruck(Driver $driver): ?Truck
     {
-        $latestTracking = TransportTracking::query()
-            ->where('driver_id', $driver->id)
-            ->whereNotNull('truck_id')
-            ->orderByDesc('client_date')
-            ->orderByDesc('provider_date')
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $latestTracking) {
+        // A driver's truck is the explicit assignment only (fast, indexed FK).
+        // Unassigned drivers have no truck — we do NOT scan trackings.
+        if (! $driver->current_truck_id) {
             return null;
         }
 
         return Truck::query()
-            ->where('id', $latestTracking->truck_id)
+            ->where('id', $driver->current_truck_id)
             ->where('is_active', true)
             ->first();
     }
@@ -110,6 +104,7 @@ class DriverController extends Controller
                 'phone' => $driver->phone,
                 'address' => $driver->address,
                 'is_active' => (bool) $driver->is_active,
+                'current_truck_id' => $driver->current_truck_id,
                 'created_at' => $driver->created_at?->format('d/m/Y'),
             ]);
 
@@ -121,6 +116,7 @@ class DriverController extends Controller
         return Inertia::render('drivers/Index', [
             'drivers' => $drivers,
             'totals' => $totals,
+            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule']),
         ]);
     }
 
@@ -144,6 +140,7 @@ class DriverController extends Controller
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
             'whatsapp_opt_in' => 'nullable|boolean',
+            'current_truck_id' => 'nullable|integer|exists:trucks,id',
         ]);
 
         Driver::firstOrCreate([
@@ -153,6 +150,7 @@ class DriverController extends Controller
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : true,
             'whatsapp_opt_in_at' => $request->boolean('whatsapp_opt_in') ? now() : null,
+            'current_truck_id' => $request->current_truck_id ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur créé avec succès.');
@@ -211,7 +209,7 @@ class DriverController extends Controller
         $driver = $this->resolveLinkedDriver();
         if (!$driver) {
             return redirect()->route('home')
-                ->with('error', __('Aucun conducteur lie a ce compte utilisateur.'));
+                ->with('error', __('Aucun conducteur lié à ce compte utilisateur.'));
         }
 
         $trips = TransportTracking::with(['truck', 'provider'])
@@ -252,7 +250,7 @@ class DriverController extends Controller
         $driver = $this->resolveLinkedDriver();
         if (!$driver) {
             return redirect()->route('home')
-                ->with('error', __('Aucun conducteur lie a ce compte utilisateur.'));
+                ->with('error', __('Aucun conducteur lié à ce compte utilisateur.'));
         }
 
         $truck = $this->resolveAssignedTruck($driver);
@@ -314,7 +312,7 @@ class DriverController extends Controller
         if (! $driver) {
             return redirect()
                 ->back()
-                ->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+                ->with('error', 'Aucun conducteur lié à ce compte utilisateur.');
         }
 
         $truck = $this->resolveAssignedTruck($driver);
@@ -407,7 +405,7 @@ class DriverController extends Controller
         $driver = $this->resolveLinkedDriver();
         if (! $driver) {
             return redirect()->back()->withInput()
-                ->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+                ->with('error', 'Aucun conducteur lié à ce compte utilisateur.');
         }
 
         $truck = $this->resolveAssignedTruck($driver);
@@ -509,7 +507,7 @@ class DriverController extends Controller
 
         $driver = $this->resolveLinkedDriver();
         if (! $driver) {
-            return redirect()->back()->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+            return redirect()->back()->with('error', 'Aucun conducteur lié à ce compte utilisateur.');
         }
 
         $truck = $this->resolveAssignedTruck($driver);
@@ -572,7 +570,7 @@ class DriverController extends Controller
 
         $driver = $this->resolveLinkedDriver();
         if (! $driver) {
-            return redirect()->back()->withInput()->with('error', 'Aucun conducteur lie a ce compte utilisateur.');
+            return redirect()->back()->withInput()->with('error', 'Aucun conducteur lié à ce compte utilisateur.');
         }
 
         $truck = $this->resolveAssignedTruck($driver);
@@ -620,19 +618,12 @@ class DriverController extends Controller
         $partsMap = $data['parts_cost'] ?? [];
         $laborMap = $data['labor_cost'] ?? [];
 
-        // Every flagged category must carry a status (severity) and a cost.
+        // Every flagged category must carry a status (severity). Cost is NOT
+        // required from drivers — managers record it later during review.
         foreach ($data['flagged'] as $category) {
             if (empty($severityMap[$category])) {
                 throw ValidationException::withMessages([
                     "severity.$category" => 'Veuillez sélectionner une gravité pour chaque catégorie cochée.',
-                ]);
-            }
-
-            $catParts = isset($partsMap[$category]) && $partsMap[$category] !== '' ? (float) $partsMap[$category] : 0;
-            $catLabor = isset($laborMap[$category]) && $laborMap[$category] !== '' ? (float) $laborMap[$category] : 0;
-            if ($catParts + $catLabor <= 0) {
-                throw ValidationException::withMessages([
-                    "parts_cost.$category" => 'Veuillez renseigner le coût (pièces ou main d\'œuvre) pour chaque catégorie cochée.',
                 ]);
             }
         }
@@ -696,15 +687,19 @@ class DriverController extends Controller
             // Alert the logistics responsible that a driver reported issue(s).
             $count = count($data['flagged']);
             $message = sprintf(
-                '%d problème%s signalé%s par %s sur le camion %s : %s. Coût estimé : %s FCFA.',
+                '%d problème%s signalé%s par %s sur le camion %s : %s.',
                 $count,
                 $count > 1 ? 's' : '',
                 $count > 1 ? 's' : '',
                 $driver->name,
                 $truck->matricule,
-                implode(', ', $reportedLabels),
-                number_format($grandTotal, 0, ',', ' ')
+                implode(', ', $reportedLabels)
             );
+
+            // Only mention a cost when one was actually recorded.
+            if ($grandTotal > 0) {
+                $message .= sprintf(' Coût estimé : %s FCFA.', number_format($grandTotal, 0, ',', ' '));
+            }
 
             LogisticsAlert::updateOrCreate(
                 [
@@ -836,6 +831,7 @@ class DriverController extends Controller
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
             'whatsapp_opt_in' => 'nullable|boolean',
+            'current_truck_id' => 'nullable|integer|exists:trucks,id',
         ]);
 
         // Only flip the opt-in timestamp on transitions: false→true sets now(),
@@ -855,6 +851,7 @@ class DriverController extends Controller
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : (bool) $driver->is_active,
             'whatsapp_opt_in_at' => $optInValue,
+            'current_truck_id' => $request->current_truck_id ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur mis à jour avec succès.');

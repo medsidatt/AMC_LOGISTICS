@@ -80,6 +80,7 @@ class UserController extends Controller
             'users' => $users,
             'roles' => $roles,
             'allPermissions' => $allPermissions,
+            'permissionMeta' => config('permissions_meta'),
         ]);
     }
 
