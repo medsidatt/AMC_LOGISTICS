@@ -41,4 +41,10 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
     Route::group(['prefix' => 'objective-history', 'as' => 'logistics.objective-history.'], function () {
         Route::get('/', [ObjectiveHistoryController::class, 'index'])->name('index');
     });
+
+    Route::group(['prefix' => 'affectations', 'as' => 'logistics.affectations.'], function () {
+        Route::get('/', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'index'])->name('index');
+        Route::post('/assign', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'assign'])->name('assign');
+        Route::post('/release', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'release'])->name('release');
+    });
 });

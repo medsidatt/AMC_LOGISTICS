@@ -69,4 +69,6 @@ return [
     'fleet-map-view',
     'driver-discipline-view',
     'driver-discipline-manage',
+
+    'driver-truck-assign',
 ];

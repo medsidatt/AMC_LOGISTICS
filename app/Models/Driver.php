@@ -65,10 +65,21 @@ class Driver extends Model
 
     /**
      * The truck this driver is currently assigned to ("camion assigné").
+     * Synced cache of the active TruckDriverAssignment (see TruckDriverAssignmentService).
      */
     public function currentTruck(): BelongsTo
     {
         return $this->belongsTo(Truck::class, 'current_truck_id');
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(TruckDriverAssignment::class);
+    }
+
+    public function activeAssignment()
+    {
+        return $this->hasOne(TruckDriverAssignment::class)->whereNull('ended_at');
     }
 
     public function transportTrackings(): HasMany
