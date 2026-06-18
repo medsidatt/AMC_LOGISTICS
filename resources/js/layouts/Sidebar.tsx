@@ -123,7 +123,6 @@ const mainSections: NavSection[] = [
         header: 'Inspections',
         items: [
             {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections', permission: 'inspection-list'},
-            {label: 'Nouvelle inspection', href: '/logistics/inspections/create', icon: <ClipboardCheck size={18}/>, permission: 'inspection-create'},
             {label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18}/>, match: '/logistics/validation/checklists', permission: 'weekly-checklist-validate'},
         ],
     },
@@ -134,6 +133,7 @@ const mainSections: NavSection[] = [
             {label: 'Suivi hebdomadaire', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
             {label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18}/>, match: '/logistics/fleet-roster', permission: 'fleet-roster-plan'},
             {label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
+            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
         ],
     },
     {
@@ -150,7 +150,6 @@ const mainSections: NavSection[] = [
             {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
             {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
-            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
             {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', permission: 'fuel-import'},
             {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],
