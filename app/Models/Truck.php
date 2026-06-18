@@ -61,6 +61,16 @@ class Truck extends Model
         return $this->hasMany(Driver::class, 'current_truck_id');
     }
 
+    public function driverAssignments(): HasMany
+    {
+        return $this->hasMany(TruckDriverAssignment::class);
+    }
+
+    public function activeAssignments(): HasMany
+    {
+        return $this->hasMany(TruckDriverAssignment::class)->whereNull('ended_at');
+    }
+
     public function kilometerTrackings(): HasMany
     {
         return $this->hasMany(KilometerTracking::class);
