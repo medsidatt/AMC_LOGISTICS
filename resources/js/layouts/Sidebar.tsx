@@ -131,6 +131,7 @@ const mainSections: NavSection[] = [
         header: 'Planification',
         items: [
             {label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
+            {label: 'Suivi hebdomadaire', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
             {label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18}/>, match: '/logistics/fleet-roster', permission: 'fleet-roster-plan'},
             {label: 'Historique objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
         ],
