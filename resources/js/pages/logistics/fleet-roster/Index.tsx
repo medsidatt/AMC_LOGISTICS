@@ -7,7 +7,9 @@ import Badge from '@/components/ui/Badge';
 import FormInput from '@/components/ui/FormInput';
 import FormTextarea from '@/components/ui/FormTextarea';
 import { usePermission } from '@/hooks/usePermission';
-import { BedDouble, Check, AlertTriangle, Calendar, Sparkles, History } from 'lucide-react';
+import AchievementSummary from '@/components/logistics/AchievementSummary';
+import type { Achievement } from '@/types/achievement';
+import { BedDouble, Check, AlertTriangle, Calendar, Sparkles, History, Trophy } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface TruckRow {
@@ -34,10 +36,13 @@ interface Props {
     min_trucks_needed: number;
     avg_capacity_per_truck_t: number;
     currently_rested_truck_ids: number[];
+    achievement: Achievement;
 }
 
+const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
+
 export default function FleetRosterIndex({
-    period, objective, trucks, min_trucks_needed, currently_rested_truck_ids,
+    period, objective, trucks, min_trucks_needed, currently_rested_truck_ids, achievement,
 }: Props) {
     const { can } = usePermission();
     const canEdit = can('fleet-roster-plan');
@@ -217,6 +222,47 @@ export default function FleetRosterIndex({
                             <strong>{workingTrucks.length}</strong> au travail · <strong>{rested.size}</strong> au repos · {trucks.length} camions
                         </div>
                     </div>
+                )}
+
+                {/* Réalisation de l'objectif */}
+                {achievement.has_objective && (
+                    <Card>
+                        <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+                            <h2 className="text-base font-semibold flex items-center gap-2"><Trophy size={18} className="text-[var(--color-primary)]" /> Réalisation de l'objectif</h2>
+                            <a href="/logistics/fleet-roster/history" className="text-sm text-[var(--color-primary)] hover:underline inline-flex items-center gap-1"><History size={14} /> Historique</a>
+                        </div>
+                        <AchievementSummary fleet={achievement.fleet} projection={achievement.projection} gpsAvailable={achievement.gps_available} />
+
+                        {achievement.per_truck.length > 0 && (
+                            <div className="mt-5 overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-[var(--color-surface-hover)] text-[11px] uppercase tracking-wide text-[var(--color-text-secondary)]">
+                                            <th className="px-3 py-2 text-left font-semibold">Camion</th>
+                                            <th className="px-3 py-2 text-right font-semibold">Objectif</th>
+                                            <th className="px-3 py-2 text-right font-semibold">Réalisé</th>
+                                            <th className="px-3 py-2 text-right font-semibold">Restant</th>
+                                            <th className="px-3 py-2 text-right font-semibold">%</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[var(--color-border)]">
+                                        {achievement.per_truck.map((t) => (
+                                            <tr key={t.truck_id}>
+                                                <td className="px-3 py-2 font-medium">{t.matricule}</td>
+                                                <td className="px-3 py-2 text-right font-mono">{fmt(t.target_rotations)} rot</td>
+                                                <td className="px-3 py-2 text-right font-mono">
+                                                    {fmt(t.done_rotations)} rot
+                                                    {t.missing_tickets > 0 && <Badge variant="warning" className="ml-1">{t.missing_tickets} ticket manquant</Badge>}
+                                                </td>
+                                                <td className="px-3 py-2 text-right font-mono">{fmt(t.remaining_rotations)} rot</td>
+                                                <td className="px-3 py-2 text-right font-mono font-semibold">{t.pct ?? '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </Card>
                 )}
 
                 {/* Sélection des camions */}
