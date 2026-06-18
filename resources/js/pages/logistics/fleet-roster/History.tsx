@@ -2,7 +2,9 @@ import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import { ArrowLeft, Target, History as HistoryIcon } from 'lucide-react';
+import Badge from '@/components/ui/Badge';
+import ObjectiveTrendChart from '@/components/charts/ObjectiveTrendChart';
+import { ArrowLeft, Target, History as HistoryIcon, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface Objective {
@@ -13,6 +15,9 @@ interface Objective {
     target_rotations: number;
     achieved_tons: number;
     achieved_rotations: number;
+    ticketed_rotations: number;
+    gps_only_rotations: number;
+    missing_tickets: number;
     remaining_tons: number;
     remaining_rotations: number;
     pct: number | null;
@@ -22,13 +27,16 @@ interface Objective {
     created_by: string | null;
 }
 
+interface TrendPoint { label: string; target_tons: number; achieved_tons: number }
+
 interface Props {
     objectives: Objective[];
+    trend: TrendPoint[];
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
 
-export default function FleetObjectiveHistory({ objectives }: Props) {
+export default function FleetObjectiveHistory({ objectives, trend }: Props) {
     return (
         <AuthenticatedLayout>
             <Head title="Historique des objectifs" />
@@ -47,6 +55,17 @@ export default function FleetObjectiveHistory({ objectives }: Props) {
                         <ArrowLeft size={14} className="mr-1" /> Retour au planning
                     </Button>
                 </div>
+
+                {trend.length > 1 && (
+                    <Card>
+                        <h2 className="text-base font-semibold flex items-center gap-2 mb-3"><TrendingUp size={18} className="text-[var(--color-primary)]" /> Tendance hebdomadaire</h2>
+                        <ObjectiveTrendChart
+                            labels={trend.map((t) => t.label)}
+                            target={trend.map((t) => t.target_tons)}
+                            achieved={trend.map((t) => t.achieved_tons)}
+                        />
+                    </Card>
+                )}
 
                 {objectives.length === 0 ? (
                     <Card>
@@ -85,7 +104,8 @@ export default function FleetObjectiveHistory({ objectives }: Props) {
                                                 </td>
                                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                                     <div className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{fmt(o.achieved_tons)} t</div>
-                                                    <div className="text-xs text-[var(--color-text-muted)]">{fmt(o.achieved_rotations)} rot.</div>
+                                                    <div className="text-xs text-[var(--color-text-muted)]">{fmt(o.achieved_rotations)} rot. ({fmt(o.ticketed_rotations)} ticket + {fmt(o.gps_only_rotations)} GPS)</div>
+                                                    {o.missing_tickets > 0 && <Badge variant="warning" className="mt-0.5">{o.missing_tickets} ticket manquant</Badge>}
                                                 </td>
                                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                                     <div className={clsx('font-mono font-semibold', o.remaining_tons > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-text-muted)]')}>

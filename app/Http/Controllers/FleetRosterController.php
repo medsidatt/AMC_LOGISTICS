@@ -8,6 +8,7 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Models\TruckRestWindow;
 use App\Services\FleetCapacityService;
+use App\Services\RotationAchievementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ class FleetRosterController extends Controller
 {
     public function __construct(
         private readonly FleetCapacityService $capacity,
+        private readonly RotationAchievementService $achievement,
     ) {
         $this->middleware('permission:fleet-roster-plan');
     }
@@ -97,6 +99,7 @@ class FleetRosterController extends Controller
             'min_trucks_needed' => $minTrucksNeeded,
             'avg_capacity_per_truck_t' => round($avgPerTruck, 2),
             'currently_rested_truck_ids' => $existingRests,
+            'achievement' => $this->achievement->forPeriod($start, $end),
         ]);
     }
 
@@ -254,17 +257,12 @@ class FleetRosterController extends Controller
         $objectives = FleetObjective::with('creator:id,name')
             ->orderByDesc('start_date')
             ->orderByDesc('id')
-            ->limit(100)
+            ->limit(26)
             ->get();
 
         $rows = $objectives->map(function (FleetObjective $o) {
-            $agg = TransportTracking::query()
-                ->whereBetween('client_date', [$o->start_date->toDateString(), $o->end_date->toDateString()])
-                ->selectRaw('COALESCE(SUM(client_net_weight), 0) as tons, COUNT(*) as rotations')
-                ->first();
-
-            $achievedTons = round((float) ($agg->tons ?? 0), 2);
-            $achievedRotations = (int) ($agg->rotations ?? 0);
+            // Reconciled achievement (ticket + GPS) for the objective period.
+            $a = $this->achievement->forPeriod($o->start_date->copy(), $o->end_date->copy())['fleet'];
             $targetTons = (float) $o->target_tons;
 
             return [
@@ -273,11 +271,14 @@ class FleetRosterController extends Controller
                 'end_date' => $o->end_date->format('d/m/Y'),
                 'target_tons' => $targetTons,
                 'target_rotations' => $o->target_rotations,
-                'achieved_tons' => $achievedTons,
-                'achieved_rotations' => $achievedRotations,
-                'remaining_tons' => round(max(0, $targetTons - $achievedTons), 2),
-                'remaining_rotations' => max(0, $o->target_rotations - $achievedRotations),
-                'pct' => $targetTons > 0 ? min(100, (int) round($achievedTons / $targetTons * 100)) : null,
+                'achieved_tons' => $a['done_tons'],
+                'achieved_rotations' => $a['done_rotations'],
+                'ticketed_rotations' => $a['ticketed_rotations'],
+                'gps_only_rotations' => $a['gps_only_rotations'],
+                'missing_tickets' => $a['missing_tickets'],
+                'remaining_tons' => $a['remaining_tons'],
+                'remaining_rotations' => $a['remaining_rotations'],
+                'pct' => $a['pct'],
                 'working_trucks' => $o->working_trucks,
                 'rested_trucks' => $o->rested_trucks,
                 'notes' => $o->notes,
@@ -285,8 +286,16 @@ class FleetRosterController extends Controller
             ];
         });
 
+        // Chronological trend (oldest → newest) for the chart.
+        $trend = $rows->reverse()->values()->map(fn ($r) => [
+            'label' => $r['start_date'],
+            'target_tons' => $r['target_tons'],
+            'achieved_tons' => $r['achieved_tons'],
+        ]);
+
         return Inertia::render('logistics/fleet-roster/History', [
             'objectives' => $rows,
+            'trend' => $trend,
         ]);
     }
 }
