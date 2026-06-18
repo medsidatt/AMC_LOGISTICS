@@ -116,7 +116,6 @@ class DriverController extends Controller
         return Inertia::render('drivers/Index', [
             'drivers' => $drivers,
             'totals' => $totals,
-            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule']),
         ]);
     }
 
@@ -140,7 +139,6 @@ class DriverController extends Controller
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
             'whatsapp_opt_in' => 'nullable|boolean',
-            'current_truck_id' => 'nullable|integer|exists:trucks,id',
         ]);
 
         Driver::firstOrCreate([
@@ -150,7 +148,6 @@ class DriverController extends Controller
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : true,
             'whatsapp_opt_in_at' => $request->boolean('whatsapp_opt_in') ? now() : null,
-            'current_truck_id' => $request->current_truck_id ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur créé avec succès.');
@@ -831,7 +828,6 @@ class DriverController extends Controller
             'address' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
             'whatsapp_opt_in' => 'nullable|boolean',
-            'current_truck_id' => 'nullable|integer|exists:trucks,id',
         ]);
 
         // Only flip the opt-in timestamp on transitions: false→true sets now(),
@@ -851,7 +847,6 @@ class DriverController extends Controller
             'address' => $request->address,
             'is_active' => $request->has('is_active') ? (bool) $request->boolean('is_active') : (bool) $driver->is_active,
             'whatsapp_opt_in_at' => $optInValue,
-            'current_truck_id' => $request->current_truck_id ?: null,
         ]);
 
         return redirect()->back()->with('success', 'Conducteur mis à jour avec succès.');

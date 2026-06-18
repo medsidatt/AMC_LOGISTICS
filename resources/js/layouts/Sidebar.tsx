@@ -109,6 +109,7 @@ const mainSections: NavSection[] = [
         items: [
             {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>, permission: 'truck-list'},
             {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>, permission: 'driver-list'},
+            {label: 'Affectations', href: '/logistics/affectations', icon: <IdCard size={18}/>, match: '/logistics/affectations', permission: 'driver-truck-assign'},
             {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>, permission: 'transporter-list'},
         ],
     },
