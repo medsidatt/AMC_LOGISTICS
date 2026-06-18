@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\DailyDispatch;
 use App\Models\Driver;
 use App\Models\Provider;
+use App\Models\Truck;
+use App\Services\RotationAchievementService;
 use App\Services\Whatsapp\DispatchNotifier;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -12,9 +14,10 @@ use Inertia\Inertia;
 
 class DailyDispatchController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('permission:daily-dispatch-list', ['only' => ['index']]);
+    public function __construct(
+        private readonly RotationAchievementService $achievement,
+    ) {
+        $this->middleware('permission:daily-dispatch-list', ['only' => ['index', 'weekly']]);
         $this->middleware('permission:daily-dispatch-edit', ['only' => ['store', 'destroy', 'renotify']]);
     }
 
@@ -30,12 +33,18 @@ class DailyDispatchController extends Controller
             ->get()
             ->keyBy('driver_id');
 
+        // Done-today per truck (ticket + GPS) for the achievement column.
+        $dayAchievement = $this->achievement->forDay($date)['by_truck'];
+        $trucks = Truck::where('is_active', true)->get(['id', 'matricule'])->keyBy('id');
+
         $drivers = Driver::query()
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name', 'phone', 'whatsapp_opt_in_at'])
-            ->map(function (Driver $d) use ($dispatchedByDriver) {
+            ->get(['id', 'name', 'phone', 'whatsapp_opt_in_at', 'current_truck_id'])
+            ->map(function (Driver $d) use ($dispatchedByDriver, $dayAchievement, $trucks) {
                 $dispatch = $dispatchedByDriver->get($d->id);
+                $truckId = $dispatch?->truck_id ?? $d->current_truck_id;
+                $ach = $truckId ? ($dayAchievement[$truckId] ?? null) : null;
                 return [
                     'id' => $d->id,
                     'name' => $d->name,
@@ -49,6 +58,10 @@ class DailyDispatchController extends Controller
                     'notification_error' => $dispatch?->notification_error
                         ? mb_substr($dispatch->notification_error, 0, 120)
                         : null,
+                    'current_status' => $dispatch?->current_status,
+                    'truck' => $truckId ? ($trucks->get($truckId)->matricule ?? null) : null,
+                    'done_today' => $ach['done'] ?? 0,
+                    'ticket_manquant' => $ach['missing'] ?? false,
                 ];
             })
             ->values();
@@ -60,6 +73,23 @@ class DailyDispatchController extends Controller
             'drivers' => $drivers,
             'providers' => Provider::query()->orderBy('name')->get(['id', 'name']),
             'dispatchedCount' => $dispatchedByDriver->count(),
+        ]);
+    }
+
+    /**
+     * Weekly rotation scoreboard (Mon→Sat): planned vs done per truck + the
+     * fleet roll-up, reusing the reconciled achievement engine.
+     */
+    public function weekly(Request $request)
+    {
+        $start = $request->query('start')
+            ? Carbon::parse($request->query('start'))->startOfWeek(Carbon::MONDAY)
+            : Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $end = $start->copy()->addDays(5);
+
+        return Inertia::render('logistics/planning/Weekly', [
+            'period' => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
+            'achievement' => $this->achievement->forPeriod($start, $end->copy()->endOfDay()),
         ]);
     }
 

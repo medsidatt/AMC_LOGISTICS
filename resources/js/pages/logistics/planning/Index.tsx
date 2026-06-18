@@ -26,6 +26,10 @@ interface DriverRow {
     notified_at: string | null;
     notification_status: NotificationStatus;
     notification_error: string | null;
+    current_status: string | null;
+    truck: string | null;
+    done_today: number;
+    ticket_manquant: boolean;
 }
 
 interface ProviderOpt { id: number; name: string }
@@ -240,9 +244,14 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
         <AuthenticatedLayout>
             <Head title="Programmation rotations" />
             <div className="space-y-4 pb-20">
-                <div className="flex items-center gap-2 flex-wrap">
-                    <Users size={22} className="text-emerald-500" />
-                    <h1 className="text-xl font-semibold">Programmation des rotations</h1>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                        <Users size={22} className="text-emerald-500" />
+                        <h1 className="text-xl font-semibold">Programmation des rotations</h1>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => router.visit('/logistics/planning/weekly')}>
+                        <Calendar size={14} className="mr-1" /> Tableau hebdomadaire
+                    </Button>
                 </div>
 
                 {/* Date hero */}
@@ -359,7 +368,22 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                                                 <Check size={14} strokeWidth={3} />
                                             </button>
                                             <div className="font-semibold min-w-0 flex-1">
-                                                <div className="truncate">{orig?.name ?? '—'}</div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="truncate">{orig?.name ?? '—'}</span>
+                                                    {orig?.truck && <span className="text-xs font-normal text-[var(--color-text-muted)]">· {orig.truck}</span>}
+                                                    {orig && (orig.done_today ?? 0) > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 text-xs font-medium">
+                                                            <Check size={10} /> {orig.done_today} rot. aujourd'hui
+                                                        </span>
+                                                    ) : (
+                                                        <span className="rounded-full bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] px-2 py-0.5 text-xs font-medium">Pas encore</span>
+                                                    )}
+                                                    {orig?.ticket_manquant && (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
+                                                            <AlertTriangle size={10} /> ticket manquant
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 {orig && (
                                                     <NotificationStatusLine
                                                         driver={orig}
