@@ -6,6 +6,7 @@ use App\Models\FleetObjective;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Reconciles "rotations done" for a period from two sources:
@@ -22,7 +23,28 @@ class RotationAchievementService
         private FleetCapacityService $capacity,
     ) {}
 
+    /**
+     * Reconciled achievement for a period. Closed periods (already ended) are
+     * cached — they only change if late tickets land, so the cache is keyed by
+     * the objective's updated_at and given a short TTL.
+     */
     public function forPeriod(Carbon $start, Carbon $end): array
+    {
+        $isClosed = $end->copy()->endOfDay()->lt(Carbon::now()->startOfDay());
+
+        if ($isClosed) {
+            $obj = FleetObjective::where('start_date', $start->toDateString())
+                ->where('end_date', $end->toDateString())
+                ->first(['id', 'updated_at']);
+            $key = 'rotach:' . $start->toDateString() . ':' . $end->toDateString() . ':' . ($obj?->updated_at?->timestamp ?? '0');
+
+            return Cache::remember($key, now()->addHours(12), fn () => $this->computePeriod($start, $end));
+        }
+
+        return $this->computePeriod($start, $end);
+    }
+
+    private function computePeriod(Carbon $start, Carbon $end): array
     {
         $startStr = $start->toDateString();
         $endStr = $end->toDateString();
