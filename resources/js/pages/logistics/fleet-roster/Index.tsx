@@ -31,6 +31,7 @@ interface Props {
         default_target_tons: number;
         weekly_target_tons: number;
         source: 'default' | 'mixed' | 'client_demand';
+        plan_capacity_t: number;
     };
     trucks: TruckRow[];
     total_capacity_t: number;
@@ -46,28 +47,25 @@ type Dist = Map<number, { rotations: number; tons: number }>;
 
 /**
  * Mirror of FleetCapacityService::distributeTargetRotations — keeps the live
- * preview identical to what the server will store. Total rotations =
- * round(target / average capacity), spread evenly, leftover to the
- * highest-capacity trucks; per-truck tonnage = rotations × own capacity.
+ * preview identical to what the server will store. Every trip is planned at the
+ * configured realistic load (planCap, e.g. 40 t). Total rotations =
+ * ceil(target / planCap) — rounded UP so the plan always meets or exceeds the
+ * target; spread evenly; per-truck tonnage = rotations × planCap.
  */
-function distribute(targetTons: number, working: TruckRow[]): Dist {
+function distribute(targetTons: number, working: TruckRow[], planCap: number): Dist {
     const map: Dist = new Map();
     const n = working.length;
+    const cap = Math.max(0.01, planCap || 0);
     if (n === 0 || targetTons <= 0) {
         working.forEach((t) => map.set(t.id, { rotations: 0, tons: 0 }));
         return map;
     }
-    const cap = (t: TruckRow) => Math.max(0.01, t.capacity_tonnage || 0);
-    const avg = Math.max(0.01, working.reduce((s, t) => s + cap(t), 0) / n);
-    const total = Math.max(0, Math.round(targetTons / avg));
+    const total = Math.ceil(targetTons / cap);
     const base = Math.floor(total / n);
     const remainder = total % n;
-    const order = [...working].sort((a, b) => cap(b) - cap(a));
-    const extra = new Map<number, number>();
-    order.forEach((t, i) => extra.set(t.id, i < remainder ? 1 : 0));
-    working.forEach((t) => {
-        const rot = base + (extra.get(t.id) ?? 0);
-        map.set(t.id, { rotations: rot, tons: Math.round(rot * cap(t)) });
+    working.forEach((t, i) => {
+        const rot = base + (i < remainder ? 1 : 0);
+        map.set(t.id, { rotations: rot, tons: Math.round(rot * cap) });
     });
     return map;
 }
@@ -164,7 +162,7 @@ export default function FleetRosterIndex({
 
     // Live top-down distribution: spreads the tonnage target across the trucks
     // in service, recomputing instantly whenever one is put to rest.
-    const dist = useMemo(() => distribute(target, workingTrucks), [target, workingTrucks]);
+    const dist = useMemo(() => distribute(target, workingTrucks, objective.plan_capacity_t), [target, workingTrucks, objective.plan_capacity_t]);
     const plannedRotations = useMemo(() => [...dist.values()].reduce((s, d) => s + d.rotations, 0), [dist]);
     const plannedTons = useMemo(() => [...dist.values()].reduce((s, d) => s + d.tons, 0), [dist]);
 
@@ -286,6 +284,7 @@ export default function FleetRosterIndex({
                             </div>
                             <div className="text-sm text-[var(--color-text-secondary)]">
                                 <strong>{fmt(plannedRotations)}</strong> rotations ≈ <strong>{fmt(plannedTons)} t</strong> sur <strong>{workingTrucks.length}</strong> camion{workingTrucks.length > 1 ? 's' : ''}
+                                <span className="text-[var(--color-text-muted)]"> · {fmt(objective.plan_capacity_t)} t/rotation</span>
                             </div>
                         </div>
                         {selectionChanged && (

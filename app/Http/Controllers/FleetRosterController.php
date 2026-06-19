@@ -95,6 +95,7 @@ class FleetRosterController extends Controller
                 'default_target_tons' => $defaultTargetTons,
                 'weekly_target_tons' => (float) $weeklyTarget['target_tons'],
                 'source' => $weeklyTarget['source'],
+                'plan_capacity_t' => round($this->capacity->defaultCapacityTonnage(), 2),
             ],
             'trucks' => $activeTrucks->values(),
             'total_capacity_t' => round($totalCapacityAllTrucks, 2),
