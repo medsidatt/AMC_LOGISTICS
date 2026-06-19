@@ -76,7 +76,8 @@ class FleetCapacityService
 
         foreach ($activeTrucks as $truck) {
             $rot = $truck->target_rotations_per_week !== null ? (int) $truck->target_rotations_per_week : $globalRotations;
-            $cap = ((float) ($truck->capacity_tonnage ?: 0)) > 0 ? (float) $truck->capacity_tonnage : $globalCapacity;
+            // Capacity is a single fleet-wide setting, identical for every truck.
+            $cap = $globalCapacity;
             $totalRotations += $rot;
             $totalTons += $rot * $cap;
             $sumCapacity += $cap;
@@ -192,7 +193,8 @@ class FleetCapacityService
         $weeksInWindow = max(1.0, self::HISTORY_DAYS / 7);
         $avgRotationsPerWeek = round($rotationsCount / $weeksInWindow, 2);
 
-        $capacityTonnage = max(0.01, (float) ($truck->capacity_tonnage ?: $this->defaultCapacityTonnage()));
+        // Capacity is a single fleet-wide setting, not a per-truck value.
+        $capacityTonnage = max(0.01, $this->defaultCapacityTonnage());
         $targetRotationsForTruck = $this->targetRotationsForTruck($truck);
 
         $targetWeeklyCapacity = round($targetRotationsForTruck * $capacityTonnage, 2);
