@@ -43,7 +43,7 @@ export default function WeightComparisonChart({ labels, providerData, clientData
         },
         tooltip: {
             theme: isDark ? 'dark' : 'light',
-            y: { formatter: (v) => `${v.toLocaleString('fr-FR')} kg` },
+            y: { formatter: (v) => `${v.toLocaleString('fr-FR')} t` },
         },
     };
 

@@ -46,7 +46,7 @@ export default function TonnageChart({ months, providerData, clientData, gapData
         yaxis: {
             labels: {
                 style: { colors: palette.text, fontSize: '11px' },
-                formatter: (v) => `${(v / 1000).toFixed(0)}K`,
+                formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k t` : `${v.toFixed(0)} t`),
             },
         },
         grid: {
@@ -62,7 +62,7 @@ export default function TonnageChart({ months, providerData, clientData, gapData
         },
         tooltip: {
             theme: isDark ? 'dark' : 'light',
-            y: { formatter: (v) => `${v.toLocaleString('fr-FR')} kg` },
+            y: { formatter: (v) => `${v.toLocaleString('fr-FR')} t` },
         },
     };
 

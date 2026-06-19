@@ -186,16 +186,16 @@ export default function TheftIncidentShow({ incident, providers = [] }: Props) {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-[var(--color-text-muted)]">Poids fournisseur</span>
-                                <span>{incident.transport_tracking.provider_net_weight ?? '-'} kg</span>
+                                <span>{incident.transport_tracking.provider_net_weight ?? '-'} t</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-[var(--color-text-muted)]">Poids client</span>
-                                <span>{incident.transport_tracking.client_net_weight ?? '-'} kg</span>
+                                <span>{incident.transport_tracking.client_net_weight ?? '-'} t</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-[var(--color-text-muted)]">Écart</span>
                                 <span className={incident.transport_tracking.gap && incident.transport_tracking.gap < 0 ? 'text-red-500 font-semibold' : ''}>
-                                    {incident.transport_tracking.gap ?? '-'} kg
+                                    {incident.transport_tracking.gap ?? '-'} t
                                 </span>
                             </div>
                             {incident.trip_segment_id && (

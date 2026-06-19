@@ -131,14 +131,14 @@ export default function TransportDashboard({ filters: initialFilters, filterOpti
                 <KpiCard
                     label="Poids transporté"
                     value={kpis.totalTransported}
-                    unit="kg"
+                    unit="t"
                     icon={<Weight size={22} />}
                     color="var(--color-primary)"
                 />
                 <KpiCard
                     label="Poids reçu"
                     value={kpis.totalReceived}
-                    unit="kg"
+                    unit="t"
                     change={kpis.pctReceived - 100}
                     changeLabel="vs transporté"
                     icon={<Scale size={22} />}
@@ -147,14 +147,13 @@ export default function TransportDashboard({ filters: initialFilters, filterOpti
                 <KpiCard
                     label="Poids perdu"
                     value={kpis.totalDifference}
-                    unit="kg"
+                    unit="t"
                     icon={<TrendingDown size={22} />}
                     color="var(--color-danger)"
                 />
                 <KpiCard
                     label="Anomalies poids"
                     value={kpis.totalPoidsAnomalies}
-                    unit="kg"
                     icon={<AlertTriangle size={22} />}
                     color="var(--color-warning)"
                 />

@@ -245,10 +245,10 @@ export default function TripReplay({ transport, dataUrl }: Props) {
                     <div>
                         <div className="text-xs text-[var(--color-text-muted)] uppercase">Poids net (fournisseur → client)</div>
                         <div>
-                            {transport.provider_net_weight ?? '-'} → {transport.client_net_weight ?? '-'} kg
+                            {transport.provider_net_weight ?? '-'} → {transport.client_net_weight ?? '-'} t
                             {transport.gap !== null && (
                                 <span className={transport.gap < 0 ? 'text-red-500 ml-2' : 'text-emerald-500 ml-2'}>
-                                    ({transport.gap > 0 ? '+' : ''}{transport.gap} kg)
+                                    ({transport.gap > 0 ? '+' : ''}{transport.gap} t)
                                 </span>
                             )}
                         </div>

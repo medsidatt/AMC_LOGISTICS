@@ -19,9 +19,9 @@ function formatKm(v: number | null | undefined): string {
     return `${Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} km`;
 }
 
-function formatKg(v: number | null | undefined): string {
+function formatTons(v: number | null | undefined): string {
     if (v == null || !Number.isFinite(Number(v))) return '—';
-    return `${Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} kg`;
+    return `${Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} t`;
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -169,11 +169,11 @@ export default function EvidencePanel({ type, evidence }: Props) {
         const unknownStops = Array.isArray(evidence.unknown_stops) ? evidence.unknown_stops : [];
         return (
             <Section icon={<Scale size={16} className="text-orange-500" />} title="Écart de poids">
-                <Row label="Poids chargé (carrière)" value={formatKg((Number(evidence.provider_net_weight ?? 0)) * 1000)} />
-                <Row label="Poids livré (chantier)" value={formatKg((Number(evidence.client_net_weight ?? 0)) * 1000)} />
-                <Row label="Écart" value={<span className="font-semibold">{formatKg(evidence.gap_kg)}</span>} />
+                <Row label="Poids chargé (carrière)" value={formatTons(evidence.provider_net_weight)} />
+                <Row label="Poids livré (chantier)" value={formatTons(evidence.client_net_weight)} />
+                <Row label="Écart" value={<span className="font-semibold">{formatTons(evidence.gap_kg)}</span>} />
                 {evidence.loss_kg != null && Number(evidence.loss_kg) > 0 && (
-                    <Row label="Perte" value={<span className="text-[var(--color-danger)] font-semibold">{formatKg(evidence.loss_kg)}</span>} />
+                    <Row label="Perte" value={<span className="text-[var(--color-danger)] font-semibold">{formatTons(evidence.loss_kg)}</span>} />
                 )}
                 {unknownStops.length > 0 && (
                     <div className="py-2">
