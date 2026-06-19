@@ -41,6 +41,36 @@ interface Props {
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
 
+type Dist = Map<number, { rotations: number; tons: number }>;
+
+/**
+ * Mirror of FleetCapacityService::distributeTargetRotations — keeps the live
+ * preview identical to what the server will store. Total rotations =
+ * round(target / average capacity), spread evenly, leftover to the
+ * highest-capacity trucks; per-truck tonnage = rotations × own capacity.
+ */
+function distribute(targetTons: number, working: TruckRow[]): Dist {
+    const map: Dist = new Map();
+    const n = working.length;
+    if (n === 0 || targetTons <= 0) {
+        working.forEach((t) => map.set(t.id, { rotations: 0, tons: 0 }));
+        return map;
+    }
+    const cap = (t: TruckRow) => Math.max(0.01, t.capacity_tonnage || 0);
+    const avg = Math.max(0.01, working.reduce((s, t) => s + cap(t), 0) / n);
+    const total = Math.max(0, Math.round(targetTons / avg));
+    const base = Math.floor(total / n);
+    const remainder = total % n;
+    const order = [...working].sort((a, b) => cap(b) - cap(a));
+    const extra = new Map<number, number>();
+    order.forEach((t, i) => extra.set(t.id, i < remainder ? 1 : 0));
+    working.forEach((t) => {
+        const rot = base + (extra.get(t.id) ?? 0);
+        map.set(t.id, { rotations: rot, tons: Math.round(rot * cap(t)) });
+    });
+    return map;
+}
+
 export default function FleetRosterIndex({
     period, objective, trucks, min_trucks_needed, currently_rested_truck_ids, achievement,
 }: Props) {
@@ -128,6 +158,20 @@ export default function FleetRosterIndex({
     const workingCapacity = workingTrucks.reduce((s, t) => s + t.period_capacity_t, 0);
     const target = Number(targetTons) || 0;
     const isCovered = target <= 0 || workingCapacity >= target;
+
+    // Live top-down distribution: spreads the tonnage target across the trucks
+    // in service, recomputing instantly whenever one is put to rest.
+    const dist = useMemo(() => distribute(target, workingTrucks), [target, workingTrucks]);
+    const plannedRotations = useMemo(() => [...dist.values()].reduce((s, d) => s + d.rotations, 0), [dist]);
+    const plannedTons = useMemo(() => [...dist.values()].reduce((s, d) => s + d.tons, 0), [dist]);
+
+    // The saved plan was built for this set of working trucks; if the selection
+    // changed, the objective will be redistributed on save.
+    const savedRested = useMemo(() => new Set(currently_rested_truck_ids), [currently_rested_truck_ids]);
+    const selectionChanged = useMemo(
+        () => rested.size !== savedRested.size || [...rested].some((id) => !savedRested.has(id)),
+        [rested, savedRested],
+    );
 
     const save = () => {
         setSaving(true);
@@ -224,6 +268,31 @@ export default function FleetRosterIndex({
                     </div>
                 )}
 
+                {/* Répartition prévue (live) */}
+                {target > 0 && workingTrucks.length > 0 && (
+                    <div className={clsx(
+                        'rounded-xl border p-4',
+                        selectionChanged
+                            ? 'border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10'
+                            : 'border-[var(--color-border)] bg-[var(--color-surface)]',
+                    )}>
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                {selectionChanged && <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />}
+                                <span className="font-semibold">Répartition prévue</span>
+                            </div>
+                            <div className="text-sm text-[var(--color-text-secondary)]">
+                                <strong>{fmt(plannedRotations)}</strong> rotations ≈ <strong>{fmt(plannedTons)} t</strong> sur <strong>{workingTrucks.length}</strong> camion{workingTrucks.length > 1 ? 's' : ''}
+                            </div>
+                        </div>
+                        {selectionChanged && (
+                            <p className="text-sm text-amber-800 dark:text-amber-300 mt-2">
+                                La sélection des camions a changé — l'objectif sera redistribué sur les camions en service à l'enregistrement.
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 {/* Réalisation de l'objectif */}
                 {achievement.has_objective && (
                     <Card>
@@ -298,6 +367,8 @@ export default function FleetRosterIndex({
                                     <span className="font-semibold text-sm truncate">{t.matricule}</span>
                                     {isResting ? (
                                         <Badge variant="warning"><BedDouble size={10} className="mr-1" /> Repos</Badge>
+                                    ) : target > 0 ? (
+                                        <Badge variant="success">{fmt(dist.get(t.id)?.rotations ?? 0)} rot</Badge>
                                     ) : (
                                         <Badge variant="success"><Check size={10} className="mr-1" /> Travail</Badge>
                                     )}
