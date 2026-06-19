@@ -2,7 +2,6 @@ import { Head, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import ObjectiveTrendChart from '@/components/charts/ObjectiveTrendChart';
 import { ArrowLeft, Target, History as HistoryIcon, TrendingUp } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -48,7 +47,7 @@ export default function FleetObjectiveHistory({ objectives, trend }: Props) {
                             <h1 className="text-xl font-semibold">Historique des objectifs</h1>
                         </div>
                         <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                            Objectif réalisé et restant par période — en tonnage et en rotations.
+                            Objectifs des périodes précédentes : réalisé et restant.
                         </p>
                     </div>
                     <Button variant="secondary" onClick={() => router.visit('/logistics/fleet-roster')}>
@@ -104,8 +103,7 @@ export default function FleetObjectiveHistory({ objectives, trend }: Props) {
                                                 </td>
                                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                                     <div className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">{fmt(o.achieved_tons)} t</div>
-                                                    <div className="text-xs text-[var(--color-text-muted)]">{fmt(o.achieved_rotations)} rot. ({fmt(o.ticketed_rotations)} ticket + {fmt(o.gps_only_rotations)} GPS)</div>
-                                                    {o.missing_tickets > 0 && <Badge variant="warning" className="mt-0.5">{o.missing_tickets} ticket manquant</Badge>}
+                                                    <div className="text-xs text-[var(--color-text-muted)]">{fmt(o.achieved_rotations)} rotations</div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right whitespace-nowrap">
                                                     <div className={clsx('font-mono font-semibold', o.remaining_tons > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--color-text-muted)]')}>

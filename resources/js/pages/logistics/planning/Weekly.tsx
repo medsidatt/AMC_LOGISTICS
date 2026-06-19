@@ -70,7 +70,7 @@ export default function PlanningWeekly({ period, achievement }: Props) {
                             {achievement.fleet.fill_pct ?? '—'}{achievement.fleet.fill_pct != null && '%'}
                         </span>
                         <span className="text-sm text-[var(--color-text-muted)]">
-                            charge moyenne <strong>{fmt(achievement.fleet.avg_load_t)} t</strong> par rotation (d'après les bons pesés)
+                            charge moyenne <strong>{fmt(achievement.fleet.avg_load_t)} t</strong> par rotation
                         </span>
                     </div>
                 </Card>
