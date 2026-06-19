@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\FleetSetting;
 use App\Models\MonthlyTonnageTarget;
+use App\Models\Truck;
+use App\Services\FleetObjectiveService;
 use App\Services\ObjectiveHistoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -11,8 +13,10 @@ use Inertia\Inertia;
 
 class FleetSettingsController extends Controller
 {
-    public function __construct(private readonly ObjectiveHistoryService $objectiveHistory)
-    {
+    public function __construct(
+        private readonly ObjectiveHistoryService $objectiveHistory,
+        private readonly FleetObjectiveService $fleetObjectives,
+    ) {
         $this->middleware('auth');
         $this->middleware('permission:fleet-settings-edit');
     }
@@ -103,6 +107,15 @@ class FleetSettingsController extends Controller
         $oldValues = $setting->only(array_keys($tracked));
 
         $setting->update($data);
+
+        // Capacity is the single source of truth: when it changes here, push it
+        // to every truck and re-plan open objectives so it takes effect across
+        // the whole application at once.
+        $capacityChanged = (string) ($oldValues['default_capacity_tonnage'] ?? '') !== (string) ($data['default_capacity_tonnage'] ?? '');
+        if ($capacityChanged) {
+            Truck::query()->update(['capacity_tonnage' => $data['default_capacity_tonnage']]);
+            $this->fleetObjectives->redistributeOpenObjectives();
+        }
 
         if ($note) {
             foreach ($tracked as $field => $label) {

@@ -8,6 +8,7 @@ use App\Models\Maintenance;
 use App\Models\LogisticsAlert;
 use App\Models\Transporter;
 use App\Models\Truck;
+use App\Services\FleetCapacityService;
 use App\Services\FleetObjectiveService;
 use App\Services\Fuel\FuelComparisonService;
 use App\Services\MaintenanceStatusService;
@@ -29,6 +30,7 @@ class TruckController extends Controller
         private readonly FuelComparisonService $fuelComparison,
         private readonly ObjectiveHistoryService $objectiveHistory,
         private readonly FleetObjectiveService $fleetObjectives,
+        private readonly FleetCapacityService $fleetCapacity,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
@@ -249,13 +251,15 @@ class TruckController extends Controller
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
-            'capacity_tonnage' => 'nullable|numeric|min:0',
             'target_rotations_per_week' => 'nullable|integer|min:1|max:14',
             'is_available' => 'nullable|boolean',
         ];
 
-        $objectiveProvided = $request->filled('capacity_tonnage') || $request->filled('target_rotations_per_week');
-        if ($objectiveProvided) {
+        // Capacity is a single fleet-wide setting (Paramètres flotte), not a
+        // per-truck value — so changing it there changes it everywhere.
+        $globalCapacity = $this->fleetCapacity->defaultCapacityTonnage();
+
+        if ($request->filled('target_rotations_per_week')) {
             $rules['change_note'] = 'required|string|min:5|max:1000';
         }
 
@@ -266,17 +270,15 @@ class TruckController extends Controller
             'transporter_id' => $request->transporter_id,
         ], [
             'km_maintenance_interval' => $request->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE,
-            'capacity_tonnage' => $request->capacity_tonnage ?? 45,
+            'capacity_tonnage' => $globalCapacity,
             'target_rotations_per_week' => $request->target_rotations_per_week,
             'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : true,
         ]);
 
-        $oldCapacity = $truck->capacity_tonnage;
         $oldTargetRotations = $truck->target_rotations_per_week;
 
-        if ($request->filled('capacity_tonnage')) {
-            $truck->update(['capacity_tonnage' => $request->capacity_tonnage]);
-        }
+        // Keep capacity aligned with the fleet setting even for an existing row.
+        $truck->update(['capacity_tonnage' => $globalCapacity]);
         if ($request->has('target_rotations_per_week')) {
             $truck->update(['target_rotations_per_week' => $request->filled('target_rotations_per_week') ? (int) $request->target_rotations_per_week : null]);
         }
@@ -286,16 +288,6 @@ class TruckController extends Controller
 
         $note = $request->input('change_note');
         if ($note) {
-            $this->objectiveHistory->record(
-                subject: $truck,
-                subjectLabel: 'Camion ' . $truck->matricule,
-                fieldName: 'capacity_tonnage',
-                fieldLabel: 'Capacité (t)',
-                oldValue: $oldCapacity,
-                newValue: $truck->capacity_tonnage,
-                note: $note,
-                context: ['scope' => 'truck_create'],
-            );
             $this->objectiveHistory->record(
                 subject: $truck,
                 subjectLabel: 'Camion ' . $truck->matricule,
@@ -414,7 +406,8 @@ class TruckController extends Controller
                 'is_available' => (bool) $truck->is_available,
             ],
             'transporters' => $transporters,
-            'defaultTargetRotationsPerWeek' => app(\App\Services\FleetCapacityService::class)->defaultTargetRotationsPerWeek(),
+            'defaultTargetRotationsPerWeek' => $this->fleetCapacity->defaultTargetRotationsPerWeek(),
+            'defaultCapacityTonnage' => $this->fleetCapacity->defaultCapacityTonnage(),
         ]);
     }
 
@@ -423,28 +416,26 @@ class TruckController extends Controller
      */
     public function update(Request $request, Truck $truck)
     {
-        $oldCapacity = $truck->capacity_tonnage;
         $oldTargetRotations = $truck->target_rotations_per_week;
         $oldAvailable = (bool) $truck->is_available;
 
-        $newCapacity = $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 45;
+        // Capacity is owned by the fleet setting, never edited per truck — always
+        // realign to the global value so it stays consistent everywhere.
+        $globalCapacity = $this->fleetCapacity->defaultCapacityTonnage();
         $newTargetRotations = $request->filled('target_rotations_per_week')
             ? (int) $request->target_rotations_per_week
             : null;
 
-        $capacityChanged = (string) $newCapacity !== (string) $oldCapacity;
         $targetRotationsChanged = (string) ($newTargetRotations ?? '') !== (string) ($oldTargetRotations ?? '');
-        $objectiveChanged = $capacityChanged || $targetRotationsChanged;
 
         $rules = [
             'matricule' => 'required|string|max:255',
             'transporter_id' => 'required|exists:transporters,id',
             'km_maintenance_interval' => 'nullable|numeric|min:1',
-            'capacity_tonnage' => 'nullable|numeric|min:0',
             'target_rotations_per_week' => 'nullable|integer|min:1|max:14',
             'is_available' => 'nullable|boolean',
         ];
-        if ($objectiveChanged) {
+        if ($targetRotationsChanged) {
             $rules['change_note'] = 'required|string|min:5|max:1000';
         }
         $request->validate($rules);
@@ -453,24 +444,12 @@ class TruckController extends Controller
             'matricule' => $request->matricule,
             'transporter_id' => $request->transporter_id,
             'km_maintenance_interval' => $request->km_maintenance_interval ?? $truck->km_maintenance_interval,
-            'capacity_tonnage' => $newCapacity,
+            'capacity_tonnage' => $globalCapacity,
             'target_rotations_per_week' => $newTargetRotations,
             'is_available' => $request->has('is_available') ? (bool) $request->boolean('is_available') : (bool) $truck->is_available,
         ]);
 
         $note = $request->input('change_note');
-        if ($note && $capacityChanged) {
-            $this->objectiveHistory->record(
-                subject: $truck,
-                subjectLabel: 'Camion ' . $truck->matricule,
-                fieldName: 'capacity_tonnage',
-                fieldLabel: 'Capacité (t)',
-                oldValue: $oldCapacity,
-                newValue: $truck->capacity_tonnage,
-                note: $note,
-                context: ['scope' => 'truck_update'],
-            );
-        }
         if ($note && $targetRotationsChanged) {
             $this->objectiveHistory->record(
                 subject: $truck,
@@ -490,10 +469,9 @@ class TruckController extends Controller
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
         );
 
-        // Availability or capacity feed the objective distribution — redistribute
-        // current/future objectives so the plan tracks the truck's new state.
-        $availabilityChanged = (bool) $truck->is_available !== $oldAvailable;
-        if ($availabilityChanged || $capacityChanged) {
+        // Availability feeds the objective distribution — redistribute current/
+        // future objectives so the plan tracks the truck's new state.
+        if ((bool) $truck->is_available !== $oldAvailable) {
             $this->fleetObjectives->redistributeOpenObjectives();
         }
 
