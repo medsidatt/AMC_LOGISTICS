@@ -1,6 +1,7 @@
 export interface TruckAchievement {
     truck_id: number;
     matricule: string;
+    capacity_tonnage: number;
     target_rotations: number;
     target_tons: number;
     ticketed_rotations: number;
@@ -12,6 +13,8 @@ export interface TruckAchievement {
     remaining_rotations: number;
     remaining_tons: number;
     pct: number | null;
+    avg_load_t: number;
+    fill_pct: number | null;
     missing_tickets: number;
 }
 
@@ -27,6 +30,8 @@ export interface FleetAchievement {
     remaining_rotations: number;
     remaining_tons: number;
     pct: number | null;
+    avg_load_t: number;
+    fill_pct: number | null;
     missing_tickets: number;
 }
 

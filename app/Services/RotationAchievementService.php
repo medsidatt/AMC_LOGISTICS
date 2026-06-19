@@ -82,7 +82,7 @@ class RotationAchievementService
 
         $perTruck = [];
         $sumTicketRot = 0; $sumTicketTons = 0.0; $sumGpsRot = 0; $sumGpsTons = 0.0;
-        $sumTargetRot = 0; $sumTargetTons = 0.0;
+        $sumTargetRot = 0; $sumTargetTons = 0.0; $sumTicketCap = 0.0;
 
         foreach ($truckIds as $id) {
             $truck = $trucks->get($id);
@@ -102,13 +102,21 @@ class RotationAchievementService
             $doneRot = $tRot + $gRot;
             $doneTons = round($tTons + $gTons, 2);
 
+            // Fill rate = how full the truck was actually loaded, from the ticket
+            // weights (bons) only — GPS-only loops have no weighed tonnage and are
+            // estimated at full capacity, so they'd hide under-loading.
+            $avgLoad = $tRot > 0 ? round($tTons / $tRot, 2) : 0.0;
+            $fillPct = ($tRot > 0 && $cap > 0) ? min(100, (int) round($avgLoad / $cap * 100)) : null;
+
             $sumTicketRot += $tRot; $sumTicketTons += $tTons;
             $sumGpsRot += $gRot; $sumGpsTons += $gTons;
             $sumTargetRot += $tgtRot; $sumTargetTons += $tgtTons;
+            $sumTicketCap += $tRot * $cap;
 
             $perTruck[] = [
                 'truck_id' => (int) $id,
                 'matricule' => $truck->matricule ?? '—',
+                'capacity_tonnage' => round($cap, 2),
                 'target_rotations' => $tgtRot,
                 'target_tons' => $tgtTons,
                 'ticketed_rotations' => $tRot,
@@ -123,6 +131,8 @@ class RotationAchievementService
                 // shown in the table), so a completed rotation reads 100% even if
                 // that trip carried less than the assumed truck capacity.
                 'pct' => $this->pct($doneTons, $tgtTons, $doneRot, $tgtRot, true),
+                'avg_load_t' => $avgLoad,
+                'fill_pct' => $fillPct,
                 'missing_tickets' => $gRot,
             ];
         }
@@ -136,6 +146,12 @@ class RotationAchievementService
 
         $doneRotations = $sumTicketRot + $sumGpsRot;
         $doneTons = round($sumTicketTons + $sumGpsTons, 2);
+
+        // Fleet load fill (from weighed tickets only).
+        $fleetAvgLoad = $sumTicketRot > 0 ? round($sumTicketTons / $sumTicketRot, 2) : 0.0;
+        $fleetFillPct = ($sumTicketRot > 0 && $sumTicketCap > 0)
+            ? min(100, (int) round($sumTicketTons / $sumTicketCap * 100))
+            : null;
 
         return [
             'period' => ['start' => $startStr, 'end' => $endStr],
@@ -153,6 +169,8 @@ class RotationAchievementService
                 'remaining_rotations' => max(0, $targetRotations - $doneRotations),
                 'remaining_tons' => round(max(0, $targetTons - $doneTons), 2),
                 'pct' => $this->pct($doneTons, $targetTons, $doneRotations, $targetRotations),
+                'avg_load_t' => $fleetAvgLoad,
+                'fill_pct' => $fleetFillPct,
                 'missing_tickets' => $gpsOnly->count(),
             ],
             'projection' => $this->projection($start, $end, $doneRotations, $doneTons, $targetRotations, $targetTons),
