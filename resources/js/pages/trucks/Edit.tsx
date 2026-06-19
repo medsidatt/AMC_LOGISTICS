@@ -23,24 +23,21 @@ interface Props {
     truck: TruckData;
     transporters: { value: number; label: string }[];
     defaultTargetRotationsPerWeek: number;
+    defaultCapacityTonnage: number;
 }
 
-export default function TrucksEdit({ truck, transporters, defaultTargetRotationsPerWeek }: Props) {
+export default function TrucksEdit({ truck, transporters, defaultTargetRotationsPerWeek, defaultCapacityTonnage }: Props) {
     const form = useForm({
         matricule: truck.matricule,
         transporter_id: truck.transporter_id as string | number,
         km_maintenance_interval: String(truck.km_maintenance_interval ?? ''),
-        capacity_tonnage: String(truck.capacity_tonnage ?? ''),
         target_rotations_per_week: truck.target_rotations_per_week != null ? String(truck.target_rotations_per_week) : '',
         is_available: truck.is_available !== false,
         change_note: '',
     });
 
-    const originalCapacity = truck.capacity_tonnage != null ? String(truck.capacity_tonnage) : '';
     const originalTargetRotations = truck.target_rotations_per_week != null ? String(truck.target_rotations_per_week) : '';
-    const objectiveChanged =
-        form.data.capacity_tonnage !== originalCapacity ||
-        form.data.target_rotations_per_week !== originalTargetRotations;
+    const objectiveChanged = form.data.target_rotations_per_week !== originalTargetRotations;
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -62,7 +59,15 @@ export default function TrucksEdit({ truck, transporters, defaultTargetRotations
                     <FormInput label="Matricule" name="matricule" value={form.data.matricule} onChange={(e) => form.setData('matricule', e.target.value)} error={form.errors.matricule} required autoFocus />
                     <FormSelect label="Transporteur" options={transporters} value={form.data.transporter_id} onChange={(v) => form.setData('transporter_id', v ?? '')} error={form.errors.transporter_id} required />
                     <FormInput label="Intervalle maintenance (km)" name="km_maintenance_interval" type="number" value={form.data.km_maintenance_interval} onChange={(e) => form.setData('km_maintenance_interval', e.target.value)} error={form.errors.km_maintenance_interval} />
-                    <FormInput label="Capacité (tonnes)" name="capacity_tonnage" type="number" value={form.data.capacity_tonnage} onChange={(e) => form.setData('capacity_tonnage', e.target.value)} error={form.errors.capacity_tonnage} />
+                    <div className="mb-3">
+                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Capacité (tonnes)</label>
+                        <div className="px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
+                            {defaultCapacityTonnage} t — valeur unique de la flotte
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                            La capacité est la même pour toute la flotte. Modifiez-la dans <a href="/settings/fleet" className="text-[var(--color-primary)] hover:underline">Paramètres flotte</a>.
+                        </p>
+                    </div>
                     <FormInput
                         label="Rotations cibles par semaine (optionnel)"
                         name="target_rotations_per_week"
@@ -82,12 +87,12 @@ export default function TrucksEdit({ truck, transporters, defaultTargetRotations
                     {objectiveChanged && (
                         <div className="border-t border-[var(--color-border)] mt-4 pt-4">
                             <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-2">
-                                Justification du changement d'objectif
+                                Justification du changement de rotations cibles
                             </p>
                             <textarea
                                 className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
                                 rows={3}
-                                placeholder="Ex : capacité réduite après rapport HSE pneus."
+                                placeholder="Ex : rotations cibles revues après réorganisation des tournées."
                                 value={form.data.change_note}
                                 onChange={(e) => form.setData('change_note', e.target.value)}
                                 required
