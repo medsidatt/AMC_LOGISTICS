@@ -13,7 +13,11 @@ use Illuminate\Support\Facades\DB;
 
 class TrackingDashboardController extends Controller
 {
-    protected int $gapThresholdKg = 150;
+    /** Weight-gap anomaly threshold in TONNES (configurable in fleet settings). */
+    private function gapThreshold(): float
+    {
+        return (float) (\App\Models\FleetSetting::current()->weight_gap_threshold ?: 0.5);
+    }
 
     /**
      * Get the start date for a custom month period (22nd to 21st).
@@ -77,7 +81,7 @@ class TrackingDashboardController extends Controller
             ->value('sum_gap') ?? 0;
 
         $suspiciousDrivers = (clone $q)
-            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThresholdKg])
+            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThreshold()])
             ->distinct('driver_id')
             ->count('driver_id');
 
@@ -132,7 +136,7 @@ class TrackingDashboardController extends Controller
 
         // Driver risk ranking (top 10)
         $driverRisk = (clone $q)
-            ->selectRaw('driver_id, SUM(client_net_weight - provider_net_weight) as sum_gap, COUNT(*) as trip_count, SUM(CASE WHEN (client_net_weight - provider_net_weight) < -? THEN 1 ELSE 0 END) as large_count', [$this->gapThresholdKg])
+            ->selectRaw('driver_id, SUM(client_net_weight - provider_net_weight) as sum_gap, COUNT(*) as trip_count, SUM(CASE WHEN (client_net_weight - provider_net_weight) < -? THEN 1 ELSE 0 END) as large_count', [$this->gapThreshold()])
             ->groupBy('driver_id')
             ->orderByDesc('sum_gap')
             ->limit(10)
@@ -152,7 +156,7 @@ class TrackingDashboardController extends Controller
 
         // Anomalies
         $anomalies = (clone $q)
-            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThresholdKg])
+            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThreshold()])
             ->with(['driver', 'truck', 'provider'])
             ->orderByDesc('client_date')
             ->limit(50)
