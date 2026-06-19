@@ -8,6 +8,7 @@ use App\Models\Maintenance;
 use App\Models\LogisticsAlert;
 use App\Models\Transporter;
 use App\Models\Truck;
+use App\Services\FleetObjectiveService;
 use App\Services\Fuel\FuelComparisonService;
 use App\Services\MaintenanceStatusService;
 use App\Services\ObjectiveHistoryService;
@@ -27,6 +28,7 @@ class TruckController extends Controller
         private readonly TruckKpiService $kpiService,
         private readonly FuelComparisonService $fuelComparison,
         private readonly ObjectiveHistoryService $objectiveHistory,
+        private readonly FleetObjectiveService $fleetObjectives,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
@@ -423,6 +425,7 @@ class TruckController extends Controller
     {
         $oldCapacity = $truck->capacity_tonnage;
         $oldTargetRotations = $truck->target_rotations_per_week;
+        $oldAvailable = (bool) $truck->is_available;
 
         $newCapacity = $request->capacity_tonnage ?? $truck->capacity_tonnage ?? 45;
         $newTargetRotations = $request->filled('target_rotations_per_week')
@@ -487,6 +490,13 @@ class TruckController extends Controller
             (float) ($request->km_maintenance_interval ?? $truck->km_maintenance_interval ?? Truck::MAX_KM_BEFORE_MAINTENANCE)
         );
 
+        // Availability or capacity feed the objective distribution — redistribute
+        // current/future objectives so the plan tracks the truck's new state.
+        $availabilityChanged = (bool) $truck->is_available !== $oldAvailable;
+        if ($availabilityChanged || $capacityChanged) {
+            $this->fleetObjectives->redistributeOpenObjectives();
+        }
+
         return redirect()
             ->route('trucks.show-page', $truck)
             ->with('success', 'Camion mis à jour avec succès.');
@@ -536,7 +546,15 @@ class TruckController extends Controller
 
         $status = $truck->is_available ? 'marqué disponible' : 'marqué indisponible';
 
-        return back()->with('success', "Camion {$truck->matricule} {$status}.");
+        // Availability drives the objective plan: redistribute current/future
+        // objectives across the trucks now in service.
+        $touched = $this->fleetObjectives->redistributeOpenObjectives();
+        $msg = "Camion {$truck->matricule} {$status}.";
+        if ($touched > 0) {
+            $msg .= ' Objectif(s) en cours redistribué(s) sur les camions en service.';
+        }
+
+        return back()->with('success', $msg);
     }
 
     public function toggleActive(Truck $truck)

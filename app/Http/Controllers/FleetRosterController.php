@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetObjective;
-use App\Models\FleetObjectiveTruck;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Models\TruckRestWindow;
 use App\Services\FleetCapacityService;
+use App\Services\FleetObjectiveService;
 use App\Services\RotationAchievementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -24,6 +24,7 @@ class FleetRosterController extends Controller
     public function __construct(
         private readonly FleetCapacityService $capacity,
         private readonly RotationAchievementService $achievement,
+        private readonly FleetObjectiveService $objectives,
     ) {
         $this->middleware('permission:fleet-roster-plan');
     }
@@ -58,6 +59,7 @@ class FleetRosterController extends Controller
                 return [
                     'id' => $t->id,
                     'matricule' => $t->matricule,
+                    'is_available' => (bool) $t->is_available,
                     'capacity_tonnage' => $info['capacity_tonnage'],
                     'target_rotations_per_week' => $info['target_rotations_per_week'],
                     'target_weekly_capacity_t' => $info['target_weekly_capacity_t'],
@@ -138,7 +140,7 @@ class FleetRosterController extends Controller
                 ]);
             }
 
-            return $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), $userId, $data['notes'] ?? null, $restedIds);
+            return $this->objectives->upsert($start, $end, (float) ($data['target_tons'] ?? 0), $userId, $data['notes'] ?? null, $restedIds);
         });
 
         return redirect()
@@ -172,7 +174,7 @@ class FleetRosterController extends Controller
 
         $objective = DB::transaction(function () use ($start, $end, $data) {
             // restedIds null → derived from existing rest windows for the period.
-            return $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), auth()->id(), null);
+            return $this->objectives->upsert($start, $end, (float) ($data['target_tons'] ?? 0), auth()->id(), null);
         });
 
         return redirect()
@@ -187,75 +189,6 @@ class FleetRosterController extends Controller
                 number_format((float) $objective->target_tons, 0, ',', ' '),
                 $objective->working_trucks,
             ));
-    }
-
-    /**
-     * Upsert the FleetObjective header for a period (and, from Phase 2, its
-     * per-truck target snapshot). When $restedIds is null the rested set is
-     * derived from the existing surplus rest windows for the period.
-     */
-    private function upsertObjective(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null): FleetObjective
-    {
-        if ($restedIds === null) {
-            $restedIds = TruckRestWindow::query()
-                ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
-                ->where('start_date', $start->toDateString())
-                ->where('end_date', $end->toDateString())
-                ->pluck('truck_id')
-                ->all();
-        }
-
-        $restedIds = array_values(array_unique($restedIds));
-        $restedSet = array_flip($restedIds);
-        $defaultCap = max(0.01, $this->capacity->defaultCapacityTonnage());
-
-        $activeTrucks = Truck::where('is_active', true)->get(['id', 'capacity_tonnage']);
-        $restedCount = count($restedIds);
-
-        // Top-down: distribute the tonnage target across the WORKING trucks into
-        // integer rotations. The fleet header is then the exact sum of the per-truck
-        // plan, so tonnage and rotations always reconcile with the breakdown.
-        $workingTrucks = $activeTrucks->reject(fn (Truck $t) => isset($restedSet[$t->id]))->values();
-        $distribution = $this->capacity->distributeTargetRotations($targetTons, $workingTrucks);
-
-        $plannedRotations = (int) array_sum(array_column($distribution, 'rotations'));
-        $plannedTons = round(array_sum(array_column($distribution, 'tons')), 2);
-
-        $objective = FleetObjective::updateOrCreate(
-            ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
-            [
-                'target_tons' => $plannedTons,
-                'target_rotations' => $plannedRotations,
-                'working_trucks' => $workingTrucks->count(),
-                'rested_trucks' => $restedCount,
-                'notes' => $notes,
-                'created_by' => $userId,
-            ],
-        );
-
-        // Snapshot per-truck targets (frozen). Rested trucks get a 0-target row
-        // so they still appear in the breakdown. Re-applying re-snapshots cleanly.
-        $objective->truckTargets()->delete();
-
-        $now = now();
-        $rows = $activeTrucks->map(function (Truck $truck) use ($objective, $distribution, $defaultCap, $now) {
-            $d = $distribution[$truck->id] ?? null;
-            return [
-                'fleet_objective_id' => $objective->id,
-                'truck_id' => $truck->id,
-                'target_rotations' => $d['rotations'] ?? 0,
-                'target_tons' => $d['tons'] ?? 0.0,
-                'capacity_tonnage' => $d['capacity'] ?? round((float) ($truck->capacity_tonnage ?: $defaultCap), 2),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        })->all();
-
-        if ($rows) {
-            FleetObjectiveTruck::insert($rows);
-        }
-
-        return $objective;
     }
 
     /**
