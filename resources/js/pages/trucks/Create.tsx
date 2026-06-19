@@ -18,15 +18,12 @@ export default function TrucksCreate({ transporters, defaultTargetRotationsPerWe
         matricule: '',
         transporter_id: '' as string | number,
         km_maintenance_interval: '',
-        capacity_tonnage: String(defaultCapacityTonnage ?? 45),
         target_rotations_per_week: '',
         is_available: true,
         change_note: '',
     });
 
-    const objectiveProvided =
-        (form.data.capacity_tonnage !== '' && Number(form.data.capacity_tonnage) !== Number(defaultCapacityTonnage)) ||
-        form.data.target_rotations_per_week !== '';
+    const objectiveProvided = form.data.target_rotations_per_week !== '';
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,7 +45,15 @@ export default function TrucksCreate({ transporters, defaultTargetRotationsPerWe
                     <FormInput label="Matricule" name="matricule" value={form.data.matricule} onChange={(e) => form.setData('matricule', e.target.value)} error={form.errors.matricule} required autoFocus />
                     <FormSelect label="Transporteur" options={transporters} value={form.data.transporter_id} onChange={(v) => form.setData('transporter_id', v ?? '')} error={form.errors.transporter_id} required />
                     <FormInput label="Intervalle maintenance (km)" name="km_maintenance_interval" type="number" value={form.data.km_maintenance_interval} onChange={(e) => form.setData('km_maintenance_interval', e.target.value)} error={form.errors.km_maintenance_interval} />
-                    <FormInput label="Capacité (tonnes)" name="capacity_tonnage" type="number" value={form.data.capacity_tonnage} onChange={(e) => form.setData('capacity_tonnage', e.target.value)} error={form.errors.capacity_tonnage} />
+                    <div className="mb-3">
+                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Capacité (tonnes)</label>
+                        <div className="px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]">
+                            {defaultCapacityTonnage} t — valeur unique de la flotte
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                            La capacité est la même pour toute la flotte. Modifiez-la dans <a href="/settings/fleet" className="text-[var(--color-primary)] hover:underline">Paramètres flotte</a>.
+                        </p>
+                    </div>
                     <FormInput
                         label="Rotations cibles par semaine (optionnel)"
                         name="target_rotations_per_week"
@@ -68,7 +73,7 @@ export default function TrucksCreate({ transporters, defaultTargetRotationsPerWe
                     {objectiveProvided && (
                         <div className="border-t border-[var(--color-border)] mt-4 pt-4">
                             <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-2">
-                                Justification objectif (capacité / rotations)
+                                Justification de l'objectif de rotations
                             </p>
                             <textarea
                                 className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
