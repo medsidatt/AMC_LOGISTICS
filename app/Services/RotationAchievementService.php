@@ -119,7 +119,10 @@ class RotationAchievementService
                 'done_tons' => $doneTons,
                 'remaining_rotations' => max(0, $tgtRot - $doneRot),
                 'remaining_tons' => round(max(0, $tgtTons - $doneTons), 2),
-                'pct' => $this->pct($doneTons, $tgtTons, $doneRot, $tgtRot),
+                // Per-truck progress is measured in rotations (the planning unit
+                // shown in the table), so a completed rotation reads 100% even if
+                // that trip carried less than the assumed truck capacity.
+                'pct' => $this->pct($doneTons, $tgtTons, $doneRot, $tgtRot, true),
                 'missing_tickets' => $gRot,
             ];
         }
@@ -203,8 +206,14 @@ class RotationAchievementService
         return ['by_truck' => $byTruck, 'gps_available' => $loops->isNotEmpty()];
     }
 
-    private function pct(float $doneTons, float $targetTons, int $doneRot, int $targetRot): ?int
+    private function pct(float $doneTons, float $targetTons, int $doneRot, int $targetRot, bool $rotationFirst = false): ?int
     {
+        if ($rotationFirst) {
+            if ($targetRot > 0) return min(100, (int) round($doneRot / $targetRot * 100));
+            if ($targetTons > 0) return min(100, (int) round($doneTons / $targetTons * 100));
+            return null;
+        }
+
         if ($targetTons > 0) return min(100, (int) round($doneTons / $targetTons * 100));
         if ($targetRot > 0) return min(100, (int) round($doneRot / $targetRot * 100));
         return null;

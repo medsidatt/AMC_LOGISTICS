@@ -15,6 +15,7 @@ import { clsx } from 'clsx';
 interface TruckRow {
     id: number;
     matricule: string;
+    is_available: boolean;
     capacity_tonnage: number;
     target_rotations_per_week: number;
     target_weekly_capacity_t: number;
@@ -154,7 +155,9 @@ export default function FleetRosterIndex({
 
     // Internal capacity check — drives the covered/insufficient status only.
     // No raw tonnage figures are shown to the user.
-    const workingTrucks = trucks.filter((t) => !rested.has(t.id));
+    // A truck works only if it's not at repos AND marked available. Trucks made
+    // unavailable elsewhere drop out of the plan automatically.
+    const workingTrucks = trucks.filter((t) => !rested.has(t.id) && t.is_available);
     const workingCapacity = workingTrucks.reduce((s, t) => s + t.period_capacity_t, 0);
     const target = Number(targetTons) || 0;
     const isCovered = target <= 0 || workingCapacity >= target;
@@ -349,23 +352,29 @@ export default function FleetRosterIndex({
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {trucks.map((t) => {
+                            const isUnavailable = !t.is_available;
                             const isResting = rested.has(t.id);
                             return (
                                 <button
                                     key={t.id}
                                     type="button"
                                     onClick={() => toggle(t.id)}
-                                    disabled={!canEdit}
+                                    disabled={!canEdit || isUnavailable}
+                                    title={isUnavailable ? 'Camion indisponible — réactivez-le depuis sa fiche.' : undefined}
                                     className={clsx(
                                         'flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition',
-                                        isResting
-                                            ? 'border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10'
-                                            : 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10',
-                                        canEdit ? 'hover:shadow-sm' : 'opacity-80 cursor-not-allowed',
+                                        isUnavailable
+                                            ? 'border-red-300 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 opacity-70 cursor-not-allowed'
+                                            : isResting
+                                                ? 'border-amber-300 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10'
+                                                : 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-900/10',
+                                        !isUnavailable && (canEdit ? 'hover:shadow-sm' : 'opacity-80 cursor-not-allowed'),
                                     )}
                                 >
                                     <span className="font-semibold text-sm truncate">{t.matricule}</span>
-                                    {isResting ? (
+                                    {isUnavailable ? (
+                                        <Badge variant="danger"><AlertTriangle size={10} className="mr-1" /> Indispo.</Badge>
+                                    ) : isResting ? (
                                         <Badge variant="warning"><BedDouble size={10} className="mr-1" /> Repos</Badge>
                                     ) : target > 0 ? (
                                         <Badge variant="success">{fmt(dist.get(t.id)?.rotations ?? 0)} rot</Badge>
