@@ -17,7 +17,7 @@ export default function AchievementSummary({ fleet, projection, gpsAvailable }: 
         <div className="space-y-4">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <Stat icon={<Target size={16} />} label="Objectif" value={`${fmt(fleet.target_tons)} t`} sub={`${fmt(fleet.target_rotations)} rotations`} />
-                <Stat icon={<CheckCircle2 size={16} className="text-emerald-500" />} label="Réalisé" value={`${fmt(fleet.done_tons)} t`} sub={`${fmt(fleet.done_rotations)} rot. (${fmt(fleet.ticketed_rotations)} ticket + ${fmt(fleet.gps_only_rotations)} GPS)`} />
+                <Stat icon={<CheckCircle2 size={16} className="text-emerald-500" />} label="Réalisé" value={`${fmt(fleet.done_tons)} t`} sub={`${fmt(fleet.done_rotations)} rotations`} />
                 <Stat icon={<TrendingUp size={16} />} label="Restant" value={`${fmt(fleet.remaining_tons)} t`} sub={`${fmt(fleet.remaining_rotations)} rotations`} />
                 <Stat
                     icon={projection.on_track ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
@@ -43,10 +43,9 @@ export default function AchievementSummary({ fleet, projection, gpsAvailable }: 
                     <span>· Rythme {projection.pace_rotations_per_day}/j</span>
                     {fleet.missing_tickets > 0 && (
                         <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                            <AlertTriangle size={12} /> {fleet.missing_tickets} ticket{fleet.missing_tickets > 1 ? 's' : ''} manquant{fleet.missing_tickets > 1 ? 's' : ''}
+                            <AlertTriangle size={12} /> {fleet.missing_tickets} bon{fleet.missing_tickets > 1 ? 's' : ''} manquant{fleet.missing_tickets > 1 ? 's' : ''}
                         </span>
                     )}
-                    {gpsAvailable === false && <span>· GPS indisponible (tickets uniquement)</span>}
                 </div>
             </div>
         </div>

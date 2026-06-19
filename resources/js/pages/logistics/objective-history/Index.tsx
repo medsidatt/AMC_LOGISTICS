@@ -98,8 +98,8 @@ export default function ObjectiveHistoryIndex({ entries, filters }: Props) {
     };
 
     return (
-        <AuthenticatedLayout title="Historique des objectifs">
-            <Head title="Historique des objectifs" />
+        <AuthenticatedLayout title="Journal des objectifs">
+            <Head title="Journal des objectifs" />
 
             <Card
                 className="mb-4"
