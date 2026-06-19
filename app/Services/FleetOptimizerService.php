@@ -197,7 +197,8 @@ class FleetOptimizerService
 
     private function estimateRotations(Truck $truck, float $dailyCapacity): int
     {
-        $capacity = max(0.01, (float) ($truck->capacity_tonnage ?: FleetCapacityService::DEFAULT_CAPACITY_TONNAGE));
+        // Capacity is a single fleet-wide setting, identical for every truck.
+        $capacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: FleetCapacityService::DEFAULT_CAPACITY_TONNAGE));
         return max(1, (int) round($dailyCapacity / $capacity));
     }
 

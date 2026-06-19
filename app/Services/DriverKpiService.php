@@ -40,7 +40,8 @@ class DriverKpiService
 
         // 1. Rotations — planned share for this driver
         $plannedTonnage = MonthlyTonnageTarget::sumForPeriod($from, $to);
-        $avgCapacity = max(0.01, (float) (Truck::where('is_active', true)->avg('capacity_tonnage') ?: 25));
+        // Capacity is a single fleet-wide setting, identical for every truck.
+        $avgCapacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
         $activeDrivers = max(1, Driver::where('is_active', true)->count());
         $plannedRotations = ($plannedTonnage / $avgCapacity) / $activeDrivers;
 
