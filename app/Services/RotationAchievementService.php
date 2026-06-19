@@ -86,7 +86,9 @@ class RotationAchievementService
 
         foreach ($truckIds as $id) {
             $truck = $trucks->get($id);
-            $cap = ((float) ($truck->capacity_tonnage ?? 0)) ?: $defaultCap;
+            // Capacity is a single fleet-wide setting — always use it, so the fill
+            // rate and tonnage never depend on a stale per-truck column value.
+            $cap = $defaultCap;
 
             $tk = $ticketRows->get($id);
             $tRot = (int) ($tk->rotations ?? 0);
