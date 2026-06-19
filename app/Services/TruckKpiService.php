@@ -36,7 +36,8 @@ class TruckKpiService
 
         $avgCycleDays = $this->averageCycleDays($rotations);
 
-        $capacity = max(0.01, (float) ($truck->capacity_tonnage ?: 25));
+        // Capacity is a single fleet-wide setting, identical for every truck.
+        $capacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
         $loadRate = $rotationsCount > 0
             ? $tonnageDelivered / ($capacity * $rotationsCount)
             : 0.0;

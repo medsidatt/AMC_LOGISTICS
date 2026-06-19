@@ -117,11 +117,13 @@ class FleetKpiService
             ->get()
             ->keyBy('truck_id');
 
-        $rows = $trucks->map(function (Truck $truck) use ($rotationsPerTruck, $fuelPerTruck) {
+        // Capacity is a single fleet-wide setting, identical for every truck.
+        $capacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
+
+        $rows = $trucks->map(function (Truck $truck) use ($rotationsPerTruck, $fuelPerTruck, $capacity) {
             $row = $rotationsPerTruck->get($truck->id);
             $rotations = (int) ($row->rotations ?? 0);
             $tonnage = (float) ($row->tonnage ?? 0);
-            $capacity = max(0.01, (float) ($truck->capacity_tonnage ?: 25));
             $loadRate = $rotations > 0 ? $tonnage / ($capacity * $rotations) : 0.0;
             $litres = (float) ($fuelPerTruck->get($truck->id)->litres ?? 0);
             $yield = $tonnage > 0 ? $litres / $tonnage : null;
@@ -180,7 +182,10 @@ class FleetKpiService
             ->groupBy('driver_id')
             ->pluck('points', 'driver_id');
 
-        $rows = $drivers->map(function (Driver $driver) use ($from, $to, $rotationsPerDriver, $gapThreshold, $disciplinePerDriver) {
+        // Capacity is a single fleet-wide setting, identical for every truck.
+        $capacity = max(0.01, (float) ($settings->default_capacity_tonnage ?? 0) ?: 25);
+
+        $rows = $drivers->map(function (Driver $driver) use ($from, $to, $rotationsPerDriver, $gapThreshold, $disciplinePerDriver, $capacity) {
             $row = $rotationsPerDriver->get($driver->id);
             $rotations = (int) ($row->rotations ?? 0);
             $tonnage = (float) ($row->tonnage ?? 0);
@@ -189,14 +194,13 @@ class FleetKpiService
                 ->where('driver_id', $driver->id)
                 ->whereBetween('client_date', [$from, $to])
                 ->select('client_net_weight', 'truck_id', 'gap')
-                ->with('truck:id,capacity_tonnage')
                 ->get();
 
             $loadSum = 0.0;
             $loadCount = 0;
             $gapPenalty = 0;
             foreach ($weighedTrips as $t) {
-                $cap = max(0.01, (float) ($t->truck?->capacity_tonnage ?: 25));
+                $cap = $capacity;
                 if (($t->client_net_weight ?? 0) > 0) {
                     $loadSum += ((float) $t->client_net_weight) / $cap;
                     $loadCount++;
