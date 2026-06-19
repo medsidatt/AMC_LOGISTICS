@@ -179,7 +179,7 @@ export default function Reports(props: Props) {
                                         <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyProvider[i])}</td>
                                         <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyClient[i])}</td>
                                         <td className="px-4 py-2.5 text-right">
-                                            <span className={clsx('font-mono', monthlyGap[i] > 500 ? 'text-red-600 font-bold' : 'text-[var(--color-text)]')}>{fmtT(monthlyGap[i])}</span>
+                                            <span className={clsx('font-mono', Math.abs(monthlyGap[i]) > 5 ? 'text-red-600 font-bold' : 'text-[var(--color-text)]')}>{fmtT(monthlyGap[i])}</span>
                                         </td>
                                     </tr>
                                 ))}
@@ -211,7 +211,7 @@ export default function Reports(props: Props) {
                                         <span className="text-sm font-bold text-[var(--color-text)]">{g.product}</span>
                                         <span className="text-xs text-[var(--color-text-muted)] ml-2">{g.trips} rot.</span>
                                     </div>
-                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -1000 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
+                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -5 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
                                         {g.gap_sum < 0 ? '' : g.gap_sum > 0 ? '+' : ''}{fmtT(g.gap_sum)}
                                     </Badge>
                                 </div>
@@ -231,7 +231,7 @@ export default function Reports(props: Props) {
                                         <span className="text-sm font-bold text-[var(--color-text)]">{BASE_LABELS[g.base] ?? g.base}</span>
                                         <span className="text-xs text-[var(--color-text-muted)] ml-2">{g.trips} rot.</span>
                                     </div>
-                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -1000 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
+                                    <Badge variant={g.gap_sum < 0 ? (g.gap_sum < -5 ? 'danger' : 'warning') : g.gap_sum > 0 ? 'info' : 'success'}>
                                         {g.gap_sum < 0 ? '' : g.gap_sum > 0 ? '+' : ''}{fmtT(g.gap_sum)}
                                     </Badge>
                                 </div>

@@ -125,9 +125,9 @@ export default function TrackingsShow({ tracking: t }: Props) {
                     <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex justify-between items-center">
                         <span className="text-sm text-[var(--color-text-secondary)]">{(t.gap ?? 0) < 0 ? 'Perte' : (t.gap ?? 0) > 0 ? 'Excédent' : 'Écart'}</span>
                         {(t.gap ?? 0) < 0
-                            ? <Badge variant="danger">Perte {fmt(Math.abs(t.gap ?? 0))} kg</Badge>
+                            ? <Badge variant="danger">Perte {fmt(Math.abs(t.gap ?? 0))} t</Badge>
                             : (t.gap ?? 0) > 0
-                                ? <Badge variant="info">Exc. +{fmt(t.gap)} kg</Badge>
+                                ? <Badge variant="info">Exc. +{fmt(t.gap)} t</Badge>
                                 : <Badge variant="success">OK</Badge>
                         }
                     </div>
