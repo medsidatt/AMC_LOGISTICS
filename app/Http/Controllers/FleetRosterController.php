@@ -119,7 +119,7 @@ class FleetRosterController extends Controller
         $userId = auth()->id();
         $restedIds = array_values(array_unique($data['rested_truck_ids'] ?? []));
 
-        DB::transaction(function () use ($start, $end, $restedIds, $userId, $data) {
+        $objective = DB::transaction(function () use ($start, $end, $restedIds, $userId, $data) {
             // Wipe previous surplus-capacity windows that exactly match this period
             TruckRestWindow::query()
                 ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
@@ -138,7 +138,7 @@ class FleetRosterController extends Controller
                 ]);
             }
 
-            $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), $userId, $data['notes'] ?? null, $restedIds);
+            return $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), $userId, $data['notes'] ?? null, $restedIds);
         });
 
         return redirect()
@@ -147,10 +147,11 @@ class FleetRosterController extends Controller
                 'end' => $end->toDateString(),
             ])
             ->with('success', sprintf(
-                'Programmation enregistrée : %d camion(s) au repos du %s au %s.',
+                'Programmation enregistrée : %d camion(s) au repos. Objectif redistribué : %d rotations ≈ %s t sur %d camion(s) en service.',
                 count($restedIds),
-                $start->format('d/m/Y'),
-                $end->format('d/m/Y'),
+                $objective->target_rotations,
+                number_format((float) $objective->target_tons, 0, ',', ' '),
+                $objective->working_trucks,
             ));
     }
 
@@ -169,9 +170,9 @@ class FleetRosterController extends Controller
         $start = Carbon::parse($data['start_date']);
         $end = Carbon::parse($data['end_date']);
 
-        DB::transaction(function () use ($start, $end, $data) {
+        $objective = DB::transaction(function () use ($start, $end, $data) {
             // restedIds null → derived from existing rest windows for the period.
-            $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), auth()->id(), null);
+            return $this->upsertObjective($start, $end, (float) ($data['target_tons'] ?? 0), auth()->id(), null);
         });
 
         return redirect()
@@ -180,7 +181,12 @@ class FleetRosterController extends Controller
                 'end' => $end->toDateString(),
                 'target_tons' => $data['target_tons'] ?? null,
             ])
-            ->with('success', 'Objectif enregistré pour la période.');
+            ->with('success', sprintf(
+                'Objectif réparti : %d rotations ≈ %s t sur %d camion(s) en service.',
+                $objective->target_rotations,
+                number_format((float) $objective->target_tons, 0, ',', ' '),
+                $objective->working_trucks,
+            ));
     }
 
     /**
@@ -200,19 +206,27 @@ class FleetRosterController extends Controller
         }
 
         $restedIds = array_values(array_unique($restedIds));
-        $capacityPerRotation = max(0.01, $this->capacity->defaultCapacityTonnage());
-        $targetRotations = (int) round($targetTons / $capacityPerRotation);
         $restedSet = array_flip($restedIds);
+        $defaultCap = max(0.01, $this->capacity->defaultCapacityTonnage());
 
-        $activeTrucks = Truck::where('is_active', true)->get(['id', 'capacity_tonnage', 'target_rotations_per_week']);
+        $activeTrucks = Truck::where('is_active', true)->get(['id', 'capacity_tonnage']);
         $restedCount = count($restedIds);
+
+        // Top-down: distribute the tonnage target across the WORKING trucks into
+        // integer rotations. The fleet header is then the exact sum of the per-truck
+        // plan, so tonnage and rotations always reconcile with the breakdown.
+        $workingTrucks = $activeTrucks->reject(fn (Truck $t) => isset($restedSet[$t->id]))->values();
+        $distribution = $this->capacity->distributeTargetRotations($targetTons, $workingTrucks);
+
+        $plannedRotations = (int) array_sum(array_column($distribution, 'rotations'));
+        $plannedTons = round(array_sum(array_column($distribution, 'tons')), 2);
 
         $objective = FleetObjective::updateOrCreate(
             ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
             [
-                'target_tons' => $targetTons,
-                'target_rotations' => $targetRotations,
-                'working_trucks' => max(0, $activeTrucks->count() - $restedCount),
+                'target_tons' => $plannedTons,
+                'target_rotations' => $plannedRotations,
+                'working_trucks' => $workingTrucks->count(),
                 'rested_trucks' => $restedCount,
                 'notes' => $notes,
                 'created_by' => $userId,
@@ -221,19 +235,17 @@ class FleetRosterController extends Controller
 
         // Snapshot per-truck targets (frozen). Rested trucks get a 0-target row
         // so they still appear in the breakdown. Re-applying re-snapshots cleanly.
-        $weeks = max(1.0, round(($start->diffInDays($end) + 1) / 7, 2));
         $objective->truckTargets()->delete();
 
         $now = now();
-        $rows = $activeTrucks->map(function (Truck $truck) use ($objective, $restedSet, $weeks, $capacityPerRotation, $now) {
-            $cap = (float) ($truck->capacity_tonnage ?: $capacityPerRotation);
-            $rot = isset($restedSet[$truck->id]) ? 0 : (int) round($this->capacity->targetRotationsForTruck($truck) * $weeks);
+        $rows = $activeTrucks->map(function (Truck $truck) use ($objective, $distribution, $defaultCap, $now) {
+            $d = $distribution[$truck->id] ?? null;
             return [
                 'fleet_objective_id' => $objective->id,
                 'truck_id' => $truck->id,
-                'target_rotations' => $rot,
-                'target_tons' => round($rot * $cap, 2),
-                'capacity_tonnage' => round($cap, 2),
+                'target_rotations' => $d['rotations'] ?? 0,
+                'target_tons' => $d['tons'] ?? 0.0,
+                'capacity_tonnage' => $d['capacity'] ?? round((float) ($truck->capacity_tonnage ?: $defaultCap), 2),
                 'created_at' => $now,
                 'updated_at' => $now,
             ];

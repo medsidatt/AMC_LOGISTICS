@@ -120,6 +120,58 @@ class FleetCapacityService
         ];
     }
 
+    /**
+     * Top-down distribution of a tonnage target across the working trucks into
+     * integer rotations. Total rotations = round(targetTons / average capacity);
+     * they are spread as evenly as possible, with leftover rotations going to the
+     * highest-capacity trucks (best tonnage fit). Per-truck tonnage = rotations ×
+     * that truck's own capacity. The fleet objective is then the exact sum of this
+     * plan, so tonnage and rotations always reconcile with the per-truck breakdown.
+     *
+     * @param  \Illuminate\Support\Collection<int, \App\Models\Truck>  $workingTrucks
+     * @return array<int, array{rotations:int, tons:float, capacity:float}>  keyed by truck id
+     */
+    public function distributeTargetRotations(float $targetTons, Collection $workingTrucks): array
+    {
+        $defaultCap = max(0.01, $this->defaultCapacityTonnage());
+        $trucks = $workingTrucks->values();
+        $n = $trucks->count();
+
+        $caps = $trucks->mapWithKeys(fn (Truck $t) => [
+            $t->id => max(0.01, (float) ($t->capacity_tonnage ?: $defaultCap)),
+        ]);
+
+        if ($n === 0 || $targetTons <= 0) {
+            return $trucks->mapWithKeys(fn (Truck $t) => [
+                $t->id => ['rotations' => 0, 'tons' => 0.0, 'capacity' => round($caps[$t->id], 2)],
+            ])->all();
+        }
+
+        $avgCap = max(0.01, $caps->sum() / $n);
+        $totalRotations = max(0, (int) round($targetTons / $avgCap));
+        $base = intdiv($totalRotations, $n);
+        $remainder = $totalRotations % $n;
+
+        // Highest-capacity trucks absorb the leftover rotations.
+        $extra = [];
+        foreach ($trucks->sortByDesc(fn (Truck $t) => $caps[$t->id])->values() as $i => $t) {
+            $extra[$t->id] = $i < $remainder ? 1 : 0;
+        }
+
+        $out = [];
+        foreach ($trucks as $t) {
+            $cap = $caps[$t->id];
+            $rot = $base + ($extra[$t->id] ?? 0);
+            $out[$t->id] = [
+                'rotations' => $rot,
+                'tons' => round($rot * $cap, 2),
+                'capacity' => round($cap, 2),
+            ];
+        }
+
+        return $out;
+    }
+
     public function truckDailyCapacity(Truck $truck): array
     {
         $from = Carbon::now()->subDays(self::HISTORY_DAYS)->startOfDay();
