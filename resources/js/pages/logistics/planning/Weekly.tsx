@@ -5,7 +5,8 @@ import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import AchievementSummary from '@/components/logistics/AchievementSummary';
 import type { Achievement } from '@/types/achievement';
-import { ArrowLeft, ChevronLeft, ChevronRight, Trophy, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Trophy, AlertTriangle, Gauge } from 'lucide-react';
+import { clsx } from 'clsx';
 
 interface Props {
     period: { start: string; end: string };
@@ -13,6 +14,18 @@ interface Props {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
+
+// Fill rate = how full the truck was loaded vs its capacity. Below 70% is a flag.
+const fillColor = (pct: number | null) =>
+    pct == null ? 'text-[var(--color-text-muted)]'
+        : pct >= 90 ? 'text-emerald-600 dark:text-emerald-400'
+            : pct >= 70 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400';
+const fillBar = (pct: number | null) =>
+    pct == null ? 'bg-[var(--color-surface-hover)]'
+        : pct >= 90 ? 'bg-emerald-500'
+            : pct >= 70 ? 'bg-amber-500'
+                : 'bg-red-500';
 
 function shiftWeek(iso: string, weeks: number): string {
     const d = new Date(iso + 'T00:00:00');
@@ -47,6 +60,19 @@ export default function PlanningWeekly({ period, achievement }: Props) {
                         <button type="button" onClick={() => goto(shiftWeek(period.start, 1))} className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)]" title="Semaine suivante"><ChevronRight size={18} /></button>
                     </div>
                     <AchievementSummary fleet={achievement.fleet} projection={achievement.projection} gpsAvailable={achievement.gps_available} />
+
+                    <div className="mt-4 flex items-center gap-3 rounded-xl border border-[var(--color-border)] p-3 flex-wrap">
+                        <div className="flex items-center gap-2">
+                            <Gauge size={18} className={fillColor(achievement.fleet.fill_pct)} />
+                            <span className="font-semibold">Remplissage moyen</span>
+                        </div>
+                        <span className={clsx('text-2xl font-bold', fillColor(achievement.fleet.fill_pct))}>
+                            {achievement.fleet.fill_pct ?? '—'}{achievement.fleet.fill_pct != null && '%'}
+                        </span>
+                        <span className="text-sm text-[var(--color-text-muted)]">
+                            charge moyenne <strong>{fmt(achievement.fleet.avg_load_t)} t</strong> par rotation (d'après les bons pesés)
+                        </span>
+                    </div>
                 </Card>
 
                 <Card padding={false}>
@@ -60,11 +86,13 @@ export default function PlanningWeekly({ period, achievement }: Props) {
                                     <th className="px-4 py-3 text-right font-semibold">Réalisé</th>
                                     <th className="px-4 py-3 text-right font-semibold">Restant</th>
                                     <th className="px-4 py-3 text-left font-semibold w-32">Avancement</th>
+                                    <th className="px-4 py-3 text-right font-semibold">Charge moy.</th>
+                                    <th className="px-4 py-3 text-left font-semibold w-32">Remplissage</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[var(--color-border)]">
                                 {achievement.per_truck.length === 0 ? (
-                                    <tr><td colSpan={5} className="px-4 py-10 text-center text-[var(--color-text-muted)]">Aucun objectif pour cette semaine.</td></tr>
+                                    <tr><td colSpan={7} className="px-4 py-10 text-center text-[var(--color-text-muted)]">Aucun objectif pour cette semaine.</td></tr>
                                 ) : achievement.per_truck.map((t) => (
                                     <tr key={t.truck_id} className="hover:bg-[var(--color-surface-hover)]/40">
                                         <td className="px-4 py-3 font-medium">{t.matricule}</td>
@@ -81,6 +109,26 @@ export default function PlanningWeekly({ period, achievement }: Props) {
                                                 </div>
                                                 <span className="text-xs font-semibold w-8 text-right">{t.pct ?? '—'}</span>
                                             </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-mono">
+                                            {t.ticketed_rotations > 0 ? (
+                                                <>
+                                                    <span className={fillColor(t.fill_pct)}>{fmt(t.avg_load_t)} t</span>
+                                                    <span className="text-[var(--color-text-muted)] text-xs"> / {fmt(t.capacity_tonnage)}</span>
+                                                </>
+                                            ) : <span className="text-[var(--color-text-muted)]">—</span>}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {t.fill_pct == null ? (
+                                                <span className="text-[var(--color-text-muted)] text-xs">—</span>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 h-2 rounded-full bg-[var(--color-surface-hover)] overflow-hidden">
+                                                        <div className={clsx('h-full rounded-full', fillBar(t.fill_pct))} style={{ width: `${t.fill_pct}%` }} />
+                                                    </div>
+                                                    <span className={clsx('text-xs font-semibold w-8 text-right', fillColor(t.fill_pct))}>{t.fill_pct}%</span>
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
