@@ -86,7 +86,6 @@ export default function DriversIndex({ drivers, totals }: Props) {
                             { key: 'is_active', label: 'Actif', render: (r) => <Badge variant={r.is_active ? 'success' : 'muted'}>{r.is_active ? 'Oui' : 'Non'}</Badge> },
                             { key: 'email', label: 'Email', hideOnMobile: true },
                             { key: 'phone', label: 'Téléphone', hideOnMobile: true },
-                            { key: 'address', label: 'Adresse', hideOnMobile: true },
                             {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
