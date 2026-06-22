@@ -122,10 +122,10 @@ Route::group(['prefix' => 'transport_tracking', 'as' => 'transport_tracking.', '
 
 // ----- Logistics Manager Routes -----
 Route::group(['prefix' => 'logistics', 'as' => 'logistics.', 'middleware' => ['auth']], function () {
-    Route::get('/dashboard', [LogisticsManagerController::class, 'dashboard'])->name('dashboard');
+    // "Tableau logistique" retired — it duplicated the role-landing dashboard.
+    Route::get('/dashboard', fn () => redirect()->route('home'))->name('dashboard');
     Route::get('/reports', [LogisticsManagerController::class, 'reports'])->name('reports');
     Route::post('/daily-issues/{issue}/resolve', [LogisticsManagerController::class, 'resolveDailyIssue'])->name('daily-issues.resolve');
-    Route::post('/rotations/{transportTracking}/validate', [LogisticsManagerController::class, 'validateRotation'])->name('rotations.validate');
 });
 
 // ----- Maintenance Routes -----
