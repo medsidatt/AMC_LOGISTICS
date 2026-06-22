@@ -38,6 +38,8 @@ class ObjectiveTargetResolver
      *   per_truck:array<int,array{target_rotations:int,target_tons:float}>
      * }
      */
+    public function __construct(private OperationsCalendarService $calendar) {}
+
     public function resolve(Carbon $start, Carbon $end, string $viewMode): array
     {
         $startStr = $start->toDateString();
@@ -194,9 +196,9 @@ class ObjectiveTargetResolver
         ];
     }
 
-    /** Inclusive day count between two dates. */
+    /** Operational working-day count between two dates (calendar-aware). */
     private function days(Carbon $a, Carbon $b): int
     {
-        return (int) $a->copy()->startOfDay()->diffInDays($b->copy()->startOfDay()) + 1;
+        return $this->calendar->operationalDays($a, $b);
     }
 }

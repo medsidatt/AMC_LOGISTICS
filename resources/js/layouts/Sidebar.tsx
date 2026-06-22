@@ -3,9 +3,9 @@ import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
-    AlertTriangle, Activity, History, Target,
+    AlertTriangle, Activity, History, Target, ChevronDown, CalendarDays,
 } from 'lucide-react';
-import {type ReactNode} from 'react';
+import {useState, useEffect, type ReactNode} from 'react';
 import {clsx} from 'clsx';
 import {usePermission} from '@/hooks/usePermission';
 
@@ -75,19 +75,6 @@ function SidebarLink({item, collapsed, activeHref}: { item: NavItem; collapsed: 
     );
 }
 
-function SectionHeader({label, collapsed}: { label: string; collapsed: boolean }) {
-    if (collapsed) {
-        return <li className="my-2 border-t border-[var(--color-sidebar-border)]"/>;
-    }
-    return (
-        <li className="px-4 pt-4 pb-1">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-sidebar-muted)]">
-                {label}
-            </span>
-        </li>
-    );
-}
-
 /**
  * Single source of truth for navigation. Each item declares the permission
  * (or role, for the handful of role-gated routes) that reveals it. Items the
@@ -139,6 +126,7 @@ const mainSections: NavSection[] = [
         items: [
             {label: 'Tableau de planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
             {label: 'Objectifs', href: '/logistics/objectives', icon: <Target size={18}/>, match: '/logistics/objectives', permission: 'fleet-roster-plan'},
+            {label: 'Calendrier opérationnel', href: '/settings/operations-calendar', icon: <CalendarDays size={18}/>, match: '/settings/operations-calendar', permission: 'fleet-settings-edit'},
             {label: 'Configuration planification', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
         ],
     },
@@ -234,6 +222,28 @@ export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) 
     };
     const allItems: NavItem[] = [dashboardItem, ...sections.flatMap((s) => s.items)];
     const activeHref = pickActiveHref(url, allItems);
+    const activeSection = sections.find((s) => s.items.some((i) => i.href === activeHref))?.header ?? null;
+
+    // Collapsible groups (expanded mode only). State persists; the section
+    // containing the current page is always shown so the user never loses context.
+    const [openSections, setOpenSections] = useState<Set<string>>(() => {
+        if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem('amc-sidebar-open-sections');
+            if (raw) {
+                try { return new Set<string>(JSON.parse(raw)); } catch { /* fall through */ }
+            }
+        }
+        return new Set(rawSections.map((s) => s.header));
+    });
+    useEffect(() => {
+        localStorage.setItem('amc-sidebar-open-sections', JSON.stringify([...openSections]));
+    }, [openSections]);
+    const toggleSection = (h: string) =>
+        setOpenSections((prev) => {
+            const next = new Set(prev);
+            next.has(h) ? next.delete(h) : next.add(h);
+            return next;
+        });
 
     return (
         <>
@@ -278,15 +288,32 @@ export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) 
                     <ul className="space-y-0.5">
                         <SidebarLink item={dashboardItem} collapsed={collapsed} activeHref={activeHref}/>
 
-                        {sections.map((section) => (
-                            <div key={section.header}>
-                                <SectionHeader label={section.header} collapsed={collapsed}/>
-                                {section.items.map((item) => (
-                                    <SidebarLink key={item.href} item={item} collapsed={collapsed}
-                                                 activeHref={activeHref}/>
-                                ))}
-                            </div>
-                        ))}
+                        {sections.map((section) => {
+                            const isOpen = collapsed || openSections.has(section.header) || section.header === activeSection;
+                            return (
+                                <div key={section.header}>
+                                    {collapsed ? (
+                                        <li className="my-2 border-t border-[var(--color-sidebar-border)]"/>
+                                    ) : (
+                                        <li className="px-2 pt-3 pb-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleSection(section.header)}
+                                                aria-expanded={isOpen}
+                                                className="w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-semibold uppercase tracking-wider text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-hover)] transition-colors cursor-pointer"
+                                            >
+                                                <span className="truncate">{section.header}</span>
+                                                <ChevronDown size={14} className={clsx('shrink-0 transition-transform', !isOpen && '-rotate-90')}/>
+                                            </button>
+                                        </li>
+                                    )}
+                                    {isOpen && section.items.map((item) => (
+                                        <SidebarLink key={item.href} item={item} collapsed={collapsed}
+                                                     activeHref={activeHref}/>
+                                    ))}
+                                </div>
+                            );
+                        })}
                     </ul>
                 </nav>
 

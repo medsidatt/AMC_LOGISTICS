@@ -22,6 +22,7 @@ class RotationAchievementService
         private FreightLoopService $loops,
         private FleetCapacityService $capacity,
         private ObjectiveTargetResolver $objectiveResolver,
+        private OperationsCalendarService $calendar,
     ) {}
 
     /**
@@ -116,9 +117,9 @@ class RotationAchievementService
 
         foreach ($truckIds as $id) {
             $truck = $trucks->get($id);
-            // Capacity is a single fleet-wide setting — always use it, so the fill
-            // rate and tonnage never depend on a stale per-truck column value.
-            $cap = $defaultCap;
+            // Per-truck rated capacity (v2 heterogeneous fleet); the fleet default
+            // is only the fallback for trucks without a configured capacity.
+            $cap = ($truck && (float) $truck->capacity_tonnage > 0) ? (float) $truck->capacity_tonnage : $defaultCap;
 
             $tk = $ticketRows->get($id);
             $tRot = (int) ($tk->rotations ?? 0);
@@ -273,7 +274,8 @@ class RotationAchievementService
 
     private function projection(Carbon $start, Carbon $end, int $doneRot, float $doneTons, int $targetRot, float $targetTons): array
     {
-        $daysTotal = (int) $start->copy()->startOfDay()->diffInDays($end->copy()->startOfDay()) + 1;
+        // Pacing on operational working days (calendar-aware), not calendar days.
+        $daysTotal = $this->calendar->operationalDays($start, $end);
         $today = Carbon::now();
 
         if ($today->lt($start)) {
@@ -281,7 +283,7 @@ class RotationAchievementService
         } elseif ($today->gt($end)) {
             $daysElapsed = $daysTotal;
         } else {
-            $daysElapsed = (int) $start->copy()->startOfDay()->diffInDays($today->copy()->startOfDay()) + 1;
+            $daysElapsed = $this->calendar->operationalDays($start, $today);
         }
 
         $paceRot = $daysElapsed > 0 ? $doneRot / $daysElapsed : 0.0;

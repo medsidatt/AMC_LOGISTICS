@@ -4,8 +4,6 @@ import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
 import InsightCard from '@/components/dashboard/InsightCard';
 import TonnageChart from '@/components/charts/TonnageChart';
-import RotationTimeline from '@/components/charts/RotationTimeline';
-import DistributionPie from '@/components/charts/DistributionPie';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
@@ -184,28 +182,8 @@ export default function TransportDashboard({ filters: initialFilters, filterOpti
                 <Card header="Poids mensuel" className="lg:col-span-2">
                     <TonnageChart months={months} providerData={monthlyWeights} />
                 </Card>
-                <div className="space-y-4">
-                    <InsightCard insights={insights} />
-                    <Card
-                        header={
-                            <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold">Distribution rotations</span>
-                            </div>
-                        }
-                    >
-                        <DistributionPie
-                            labels={['Normales', 'Perdues']}
-                            values={[kpis.rotationsNormal, kpis.rotationsPerdues]}
-                            height={220}
-                        />
-                    </Card>
-                </div>
+                <InsightCard insights={insights} />
             </div>
-
-            {/* Timeline / Gantt */}
-            <Card header="Timeline des rotations" className="mt-6">
-                <RotationTimeline events={timelineEvents} height={400} />
-            </Card>
         </AuthenticatedLayout>
     );
 }
