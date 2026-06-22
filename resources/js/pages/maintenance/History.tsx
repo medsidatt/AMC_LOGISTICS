@@ -380,7 +380,7 @@ export default function MaintenanceHistory({
 
     const onEditKmChange = (val: string) => {
         // Vidange km mirrors the odometer reading; recompute the next change from it.
-        editForm.setData((d) => ({
+        editForm.setData((d: typeof editForm.data) => ({
             ...d,
             kilometers_at_maintenance: val,
             oil_change_km: val,

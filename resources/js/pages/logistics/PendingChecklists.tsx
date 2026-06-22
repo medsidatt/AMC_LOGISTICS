@@ -85,7 +85,7 @@ export default function PendingChecklists({ checklists }: Props) {
                 </Card>
             </div>
 
-            <Modal isOpen={!!target} onClose={() => setTarget(null)} title={decision === 'validated' ? 'Valider la checklist' : 'Rejeter la checklist'}>
+            <Modal open={!!target} onClose={() => setTarget(null)} title={decision === 'validated' ? 'Valider la checklist' : 'Rejeter la checklist'}>
                 <form onSubmit={submit} className="space-y-3">
                     <FormTextarea
                         label="Notes (optionnel)"
