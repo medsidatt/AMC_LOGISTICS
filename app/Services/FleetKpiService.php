@@ -9,7 +9,7 @@ use App\Models\DriverDisciplineRecord;
 use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelTracking;
-use App\Models\MonthlyTonnageTarget;
+use App\Models\FleetObjective;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use Carbon\Carbon;
@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class FleetKpiService
 {
+    public function __construct(private readonly ObjectiveTargetResolver $objectiveResolver) {}
+
     public function compute(Carbon $from, Carbon $to): array
     {
         $from = $from->copy()->startOfDay();
@@ -58,7 +60,7 @@ class FleetKpiService
         $saturationRate = $trucksAvailable > 0 ? $trucksActive / $trucksAvailable : 0.0;
 
         $periodDays = max(1, (int) ceil($from->diffInDays($to)) + 1);
-        $plannedTonnage = MonthlyTonnageTarget::sumForPeriod($from, $to);
+        $plannedTonnage = $this->objectiveResolver->resolve($from, $to, FleetObjective::PERIOD_CUSTOM)['fleet']['target_tons'];
         $productionTarget = $plannedTonnage > 0 ? $totalTonnageDelivered / $plannedTonnage : 0.0;
 
         $theoreticalCapacity = $avgCapacity * $totalRotations;

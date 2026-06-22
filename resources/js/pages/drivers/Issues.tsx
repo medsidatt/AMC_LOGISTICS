@@ -173,7 +173,7 @@ export default function Issues({ driver, truck, recent, options }: Props) {
         const turningOn = !isFlagged(cat);
         const next = turningOn
             ? [...form.data.flagged, cat]
-            : form.data.flagged.filter((c) => c !== cat);
+            : form.data.flagged.filter((c: string) => c !== cat);
         form.setData('flagged', next);
 
         // Pre-select the lowest severity so a status is always set.
@@ -196,7 +196,7 @@ export default function Issues({ driver, truck, recent, options }: Props) {
 
     const togglePosition = (cat: string, pos: string) => {
         const current = form.data.positions[cat] ?? [];
-        const next = current.includes(pos) ? current.filter((p) => p !== pos) : [...current, pos];
+        const next = current.includes(pos) ? current.filter((p: string) => p !== pos) : [...current, pos];
         form.setData('positions', { ...form.data.positions, [cat]: next });
     };
 
@@ -224,7 +224,7 @@ export default function Issues({ driver, truck, recent, options }: Props) {
     const requiresPositions = (cat: string) => cat === 'tires' || cat === 'lights';
     const formValid =
         flaggedCount > 0 &&
-        form.data.flagged.every((cat) => {
+        form.data.flagged.every((cat: string) => {
             if (!form.data.severity[cat]) return false;
             if (requiresPositions(cat) && (form.data.positions[cat]?.length ?? 0) === 0) return false;
             return true;

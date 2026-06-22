@@ -16,8 +16,6 @@ export function usePolling({ interval, only, enabled = true }: UsePollingOptions
         timer.current = setInterval(() => {
             router.reload({
                 only: only,
-                preserveState: true,
-                preserveScroll: true,
             });
         }, interval * 1000);
 

@@ -65,9 +65,6 @@ export default function TrucksCreate({ transporters, defaultTargetRotationsPerWe
                         onChange={(e) => form.setData('target_rotations_per_week', e.target.value)}
                         error={form.errors.target_rotations_per_week}
                     />
-                    <p className="text-xs text-[var(--color-text-muted)] -mt-2 mb-3">
-                        Laisser vide pour utiliser le défaut flotte ({defaultTargetRotationsPerWeek} rot./sem).
-                    </p>
                     <FormCheckbox label="Disponible dès la création" name="is_available" checked={form.data.is_available} onChange={(e) => form.setData('is_available', e.target.checked)} error={form.errors.is_available} />
 
                     {objectiveProvided && (

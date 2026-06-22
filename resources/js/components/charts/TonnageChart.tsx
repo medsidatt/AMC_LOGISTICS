@@ -18,7 +18,7 @@ export default function TonnageChart({ months, providerData, clientData, gapData
     const { isDark } = useTheme();
     const palette = getChartPalette(isDark);
 
-    const series: ApexAxisChartSeries = [
+    const series: { name: string; data: number[]; type?: string }[] = [
         { name: 'Fournisseur', data: providerData },
     ];
     if (clientData) series.push({ name: 'Client', data: clientData });

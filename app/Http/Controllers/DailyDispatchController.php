@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyDispatch;
 use App\Models\Driver;
+use App\Models\FleetObjective;
 use App\Models\Provider;
 use App\Models\Truck;
+use App\Services\PlanningPeriodResolver;
 use App\Services\RotationAchievementService;
 use App\Services\Whatsapp\DispatchNotifier;
 use Carbon\Carbon;
@@ -78,19 +80,23 @@ class DailyDispatchController extends Controller
     }
 
     /**
-     * Weekly rotation scoreboard (Mon→Sat): planned vs done per truck + the
-     * fleet roll-up, reusing the reconciled achievement engine.
+     * Planning scoreboard: planned vs done per truck + the fleet roll-up, for any
+     * period (Week / Month / Year / Custom). Targets resolve hierarchically via
+     * the view mode; the realized side is computed from trips in the range.
      */
-    public function weekly(Request $request)
+    public function weekly(Request $request, PlanningPeriodResolver $periods)
     {
-        $start = $request->query('start')
-            ? Carbon::parse($request->query('start'))->startOfWeek(Carbon::MONDAY)
-            : Carbon::now()->startOfWeek(Carbon::MONDAY);
-        $end = $start->copy()->addDays(5);
+        $p = $periods->resolve(
+            $request->query('mode', FleetObjective::PERIOD_WEEK),
+            $request->query('anchor') ?? $request->query('start'),
+            $request->query('start'),
+            $request->query('end'),
+        );
 
         return Inertia::render('logistics/planning/Weekly', [
-            'period' => ['start' => $start->toDateString(), 'end' => $end->toDateString()],
-            'achievement' => $this->achievement->forPeriod($start, $end->copy()->endOfDay()),
+            'mode' => $p['mode'],
+            'period' => ['start' => $p['start']->toDateString(), 'end' => $p['end']->toDateString()],
+            'achievement' => $this->achievement->forPeriod($p['start'], $p['end'], $p['mode']),
         ]);
     }
 

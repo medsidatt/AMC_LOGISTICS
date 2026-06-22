@@ -21,6 +21,7 @@ class RotationAchievementService
     public function __construct(
         private FreightLoopService $loops,
         private FleetCapacityService $capacity,
+        private ObjectiveTargetResolver $objectiveResolver,
     ) {}
 
     /**
@@ -28,8 +29,16 @@ class RotationAchievementService
      * cached — they only change if late tickets land, so the cache is keyed by
      * the objective's updated_at and given a short TTL.
      */
-    public function forPeriod(Carbon $start, Carbon $end): array
+    public function forPeriod(Carbon $start, Carbon $end, ?string $viewMode = null): array
     {
+        // Hierarchical target resolution (multi-period scoreboard) reads from
+        // potentially several broader objectives, so it is not safely keyed by a
+        // single objective's updated_at — compute it fresh. The legacy exact-match
+        // path (dashboard / roster history) keeps its cache untouched.
+        if ($viewMode !== null) {
+            return $this->computePeriod($start, $end, $viewMode);
+        }
+
         $isClosed = $end->copy()->endOfDay()->lt(Carbon::now()->startOfDay());
 
         if ($isClosed) {
@@ -44,7 +53,7 @@ class RotationAchievementService
         return $this->computePeriod($start, $end);
     }
 
-    private function computePeriod(Carbon $start, Carbon $end): array
+    private function computePeriod(Carbon $start, Carbon $end, ?string $viewMode = null): array
     {
         $startStr = $start->toDateString();
         $endStr = $end->toDateString();
@@ -66,17 +75,38 @@ class RotationAchievementService
         $gpsOnly = $loops->filter(fn ($l) => empty($l['transport_tracking_id']));
         $gpsOnlyByTruck = $gpsOnly->groupBy('truck_id')->map->count();
 
-        // Frozen targets from the objective snapshot.
-        $objective = FleetObjective::with('truckTargets')
-            ->where('start_date', $startStr)
-            ->where('end_date', $endStr)
-            ->first();
-        $truckTargets = $objective ? $objective->truckTargets->keyBy('truck_id') : collect();
+        // Target resolution. With a view mode (multi-period scoreboard) targets
+        // resolve hierarchically (week → month → year, prorated/aggregated). Without
+        // one (legacy callers) we keep the exact same-period weekly snapshot.
+        if ($viewMode !== null) {
+            $resolved = $this->objectiveResolver->resolve($start, $end, $viewMode);
+            $perTruckTargets = $resolved['per_truck'];
+            $fleetTarget = $resolved['source'] !== 'none' ? $resolved['fleet'] : null;
+            $targetSource = $resolved['source'];
+            $targetCoverage = $resolved['coverage'];
+        } else {
+            $objective = FleetObjective::with('truckTargets')
+                ->where('period_type', FleetObjective::PERIOD_WEEK)
+                ->where('start_date', $startStr)
+                ->where('end_date', $endStr)
+                ->first();
+            $perTruckTargets = $objective
+                ? $objective->truckTargets->mapWithKeys(fn ($t) => [(int) $t->truck_id => [
+                    'target_rotations' => (int) $t->target_rotations,
+                    'target_tons' => round((float) $t->target_tons, 2),
+                ]])->all()
+                : [];
+            $fleetTarget = $objective
+                ? ['target_rotations' => (int) $objective->target_rotations, 'target_tons' => round((float) $objective->target_tons, 2)]
+                : null;
+            $targetSource = $objective ? 'exact' : 'none';
+            $targetCoverage = $objective ? 1.0 : 0.0;
+        }
 
         $truckIds = collect($trucks->keys())
             ->merge($ticketRows->keys())
             ->merge($gpsOnlyByTruck->keys())
-            ->merge($truckTargets->keys())
+            ->merge(array_keys($perTruckTargets))
             ->unique()
             ->values();
 
@@ -97,9 +127,9 @@ class RotationAchievementService
             $gRot = (int) ($gpsOnlyByTruck->get($id) ?? 0);
             $gTons = round($gRot * $cap, 2);
 
-            $tt = $truckTargets->get($id);
-            $tgtRot = (int) ($tt->target_rotations ?? 0);
-            $tgtTons = round((float) ($tt->target_tons ?? 0), 2);
+            $tt = $perTruckTargets[$id] ?? null;
+            $tgtRot = (int) ($tt['target_rotations'] ?? 0);
+            $tgtTons = round((float) ($tt['target_tons'] ?? 0), 2);
 
             $doneRot = $tRot + $gRot;
             $doneTons = round($tTons + $gTons, 2);
@@ -142,9 +172,9 @@ class RotationAchievementService
         // Sort per-truck by rotations done (desc) for the table + leaderboard.
         usort($perTruck, fn ($a, $b) => $b['done_rotations'] <=> $a['done_rotations']);
 
-        // Fleet target: prefer the objective header; else the sum of per-truck targets.
-        $targetTons = $objective ? (float) $objective->target_tons : round($sumTargetTons, 2);
-        $targetRotations = $objective ? (int) $objective->target_rotations : $sumTargetRot;
+        // Fleet target: prefer the resolved header; else the sum of per-truck targets.
+        $targetTons = $fleetTarget ? (float) $fleetTarget['target_tons'] : round($sumTargetTons, 2);
+        $targetRotations = $fleetTarget ? (int) $fleetTarget['target_rotations'] : $sumTargetRot;
 
         $doneRotations = $sumTicketRot + $sumGpsRot;
         $doneTons = round($sumTicketTons + $sumGpsTons, 2);
@@ -158,7 +188,9 @@ class RotationAchievementService
         return [
             'period' => ['start' => $startStr, 'end' => $endStr],
             'gps_available' => $gpsAvailable,
-            'has_objective' => (bool) $objective,
+            'has_objective' => $targetSource !== 'none',
+            'target_source' => $targetSource,
+            'target_coverage' => $targetCoverage,
             'fleet' => [
                 'target_rotations' => $targetRotations,
                 'target_tons' => round($targetTons, 2),

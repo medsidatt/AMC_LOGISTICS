@@ -31,15 +31,22 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
         Route::delete('/{restWindow}', [TruckRestWindowController::class, 'destroy'])->name('destroy');
     });
 
+    // Legacy fleet-roster URLs → Objectives. Authoring + outcomes were merged into
+    // Objectives / the Planning Dashboard; the old roster + history screens are gone.
     Route::group(['prefix' => 'fleet-roster', 'as' => 'logistics.fleet-roster.'], function () {
-        Route::get('/', [\App\Http\Controllers\FleetRosterController::class, 'index'])->name('index');
-        Route::get('/history', [\App\Http\Controllers\FleetRosterController::class, 'history'])->name('history');
-        Route::post('/apply', [\App\Http\Controllers\FleetRosterController::class, 'apply'])->name('apply');
-        Route::post('/', [\App\Http\Controllers\FleetRosterController::class, 'store'])->name('store');
+        Route::get('/', fn () => redirect()->route('logistics.objectives.index'))->name('index');
+        Route::get('/history', fn () => redirect()->route('logistics.objectives.index'))->name('history');
     });
 
     Route::group(['prefix' => 'objective-history', 'as' => 'logistics.objective-history.'], function () {
         Route::get('/', [ObjectiveHistoryController::class, 'index'])->name('index');
+    });
+
+    Route::group(['prefix' => 'objectives', 'as' => 'logistics.objectives.'], function () {
+        Route::get('/', [\App\Http\Controllers\FleetObjectiveController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\FleetObjectiveController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\FleetObjectiveController::class, 'store'])->name('store');
+        Route::post('/{objective}/archive', [\App\Http\Controllers\FleetObjectiveController::class, 'archive'])->name('archive');
     });
 
     Route::group(['prefix' => 'affectations', 'as' => 'logistics.affectations.'], function () {
