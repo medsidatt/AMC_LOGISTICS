@@ -96,20 +96,26 @@ function SectionHeader({label, collapsed}: { label: string; collapsed: boolean }
  */
 const mainSections: NavSection[] = [
     {
+        // Transport — the freight ledger (records only; analytics/reports moved out).
         header: 'Transport',
         items: [
             {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>, permission: 'transport-tracking-list'},
-            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/', permission: 'transport-tracking-list'},
-            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>, permission: 'provider-list'},
-            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', permission: 'report-view'},
         ],
     },
     {
+        // Fleet — your own assets + their resource assignment.
         header: 'Flotte',
         items: [
             {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>, permission: 'truck-list'},
             {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>, permission: 'driver-list'},
-            {label: 'Affectations', href: '/logistics/affectations', icon: <IdCard size={18}/>, match: '/logistics/affectations', permission: 'driver-truck-assign'},
+            {label: 'Affectations', href: '/logistics/affectations', icon: <Network size={18}/>, match: '/logistics/affectations', permission: 'driver-truck-assign'},
+        ],
+    },
+    {
+        // Partners / master data — external parties (moved out of Transport/Flotte).
+        header: 'Partenaires',
+        items: [
+            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>, permission: 'provider-list'},
             {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>, permission: 'transporter-list'},
         ],
     },
@@ -117,29 +123,34 @@ const mainSections: NavSection[] = [
         header: 'Maintenance',
         items: [
             {label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance', permission: 'maintenance-list'},
-            {label: 'Tableau logistique', href: '/logistics/dashboard', icon: <ClipboardCheck size={18}/>, match: '/logistics/dashboard', permission: 'logistics-dashboard'},
         ],
     },
     {
-        header: 'Inspections',
+        // Compliance & HSE — inspections + checklist validation workflow.
+        header: 'Conformité & HSE',
         items: [
             {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections', permission: 'inspection-list'},
-            {label: 'Checklists hebdo', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18}/>, match: '/logistics/validation/checklists', permission: 'weekly-checklist-validate'},
+            {label: 'Validation checklists', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18}/>, match: '/logistics/validation/checklists', permission: 'weekly-checklist-validate'},
         ],
     },
     {
+        // Fleet Planning — strategic demand + supply. Each item = one capability.
         header: 'Planification',
         items: [
-            {label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
-            {label: 'Suivi planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
+            {label: 'Tableau de planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
             {label: 'Objectifs', href: '/logistics/objectives', icon: <Target size={18}/>, match: '/logistics/objectives', permission: 'fleet-roster-plan'},
-            {label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18}/>, match: '/logistics/fleet-roster', permission: 'fleet-roster-plan'},
-            {label: 'Historique objectifs', href: '/logistics/fleet-roster/history', icon: <History size={18}/>, match: '/logistics/fleet-roster/history', permission: 'fleet-roster-plan'},
-            {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
+            {label: 'Configuration planification', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
         ],
     },
     {
-        header: 'Sécurité',
+        // Operations & Dispatch — daily execution (extracted from Planning).
+        header: 'Opérations & Répartition',
+        items: [
+            {label: 'Répartition quotidienne', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
+        ],
+    },
+    {
+        header: 'Sécurité & GPS',
         items: [
             {label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18}/>, match: '/logistics/fleet-map', permission: 'fleet-map-view'},
             {label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18}/>, match: '/logistics/theft-incidents', permission: 'logistics-dashboard'},
@@ -147,13 +158,28 @@ const mainSections: NavSection[] = [
         ],
     },
     {
+        // Analytics & Reporting — insight (moved out of Transport).
+        header: 'Analyse & Rapports',
+        items: [
+            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/', permission: 'transport-tracking-list'},
+            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', permission: 'report-view'},
+        ],
+    },
+    {
+        // Fuel & Energy — fuel data ingestion (moved out of Administration).
+        header: 'Carburant',
+        items: [
+            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', permission: 'fuel-import'},
+        ],
+    },
+    {
+        // Administration — IAM + compliance/audit trails only.
         header: 'Administration',
         items: [
             {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
             {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
-            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', permission: 'fuel-import'},
-            {label: 'Journal des objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
+            {label: 'Modifications d\'objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
             {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],
     },
