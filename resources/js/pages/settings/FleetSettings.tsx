@@ -1,122 +1,71 @@
-import { Head, useForm, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import FormInput from '@/components/ui/FormInput';
-import { formatNumber } from '@/utils/formatters';
-import { Settings, Target, RotateCcw } from 'lucide-react';
-
-interface MonthlyTarget {
-    year: number;
-    month: number;
-    label: string;
-    target: number | null;
-    effective: number;
-    is_default: boolean;
-}
+import { Settings, SlidersHorizontal } from 'lucide-react';
 
 interface Props {
     setting: {
-        monthly_target_tonnage: number;
+        default_capacity_tonnage: number;
+        target_rotations_per_week: number;
         weight_gap_threshold: number;
         price_per_litre: number;
-        target_rotations_per_week: number;
-        default_capacity_tonnage: number;
     };
-    defaultTarget: number;
-    monthlyTargets: MonthlyTarget[];
 }
 
-function MonthRow({ row, defaultTarget }: { row: MonthlyTarget; defaultTarget: number }) {
-    const [value, setValue] = useState<string>(row.target !== null ? String(row.target) : '');
-    const [saving, setSaving] = useState(false);
-
-    const submit = () => {
-        setSaving(true);
-        router.post('/settings/fleet/monthly-target', {
-            year: row.year,
-            month: row.month,
-            target_tonnage: value === '' ? null : Number(value),
-        }, {
-            preserveScroll: true,
-            onFinish: () => setSaving(false),
-        });
-    };
-
-    const reset = () => {
-        setValue('');
-        router.post('/settings/fleet/monthly-target', {
-            year: row.year,
-            month: row.month,
-            target_tonnage: null,
-        }, {
-            preserveScroll: true,
-        });
+/**
+ * Spinner-free numeric field: text input with a numeric keyboard hint and
+ * value sanitisation — no mouse-wheel / arrow-key / spinner value changes
+ * (unsafe for capacity, rotation and threshold settings).
+ */
+function NumberField({
+    label, value, onChange, error, integer = false,
+}: {
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    error?: string;
+    integer?: boolean;
+}) {
+    const sanitize = (raw: string) => {
+        let v = raw.replace(integer ? /[^\d]/g : /[^\d.]/g, '');
+        if (!integer) {
+            const i = v.indexOf('.');
+            if (i !== -1) v = v.slice(0, i + 1) + v.slice(i + 1).replace(/\./g, '');
+        }
+        onChange(v);
     };
 
     return (
-        <tr className="border-b border-[var(--color-border)] last:border-0">
-            <td className="py-2 pr-3 text-sm capitalize">{row.label}</td>
-            <td className="py-2 pr-3">
-                <input
-                    type="number"
-                    step="1"
-                    placeholder={`Défaut: ${formatNumber(defaultTarget, 0)}`}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    onBlur={() => {
-                        const current = row.target !== null ? String(row.target) : '';
-                        if (value !== current) submit();
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            (e.target as HTMLInputElement).blur();
-                        }
-                    }}
-                    className="w-32 px-2 py-1 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
-                />
-            </td>
-            <td className="py-2 pr-3 text-sm font-medium text-[var(--color-text)]">
-                {formatNumber(row.effective, 0)} T
-            </td>
-            <td className="py-2 pr-3">
-                {row.is_default
-                    ? <Badge variant="muted">Défaut</Badge>
-                    : <Badge variant="success">Personnalisé</Badge>}
-            </td>
-            <td className="py-2 text-right">
-                {! row.is_default && (
-                    <button
-                        type="button"
-                        onClick={reset}
-                        disabled={saving}
-                        title="Revenir au défaut"
-                        className="p-1.5 rounded hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-warning)]"
-                    >
-                        <RotateCcw size={14} />
-                    </button>
-                )}
-            </td>
-        </tr>
+        <FormInput
+            label={label}
+            type="text"
+            inputMode={integer ? 'numeric' : 'decimal'}
+            autoComplete="off"
+            value={value}
+            onChange={(e) => sanitize(e.target.value)}
+            onWheel={(e) => (e.target as HTMLInputElement).blur()}
+            error={error}
+            required
+        />
     );
 }
 
-export default function FleetSettingsPage({ setting, defaultTarget, monthlyTargets }: Props) {
+export default function FleetSettingsPage({ setting }: Props) {
     const form = useForm({
-        monthly_target_tonnage: String(setting.monthly_target_tonnage ?? 2000),
+        default_capacity_tonnage: String(setting.default_capacity_tonnage ?? 45),
+        target_rotations_per_week: String(setting.target_rotations_per_week ?? 3),
         weight_gap_threshold: String(setting.weight_gap_threshold ?? 0.5),
         price_per_litre: String(setting.price_per_litre ?? 730),
-        target_rotations_per_week: String(setting.target_rotations_per_week ?? 3),
-        default_capacity_tonnage: String(setting.default_capacity_tonnage ?? 45),
         change_note: '',
     });
 
-    const objectiveChanged =
-        Number(form.data.monthly_target_tonnage) !== Number(setting.monthly_target_tonnage) ||
-        Number(form.data.target_rotations_per_week) !== Number(setting.target_rotations_per_week) ||
-        Number(form.data.default_capacity_tonnage) !== Number(setting.default_capacity_tonnage);
+    // A change to fleet configuration (capacity / rotation rules) propagates to
+    // every truck and re-plans open objectives, so it must be justified.
+    const configChanged =
+        Number(form.data.default_capacity_tonnage) !== Number(setting.default_capacity_tonnage) ||
+        Number(form.data.target_rotations_per_week) !== Number(setting.target_rotations_per_week);
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -124,156 +73,76 @@ export default function FleetSettingsPage({ setting, defaultTarget, monthlyTarge
     };
 
     return (
-        <AuthenticatedLayout title="Paramètres flotte">
-            <Head title="Paramètres flotte" />
+        <AuthenticatedLayout title="Configuration flotte">
+            <Head title="Configuration flotte" />
 
-            <Card
-                className="mb-6"
-                header={
-                    <div className="flex items-center gap-2">
-                        <Settings size={16} />
-                        <span className="text-sm font-semibold">Paramètres globaux KPI</span>
-                    </div>
-                }
-            >
-                <form onSubmit={submit} className="max-w-lg space-y-1">
-                    <FormInput
-                        label="Objectif mensuel par défaut (tonnes)"
-                        name="monthly_target_tonnage"
-                        type="number"
-                        step="0.01"
-                        value={form.data.monthly_target_tonnage}
-                        onChange={(e) => form.setData('monthly_target_tonnage', e.target.value)}
-                        error={form.errors.monthly_target_tonnage}
-                        required
-                    />
-                    <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
-                        Appliqué automatiquement aux mois sans cible personnalisée saisie ci-dessous.
-                    </p>
-                    <FormInput
-                        label="Seuil écart de poids (tonnes)"
-                        name="weight_gap_threshold"
-                        type="number"
-                        step="0.01"
-                        value={form.data.weight_gap_threshold}
-                        onChange={(e) => form.setData('weight_gap_threshold', e.target.value)}
-                        error={form.errors.weight_gap_threshold}
-                        required
-                    />
-                    <FormInput
-                        label="Prix du gasoil (FCFA / litre)"
-                        name="price_per_litre"
-                        type="number"
-                        step="0.01"
-                        value={form.data.price_per_litre}
-                        onChange={(e) => form.setData('price_per_litre', e.target.value)}
-                        error={form.errors.price_per_litre}
-                        required
-                    />
-                    <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
-                        Sert à convertir le montant FCFA des transactions EDK en litres lors de l'import.
-                    </p>
-
-                    <div className="border-t border-[var(--color-border)] mt-4 pt-4">
-                        <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-3">
-                            Objectif de capacité par camion
-                        </p>
-                        <FormInput
-                            label="Rotations cibles par semaine"
-                            name="target_rotations_per_week"
-                            type="number"
-                            step="1"
-                            min="1"
-                            max="14"
-                            value={form.data.target_rotations_per_week}
-                            onChange={(e) => form.setData('target_rotations_per_week', e.target.value)}
-                            error={form.errors.target_rotations_per_week}
-                            required
-                        />
-                        <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
-                            Cible par défaut appliquée à chaque camion (modifiable individuellement sur la fiche camion).
-                        </p>
-                        <FormInput
-                            label="Capacité par défaut d'un camion (tonnes)"
-                            name="default_capacity_tonnage"
-                            type="number"
-                            step="0.1"
-                            min="1"
-                            max="200"
-                            value={form.data.default_capacity_tonnage}
-                            onChange={(e) => form.setData('default_capacity_tonnage', e.target.value)}
-                            error={form.errors.default_capacity_tonnage}
-                            required
-                        />
-                        <p className="text-xs text-[var(--color-text-muted)] mb-3 -mt-2">
-                            Utilisée si la fiche d'un camion n'a pas de capacité spécifique renseignée.
-                        </p>
-                    </div>
-
-                    {objectiveChanged && (
-                        <div className="border-t border-[var(--color-border)] mt-4 pt-4">
-                            <p className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mb-2">
-                                Justification du changement d'objectif
-                            </p>
-                            <textarea
-                                className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
-                                rows={3}
-                                placeholder="Ex : demande Pont Rosso revue à la hausse suite à réunion client du 17/05/2026."
-                                value={form.data.change_note}
-                                onChange={(e) => form.setData('change_note', e.target.value)}
-                                required
-                            />
-                            {form.errors.change_note && (
-                                <p className="text-xs text-red-500 mt-1">{form.errors.change_note}</p>
-                            )}
-                            <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                                Cette note est archivée dans l'historique des objectifs (preuve d'audit).
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="flex gap-2 pt-4">
-                        <Button type="submit" loading={form.processing}>Enregistrer</Button>
-                    </div>
-                </form>
-            </Card>
-
-            <Card
-                header={
-                    <div className="flex items-center justify-between">
+            <form onSubmit={submit} className="max-w-lg space-y-6">
+                <Card
+                    header={
                         <div className="flex items-center gap-2">
-                            <Target size={16} />
-                            <span className="text-sm font-semibold">Objectif tonnage par mois</span>
+                            <Settings size={16} />
+                            <span className="text-sm font-semibold">Configuration flotte</span>
                         </div>
-                        <span className="text-xs text-[var(--color-text-muted)]">
-                            Défaut courant : {formatNumber(defaultTarget, 0)} T
-                        </span>
-                    </div>
-                }
-            >
-                <p className="text-xs text-[var(--color-text-muted)] mb-3">
-                    Saisis une valeur pour personnaliser le mois (sinon le défaut s'applique). Validation au clic ailleurs ou avec Entrée.
-                    Le bouton <RotateCcw size={12} className="inline" /> remet la valeur par défaut.
-                </p>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[600px]">
-                        <thead>
-                            <tr className="text-xs text-[var(--color-text-muted)] uppercase border-b border-[var(--color-border)]">
-                                <th className="text-left py-2 pr-3">Mois</th>
-                                <th className="text-left py-2 pr-3">Cible saisie (T)</th>
-                                <th className="text-left py-2 pr-3">Effective</th>
-                                <th className="text-left py-2 pr-3">Statut</th>
-                                <th className="py-2"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {monthlyTargets.map((row) => (
-                                <MonthRow key={`${row.year}-${row.month}`} row={row} defaultTarget={defaultTarget} />
-                            ))}
-                        </tbody>
-                    </table>
+                    }
+                >
+                    <NumberField
+                        label="Capacité par défaut d'un camion (tonnes)"
+                        value={form.data.default_capacity_tonnage}
+                        onChange={(v) => form.setData('default_capacity_tonnage', v)}
+                        error={form.errors.default_capacity_tonnage}
+                    />
+                    <NumberField
+                        label="Rotations cibles par semaine"
+                        value={form.data.target_rotations_per_week}
+                        onChange={(v) => form.setData('target_rotations_per_week', v)}
+                        error={form.errors.target_rotations_per_week}
+                        integer
+                    />
+                </Card>
+
+                <Card
+                    header={
+                        <div className="flex items-center gap-2">
+                            <SlidersHorizontal size={16} />
+                            <span className="text-sm font-semibold">Paramètres opérationnels</span>
+                        </div>
+                    }
+                >
+                    <NumberField
+                        label="Seuil d'écart de poids (tonnes)"
+                        value={form.data.weight_gap_threshold}
+                        onChange={(v) => form.setData('weight_gap_threshold', v)}
+                        error={form.errors.weight_gap_threshold}
+                    />
+                    <NumberField
+                        label="Prix du gasoil (FCFA / litre)"
+                        value={form.data.price_per_litre}
+                        onChange={(v) => form.setData('price_per_litre', v)}
+                        error={form.errors.price_per_litre}
+                    />
+                </Card>
+
+                {configChanged && (
+                    <Card
+                        header={<span className="text-sm font-semibold">Justification de la modification</span>}
+                    >
+                        <textarea
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                            rows={3}
+                            value={form.data.change_note}
+                            onChange={(e) => form.setData('change_note', e.target.value)}
+                            required
+                        />
+                        {form.errors.change_note && (
+                            <p className="text-xs text-[var(--color-danger)] mt-1">{form.errors.change_note}</p>
+                        )}
+                    </Card>
+                )}
+
+                <div className="flex gap-2">
+                    <Button type="submit" loading={form.processing}>Enregistrer</Button>
                 </div>
-            </Card>
+            </form>
         </AuthenticatedLayout>
     );
 }
