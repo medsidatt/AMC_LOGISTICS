@@ -42,6 +42,12 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
         Route::get('/', [ObjectiveHistoryController::class, 'index'])->name('index');
     });
 
+    Route::group(['prefix' => 'availability', 'as' => 'logistics.availability.'], function () {
+        Route::get('/', [\App\Http\Controllers\AvailabilityController::class, 'index'])->name('index');
+        Route::post('/windows', [\App\Http\Controllers\AvailabilityController::class, 'storeWindow'])->name('windows.store');
+        Route::delete('/windows/{window}', [\App\Http\Controllers\AvailabilityController::class, 'destroyWindow'])->name('windows.destroy');
+    });
+
     Route::group(['prefix' => 'objectives', 'as' => 'logistics.objectives.'], function () {
         Route::get('/', [\App\Http\Controllers\FleetObjectiveController::class, 'index'])->name('index');
         Route::get('/create', [\App\Http\Controllers\FleetObjectiveController::class, 'create'])->name('create');

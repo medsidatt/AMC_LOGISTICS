@@ -3,7 +3,7 @@ import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
-    AlertTriangle, Activity, History, Target, ChevronDown, CalendarDays,
+    AlertTriangle, Activity, History, Target, ChevronDown, CalendarDays, CalendarOff,
 } from 'lucide-react';
 import {useState, useEffect, type ReactNode} from 'react';
 import {clsx} from 'clsx';
@@ -126,6 +126,7 @@ const mainSections: NavSection[] = [
         items: [
             {label: 'Tableau de planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
             {label: 'Objectifs', href: '/logistics/objectives', icon: <Target size={18}/>, match: '/logistics/objectives', permission: 'fleet-roster-plan'},
+            {label: 'Disponibilité flotte', href: '/logistics/availability', icon: <CalendarOff size={18}/>, match: '/logistics/availability', permission: 'fleet-roster-plan'},
             {label: 'Calendrier opérationnel', href: '/settings/operations-calendar', icon: <CalendarDays size={18}/>, match: '/settings/operations-calendar', permission: 'fleet-settings-edit'},
             {label: 'Configuration planification', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
         ],
