@@ -59,7 +59,75 @@ class FleetPlanningPeriodsTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('logistics/objectives/Index')
-                ->has('objectives')
-                ->has('periodTypes'));
+                ->has('objectives'));
+    }
+
+    public function test_objective_authoring_page_renders(): void
+    {
+        $this->actingAs($this->planner())
+            ->get('/logistics/objectives/create')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('logistics/objectives/Create')
+                ->has('trucks')
+                ->has('periodTypes')
+                ->has('planCapacityT'));
+    }
+
+    public function test_legacy_fleet_roster_redirects_to_objectives(): void
+    {
+        $this->actingAs($this->planner())
+            ->get('/logistics/fleet-roster')
+            ->assertRedirect('/logistics/objectives');
+    }
+
+    public function test_fleet_settings_renders_without_planning_objectives(): void
+    {
+        $user = User::query()->permission('fleet-settings-edit')->firstOrFail();
+
+        $this->actingAs($user)
+            ->get('/settings/fleet')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('settings/FleetSettings')
+                ->has('setting.default_capacity_tonnage')
+                ->has('setting.weight_gap_threshold')
+                ->missing('monthlyTargets')          // objectives removed from settings
+                ->missing('setting.monthly_target_tonnage'));
+    }
+
+    public function test_monthly_target_route_is_gone(): void
+    {
+        $user = User::query()->permission('fleet-settings-edit')->firstOrFail();
+        $this->actingAs($user)
+            ->post('/settings/fleet/monthly-target', ['year' => 2026, 'month' => 6, 'target_tonnage' => 1000])
+            ->assertNotFound(); // route removed (objectives no longer managed in settings)
+    }
+
+    public function test_creating_an_objective_persists_target_and_truck_rest(): void
+    {
+        $truck = \App\Models\Truck::where('is_active', true)->firstOrFail();
+
+        $this->actingAs($this->planner())
+            ->post('/logistics/objectives', [
+                'period_type' => 'WEEK',
+                'start_date' => '2026-09-07', // any day; resolver canonicalises to Mon–Sat
+                'target_tons' => 500,
+                'rested_truck_ids' => [$truck->id],
+                'notes' => 'merge end-to-end test',
+            ])
+            ->assertRedirect('/logistics/objectives');
+
+        $objective = \App\Models\FleetObjective::where('period_type', 'WEEK')
+            ->whereDate('start_date', '<=', '2026-09-07')
+            ->whereDate('end_date', '>=', '2026-09-07')
+            ->first();
+
+        $this->assertNotNull($objective, 'objective created');
+        $this->assertGreaterThan(0, (int) $objective->target_rotations);
+        $this->assertDatabaseHas('truck_rest_windows', [
+            'truck_id' => $truck->id,
+            'reason' => \App\Models\TruckRestWindow::REASON_SURPLUS_CAPACITY,
+        ]);
     }
 }
