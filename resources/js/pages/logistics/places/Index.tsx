@@ -159,7 +159,7 @@ export default function PlacesIndex({ places }: Props) {
                         ]}
                         searchable
                         searchKeys={['name', 'code', 'type']}
-                        emptyMessage="Aucun lieu enregistré. Le planificateur nocturne en créera automatiquement à partir de la télémétrie."
+                        emptyMessage="Aucun lieu enregistré."
                     />
                 </div>
             </Card>

@@ -502,8 +502,8 @@ export default function TheftIncidentsIndex({ incidents, filters, stats, trucks 
                             Aucun incident détecté
                         </h3>
                         <p className="text-[var(--color-text-muted)] max-w-md mb-6 leading-relaxed">
-                            Le système de détection analyse en continu les données de télémétrie, le carburant, les poids, les arrêts
-                            et les itinéraires pour identifier automatiquement les incidents suspects.
+                            Aucun incident suspect pour le moment. Les anomalies (vol de carburant, déviation d'itinéraire,
+                            arrêts non autorisés, écarts de poids) apparaîtront ici dès qu'elles sont détectées.
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl w-full">
                             {[

@@ -125,3 +125,15 @@
     z-index: auto;
 }
 
+
+/* Numeric inputs: hide spinner buttons so values can't be changed by accident.
+   Mouse-wheel and arrow-key increments are blocked in the FormInput component. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}

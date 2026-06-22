@@ -180,9 +180,6 @@ export default function AffectationsIndex({ trucks, availableDrivers, history, r
                     {availableDrivers.length === 0 && (
                         <p className="text-xs text-amber-600 dark:text-amber-400">Aucun chauffeur disponible — tous sont déjà affectés.</p>
                     )}
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                        Si ce chauffeur est déjà sur un autre camion, il en sera retiré automatiquement.
-                    </p>
                     <div className="flex justify-end gap-2 pt-1">
                         <Button variant="secondary" type="button" onClick={() => setModal(null)}>Annuler</Button>
                         <Button type="submit" loading={form.processing} disabled={!form.data.driver_id}>Affecter</Button>
