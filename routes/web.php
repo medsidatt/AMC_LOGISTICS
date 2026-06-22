@@ -33,6 +33,11 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
 Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
     Route::get('fleet', [App\Http\Controllers\FleetSettingsController::class, 'edit'])->name('settings.fleet.edit');
     Route::put('fleet', [App\Http\Controllers\FleetSettingsController::class, 'update'])->name('settings.fleet.update');
+
+    Route::get('operations-calendar', [App\Http\Controllers\OperationsCalendarController::class, 'edit'])->name('settings.operations-calendar.edit');
+    Route::put('operations-calendar/weekdays', [App\Http\Controllers\OperationsCalendarController::class, 'updateWeekdays'])->name('settings.operations-calendar.weekdays');
+    Route::post('operations-calendar/days', [App\Http\Controllers\OperationsCalendarController::class, 'storeDay'])->name('settings.operations-calendar.days.store');
+    Route::delete('operations-calendar/days/{day}', [App\Http\Controllers\OperationsCalendarController::class, 'destroyDay'])->name('settings.operations-calendar.days.destroy');
 });
 
 Route::get('/admin/audit-logs', [App\Http\Controllers\AuditLogController::class, 'index'])
