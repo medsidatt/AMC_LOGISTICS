@@ -22,6 +22,8 @@ class Truck extends Model
         'km_maintenance_interval' => 'float',
         'total_kilometers' => 'float',
         'capacity_tonnage' => 'float',
+        'availability_factor' => 'float',
+        'maintenance_factor' => 'float',
         'fleeti_last_kilometers' => 'float',
         'fleeti_last_fuel_level' => 'float',
         // Live telemetry cache (added in 2026_04_09_150000)
@@ -51,6 +53,11 @@ class Truck extends Model
     public function transportTrackings(): HasMany
     {
         return $this->hasMany(TransportTracking::class);
+    }
+
+    public function availabilityWindows(): HasMany
+    {
+        return $this->hasMany(TruckAvailabilityWindow::class);
     }
 
     /**
