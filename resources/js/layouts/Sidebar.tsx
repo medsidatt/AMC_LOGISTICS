@@ -3,7 +3,7 @@ import {
     LayoutDashboard, List, BarChart3, Factory, Truck, IdCard, Network,
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
-    AlertTriangle, Activity, History,
+    AlertTriangle, Activity, History, Target,
 } from 'lucide-react';
 import {type ReactNode} from 'react';
 import {clsx} from 'clsx';
@@ -131,7 +131,8 @@ const mainSections: NavSection[] = [
         header: 'Planification',
         items: [
             {label: 'Programmation rotations', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
-            {label: 'Suivi hebdomadaire', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
+            {label: 'Suivi planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
+            {label: 'Objectifs', href: '/logistics/objectives', icon: <Target size={18}/>, match: '/logistics/objectives', permission: 'fleet-roster-plan'},
             {label: 'Planning flotte', href: '/logistics/fleet-roster', icon: <Truck size={18}/>, match: '/logistics/fleet-roster', permission: 'fleet-roster-plan'},
             {label: 'Historique objectifs', href: '/logistics/fleet-roster/history', icon: <History size={18}/>, match: '/logistics/fleet-roster/history', permission: 'fleet-roster-plan'},
             {label: 'Paramètres flotte', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},

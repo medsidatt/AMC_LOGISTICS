@@ -42,6 +42,13 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
         Route::get('/', [ObjectiveHistoryController::class, 'index'])->name('index');
     });
 
+    Route::group(['prefix' => 'objectives', 'as' => 'logistics.objectives.'], function () {
+        Route::get('/', [\App\Http\Controllers\FleetObjectiveController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\FleetObjectiveController::class, 'store'])->name('store');
+        Route::put('/{objective}', [\App\Http\Controllers\FleetObjectiveController::class, 'update'])->name('update');
+        Route::post('/{objective}/archive', [\App\Http\Controllers\FleetObjectiveController::class, 'archive'])->name('archive');
+    });
+
     Route::group(['prefix' => 'affectations', 'as' => 'logistics.affectations.'], function () {
         Route::get('/', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'index'])->name('index');
         Route::post('/assign', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'assign'])->name('assign');

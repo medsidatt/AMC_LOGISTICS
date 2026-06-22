@@ -23,7 +23,7 @@ class FleetObjectiveService
      * Working set = active && available && not in a surplus rest window for the
      * period. When $restedIds is null it is derived from the rest windows.
      */
-    public function upsert(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null): FleetObjective
+    public function upsert(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null, string $periodType = FleetObjective::PERIOD_WEEK): FleetObjective
     {
         if ($restedIds === null) {
             $restedIds = TruckRestWindow::query()
@@ -54,7 +54,7 @@ class FleetObjectiveService
         $plannedTons = round(array_sum(array_column($distribution, 'tons')), 2);
 
         $objective = FleetObjective::updateOrCreate(
-            ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
+            ['period_type' => $periodType, 'start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
             [
                 'target_tons' => $plannedTons,
                 'target_rotations' => $plannedRotations,
@@ -103,6 +103,8 @@ class FleetObjectiveService
             (float) $objective->target_tons,
             $objective->created_by,
             $objective->notes,
+            null,
+            $objective->period_type ?? FleetObjective::PERIOD_WEEK,
         );
     }
 
