@@ -1,4 +1,5 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
+import type { SharedProps } from '@/types/global';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export default function Profile({ user }: Props) {
-    const { auth } = usePage().props;
+    const { auth } = usePage<SharedProps>().props;
     const profileForm = useForm({ name: user.name });
     const passwordForm = useForm({ old_password: '', password: '', password_confirmation: '' });
 

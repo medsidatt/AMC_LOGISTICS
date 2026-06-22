@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { usePage } from '@inertiajs/react';
+import type { SharedProps } from '@/types/global';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import Toast from '@/components/ui/Toast';
@@ -11,7 +12,7 @@ interface Props {
 }
 
 export default function AuthenticatedLayout({ children, title }: Props) {
-    const { flash } = usePage().props;
+    const { flash } = usePage<SharedProps>().props;
     const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
         if (typeof window === 'undefined') return false;
         return localStorage.getItem('amc-sidebar-collapsed') === 'true';

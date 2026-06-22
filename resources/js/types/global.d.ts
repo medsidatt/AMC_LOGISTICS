@@ -22,6 +22,7 @@ export interface SharedProps {
     flash: Flash;
     locale: string;
     appName: string;
+    [key: string]: unknown;
 }
 
 declare module '@inertiajs/react' {

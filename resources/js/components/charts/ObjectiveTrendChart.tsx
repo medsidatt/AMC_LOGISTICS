@@ -18,7 +18,7 @@ export default function ObjectiveTrendChart({ labels, target, achieved, height =
     const { isDark } = useTheme();
     const palette = getChartPalette(isDark);
 
-    const series: ApexAxisChartSeries = [
+    const series = [
         { name: 'Réalisé', type: 'column', data: achieved },
         { name: 'Objectif', type: 'line', data: target },
     ];

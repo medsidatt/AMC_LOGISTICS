@@ -92,7 +92,7 @@ export default function MaintenanceRecord({ truck, oilIntervals, componentStatus
     };
 
     const onKmChange = (val: string) => {
-        form.setData((data) => ({
+        form.setData((data: typeof form.data) => ({
             ...data,
             kilometers_at_maintenance: val,
             oil_change_km: val,
