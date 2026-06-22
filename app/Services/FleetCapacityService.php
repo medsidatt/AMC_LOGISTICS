@@ -136,27 +136,36 @@ class FleetCapacityService
      */
     public function distributeTargetRotations(float $targetTons, Collection $workingTrucks): array
     {
-        $planCap = round(max(0.01, $this->defaultCapacityTonnage()), 2);
+        $defaultCap = round(max(0.01, $this->defaultCapacityTonnage()), 2);
         $trucks = $workingTrucks->values();
-        $n = $trucks->count();
 
-        if ($n === 0 || $targetTons <= 0) {
+        // Per-truck rated capacity; fleet default is the fallback for trucks
+        // without a configured capacity.
+        $caps = [];
+        foreach ($trucks as $t) {
+            $caps[$t->id] = ((float) $t->capacity_tonnage > 0) ? round((float) $t->capacity_tonnage, 2) : $defaultCap;
+        }
+        $sumCapSq = array_sum(array_map(fn ($c) => $c * $c, $caps));
+
+        if ($trucks->isEmpty() || $targetTons <= 0 || $sumCapSq <= 0.0) {
             return $trucks->mapWithKeys(fn (Truck $t) => [
-                $t->id => ['rotations' => 0, 'tons' => 0.0, 'capacity' => $planCap],
+                $t->id => ['rotations' => 0, 'tons' => 0.0, 'capacity' => $caps[$t->id] ?? $defaultCap],
             ])->all();
         }
 
-        $totalRotations = (int) ceil($targetTons / $planCap);
-        $base = intdiv($totalRotations, $n);
-        $remainder = $totalRotations % $n;
+        // Rotations proportional to capacity: rot_i = round(target × cap_i / Σcap²).
+        // Larger trucks do more trips; per-truck tonnage = rot_i × cap_i and the
+        // fleet total ≈ target, so tonnage and rotations always reconcile.
+        $k = $targetTons / $sumCapSq;
 
         $out = [];
-        foreach ($trucks as $i => $t) {
-            $rot = $base + ($i < $remainder ? 1 : 0);
+        foreach ($trucks as $t) {
+            $cap = $caps[$t->id];
+            $rot = max(0, (int) round($k * $cap));
             $out[$t->id] = [
                 'rotations' => $rot,
-                'tons' => round($rot * $planCap, 2),
-                'capacity' => $planCap,
+                'tons' => round($rot * $cap, 2),
+                'capacity' => $cap,
             ];
         }
 
@@ -193,8 +202,8 @@ class FleetCapacityService
         $weeksInWindow = max(1.0, self::HISTORY_DAYS / 7);
         $avgRotationsPerWeek = round($rotationsCount / $weeksInWindow, 2);
 
-        // Capacity is a single fleet-wide setting, not a per-truck value.
-        $capacityTonnage = max(0.01, $this->defaultCapacityTonnage());
+        // Per-truck rated capacity (fallback to fleet default).
+        $capacityTonnage = max(0.01, (float) $truck->capacity_tonnage > 0 ? (float) $truck->capacity_tonnage : $this->defaultCapacityTonnage());
         $targetRotationsForTruck = $this->targetRotationsForTruck($truck);
 
         $targetWeeklyCapacity = round($targetRotationsForTruck * $capacityTonnage, 2);

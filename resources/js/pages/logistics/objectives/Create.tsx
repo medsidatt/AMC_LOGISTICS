@@ -49,16 +49,18 @@ function rangeFor(type: PlanningMode, anchorIso: string, endIso: string): [strin
 const daysBetween = (s: string, e: string) =>
     Math.round((new Date(e + 'T00:00:00').getTime() - new Date(s + 'T00:00:00').getTime()) / 86400000) + 1;
 
-/** Mirror of FleetCapacityService::distributeTargetRotations (live preview = server). */
-function distribute(targetTons: number, working: TruckRow[], planCap: number): Map<number, number> {
+/**
+ * Mirror of FleetCapacityService::distributeTargetRotations (live preview = server).
+ * Rotations proportional to per-truck capacity: rot_i = round(target × cap_i / Σcap²).
+ */
+function distribute(targetTons: number, working: TruckRow[], defaultCap: number): Map<number, number> {
     const map = new Map<number, number>();
-    const n = working.length;
-    const cap = Math.max(0.01, planCap || 0);
-    if (n === 0 || targetTons <= 0) { working.forEach((t) => map.set(t.id, 0)); return map; }
-    const total = Math.ceil(targetTons / cap);
-    const base = Math.floor(total / n);
-    const rem = total % n;
-    working.forEach((t, i) => map.set(t.id, base + (i < rem ? 1 : 0)));
+    if (working.length === 0 || targetTons <= 0) { working.forEach((t) => map.set(t.id, 0)); return map; }
+    const capOf = (t: TruckRow) => (t.capacity_tonnage > 0 ? t.capacity_tonnage : Math.max(0.01, defaultCap));
+    const sumCapSq = working.reduce((s, t) => { const c = capOf(t); return s + c * c; }, 0);
+    if (sumCapSq <= 0) { working.forEach((t) => map.set(t.id, 0)); return map; }
+    const k = targetTons / sumCapSq;
+    working.forEach((t) => map.set(t.id, Math.max(0, Math.round(k * capOf(t)))));
     return map;
 }
 
@@ -89,7 +91,10 @@ export default function ObjectiveAuthoring({ editing, periodTypes, period, targe
 
     const dist = useMemo(() => distribute(targetNum, workingTrucks, planCapacityT), [targetNum, workingTrucks, planCapacityT]);
     const plannedRotations = useMemo(() => [...dist.values()].reduce((s, r) => s + r, 0), [dist]);
-    const plannedTons = plannedRotations * planCapacityT;
+    const plannedTons = useMemo(
+        () => workingTrucks.reduce((s, t) => s + (dist.get(t.id) ?? 0) * (t.capacity_tonnage > 0 ? t.capacity_tonnage : planCapacityT), 0),
+        [dist, workingTrucks, planCapacityT],
+    );
 
     const autoSuggest = () => {
         const totalCap = trucks.reduce((s, t) => s + t.target_weekly_capacity_t * weeks, 0);

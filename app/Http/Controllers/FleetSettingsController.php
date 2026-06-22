@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\FleetSetting;
-use App\Models\Truck;
 use App\Services\FleetObjectiveService;
 use App\Services\ObjectiveHistoryService;
 use Illuminate\Http\Request;
@@ -76,11 +75,11 @@ class FleetSettingsController extends Controller
 
         $setting->update($data);
 
-        // Capacity is the single source of truth: when it changes, push it to every
-        // truck and re-plan open objectives so it takes effect everywhere at once.
+        // The default capacity is a FALLBACK for trucks without a configured rated
+        // capacity — it does NOT overwrite per-truck capacities. Open objectives are
+        // re-planned so the change takes effect for trucks using the fallback.
         $capacityChanged = (string) ($oldValues['default_capacity_tonnage'] ?? '') !== (string) ($data['default_capacity_tonnage'] ?? '');
         if ($capacityChanged) {
-            Truck::query()->update(['capacity_tonnage' => $data['default_capacity_tonnage']]);
             $this->fleetObjectives->redistributeOpenObjectives();
         }
 
