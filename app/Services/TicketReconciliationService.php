@@ -13,12 +13,14 @@ use Illuminate\Support\Facades\Log;
  * under-ticketing gap surfaced in operational reviews (e.g. March 2026:
  * 34 GPS CSE visits vs 13 CSE tickets — see memory).
  *
- * Matching window: |provider_date - loaded_at| <= 2h, same truck, same provider.
+ * Matching window: provider_date within ±1 day of loaded_at's date, same
+ * truck, same provider. provider_date is a DATE-only column (no time), so we
+ * match on the calendar day rather than a time window.
  */
 class TicketReconciliationService
 {
-    /** Time window for matching a TransportTracking to an expected loading. */
-    private const MATCH_WINDOW_HOURS = 2;
+    /** Day tolerance for matching a TransportTracking to an expected loading. */
+    private const MATCH_WINDOW_DAYS = 1;
 
     /**
      * Run reconciliation across all open expected tickets.
@@ -48,19 +50,21 @@ class TicketReconciliationService
      */
     public function reconcileOne(ExpectedTransportTicket $expected): string
     {
-        $loadedAt = Carbon::parse($expected->loaded_at);
-        $start = $loadedAt->copy()->subHours(self::MATCH_WINDOW_HOURS);
-        $end = $loadedAt->copy()->addHours(self::MATCH_WINDOW_HOURS);
+        $loadedDate = Carbon::parse($expected->loaded_at)->toDateString();
 
-        // Match by (truck, provider) within the time window.
-        // TransportTracking has provider_date that reflects when the load was
-        // weighed at the quarry — the natural anchor for matching.
+        // Match by (truck, provider) on the calendar day. provider_date is a
+        // DATE-only column reflecting when the load was weighed at the quarry,
+        // so we match within ±1 day of loaded_at's date and disambiguate
+        // multiple same-window candidates by the nearest provider_date.
         $match = TransportTracking::query()
             ->where('truck_id', $expected->truck_id)
             ->where('provider_id', $expected->provider_id)
-            ->whereBetween('provider_date', [$start, $end])
+            ->whereBetween('provider_date', [
+                Carbon::parse($loadedDate)->subDays(self::MATCH_WINDOW_DAYS)->toDateString(),
+                Carbon::parse($loadedDate)->addDays(self::MATCH_WINDOW_DAYS)->toDateString(),
+            ])
             ->whereDoesntHave('expectedTicket')
-            ->orderBy('provider_date')
+            ->orderByRaw('ABS(DATEDIFF(provider_date, ?))', [$loadedDate])
             ->first();
 
         if ($match) {

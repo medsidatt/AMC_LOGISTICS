@@ -24,7 +24,7 @@ Route::get('/', function () {
     return redirect()->route('home');
 });
 
-Auth::routes(['reset' => false]);
+Auth::routes(['reset' => false, 'register' => false]);
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
     Route::get('', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
