@@ -268,8 +268,7 @@ export default function TheftIncidentShow({ incident, providers = [] }: Props) {
             {isUntrackedTrip && !ticketAlreadyLinked && isAdmin && (
                 <Card header="Bon de transport manquant" className="mb-5">
                     <p className="text-sm text-[var(--color-text-secondary)] mb-3">
-                        Aucun bon de transport n'a été enregistré pour ce voyage. Créez-le ici
-                        — les segments GPS seront automatiquement liés et l'incident sera clôturé.
+                        Aucun bon de transport n'a été enregistré pour ce voyage. Créez-le ici pour clôturer l'incident.
                     </p>
                     <Button
                         onClick={() => setShowTicketModal(true)}

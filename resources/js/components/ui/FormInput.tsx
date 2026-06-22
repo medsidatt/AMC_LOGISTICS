@@ -7,11 +7,24 @@ interface FormInputProps extends InputHTMLAttributes<HTMLInputElement> {
     wrapperClass?: string;
 }
 
-export default function FormInput({ label, error, wrapperClass, className, id, type, ...props }: FormInputProps) {
+export default function FormInput({ label, error, wrapperClass, className, id, type, onWheel, onKeyDown, ...props }: FormInputProps) {
     const inputId = id ?? props.name;
     const isPassword = type === 'password';
+    const isNumber = type === 'number';
     const [revealed, setRevealed] = useState(false);
     const effectiveType = isPassword ? (revealed ? 'text' : 'password') : type;
+
+    // Numeric inputs must never change value by accident: block mouse-wheel and
+    // up/down-arrow increments (spinner buttons are hidden via global CSS).
+    const handleWheel = isNumber
+        ? (e: React.WheelEvent<HTMLInputElement>) => { (e.target as HTMLInputElement).blur(); onWheel?.(e); }
+        : onWheel;
+    const handleKeyDown = isNumber
+        ? (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
+            onKeyDown?.(e);
+        }
+        : onKeyDown;
 
     return (
         <div className={clsx('mb-4', wrapperClass)}>
@@ -25,6 +38,8 @@ export default function FormInput({ label, error, wrapperClass, className, id, t
                 <input
                     id={inputId}
                     type={effectiveType}
+                    onWheel={handleWheel}
+                    onKeyDown={handleKeyDown}
                     className={clsx(
                         'w-full px-3 py-2 rounded-lg border text-sm transition bg-[var(--color-surface)] text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]',
                         'focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)]',

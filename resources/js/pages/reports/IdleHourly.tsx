@@ -365,7 +365,7 @@ export default function IdleHourlyReport({ trucks }: Props) {
                             {rows.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="px-4 py-8 text-center text-[var(--color-text-muted)]">
-                                        {hasFetched ? 'Aucun ralenti détecté pour la période sélectionnée.' : 'Choisissez des camions et une période, puis cliquez sur Prévisualiser.'}
+                                        {hasFetched ? 'Aucun ralenti détecté pour la période sélectionnée.' : 'Choisissez des camions et une période pour afficher les ralentis.'}
                                     </td>
                                 </tr>
                             )}
