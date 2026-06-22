@@ -45,10 +45,18 @@ export interface Projection {
     on_track: boolean;
 }
 
+export type PlanningMode = 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
+
+export type TargetSource = 'exact' | 'derived' | 'aggregated' | 'none';
+
 export interface Achievement {
     period: { start: string; end: string };
     gps_available: boolean;
     has_objective: boolean;
+    /** How the target was resolved: exact match, prorated from a broader objective, or aggregated. */
+    target_source?: TargetSource;
+    /** Fraction (0–1) of the period covered by objectives (for aggregated targets). */
+    target_coverage?: number;
     fleet: FleetAchievement;
     projection: Projection;
     per_truck: TruckAchievement[];
