@@ -5,19 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\InspectionChecklistIssue;
-use App\Models\LogisticsAlert;
-use App\Models\TransportTracking;
-use App\Models\Truck;
-use App\Services\RotationService;
 use App\Services\SharePointDailyChecklistService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Logistics operational workflows: issue reporting/resolution and weekly
+ * checklist validation. (The standalone "Tableau logistique" dashboard was
+ * retired — it duplicated the role-landing dashboard; rotation validation was
+ * dropped as an unused workflow.)
+ */
 class LogisticsManagerController extends Controller
 {
     public function __construct(
         private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
-        private readonly RotationService $rotationService,
     ) {
         $this->middleware('permission:logistics-dashboard', ['except' => [
             'pendingChecklists', 'validateChecklist',
@@ -25,81 +26,6 @@ class LogisticsManagerController extends Controller
         ]]);
         $this->middleware('permission:weekly-checklist-validate', ['only' => ['pendingChecklists', 'validateChecklist']]);
         $this->middleware('permission:checklist-issue-resolve', ['only' => ['resolveInspectionIssue']]);
-    }
-
-    public function dashboard()
-    {
-        $dueEngineTrucks = Truck::query()
-            ->where('is_active', true)
-            ->get()
-            ->filter(function (Truck $truck) {
-                return (float) $truck->total_kilometers >= (float) $truck->nextMaintenanceAtKm();
-            })
-            ->values();
-
-        $unresolvedIssues = DailyChecklistIssue::query()
-            ->where('flagged', true)
-            ->whereNull('resolved_at')
-            ->with(['truck:id,matricule', 'driver:id,name', 'dailyChecklist.truck:id,matricule', 'dailyChecklist.driver:id,name'])
-            ->orderByDesc('reported_at')
-            ->orderByDesc('created_at')
-            ->limit(50)
-            ->get();
-
-        $lastDailyChecklists = DailyChecklist::query()
-            ->with(['truck', 'driver', 'issues'])
-            ->orderByDesc('checklist_date')
-            ->limit(20)
-            ->get();
-
-        $alerts = LogisticsAlert::query()
-            ->whereNull('read_at')
-            ->whereNull('resolved_at')
-            ->orderByDesc('created_at')
-            ->limit(10)
-            ->get();
-
-        return \Inertia\Inertia::render('LogisticsDashboard', [
-            'dueEngineTrucks' => $dueEngineTrucks->map(fn ($t) => [
-                'id' => $t->id,
-                'matricule' => $t->matricule,
-                'total_kilometers' => $t->total_kilometers,
-                'level' => $t->maintenanceLevelByType(),
-            ])->values(),
-            'unresolvedIssues' => $unresolvedIssues->map(fn ($i) => [
-                'id' => $i->id,
-                'description' => $i->issue_notes ?? $i->category ?? '',
-                'category' => $i->category,
-                'severity' => $i->severity,
-                'reported_at' => $i->reported_at?->format('d/m/Y H:i'),
-                'checklist_date' => $i->dailyChecklist?->checklist_date,
-                'truck' => $i->truck?->matricule ?? $i->dailyChecklist?->truck?->matricule,
-                'driver' => $i->driver?->name ?? $i->dailyChecklist?->driver?->name,
-            ]),
-            'lastChecklists' => $lastDailyChecklists->map(fn ($c) => [
-                'id' => $c->id,
-                'checklist_date' => $c->checklist_date,
-                'truck' => $c->truck?->matricule,
-                'driver' => $c->driver?->name,
-                'issues_count' => $c->issues->count(),
-            ]),
-            'alerts' => $alerts->map(fn ($a) => [
-                'id' => $a->id,
-                'type' => $a->type,
-                'message' => $a->message,
-                'created_at' => $a->created_at->format('d/m/Y H:i'),
-            ]),
-            'unvalidatedRotations' => $this->rotationService->getUnvalidatedRotations()->map(fn ($r) => [
-                'id' => $r->id,
-                'reference' => $r->reference,
-                'truck' => $r->truck?->matricule,
-                'driver' => $r->driver?->name,
-                'start_km' => $r->start_km,
-                'end_km' => $r->end_km,
-                'distance' => $r->distance_km,
-                'date' => $r->client_date?->format('d/m/Y') ?? $r->provider_date?->format('d/m/Y'),
-            ])->values(),
-        ]);
     }
 
     public function reports()
@@ -182,12 +108,6 @@ class LogisticsManagerController extends Controller
         }
 
         return redirect()->back()->with('success', 'Issue resolue avec succes.');
-    }
-
-    public function validateRotation(TransportTracking $transportTracking)
-    {
-        $this->rotationService->validateRotation($transportTracking, auth()->user());
-        return redirect()->back()->with('success', 'Rotation validée avec succès. Kilométrage mis à jour.');
     }
 
     public function pendingChecklists()
