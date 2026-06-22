@@ -8,7 +8,7 @@ use App\Models\Driver;
 use App\Models\DriverDisciplineRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelEvent;
-use App\Models\MonthlyTonnageTarget;
+use App\Models\FleetObjective;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use Carbon\Carbon;
@@ -20,6 +20,8 @@ class DriverKpiService
     private const WEIGHT_FUEL_GAP = 0.20;
     private const WEIGHT_WEIGHT_GAP = 0.20;
     private const WEIGHT_DISCIPLINE = 0.20;
+
+    public function __construct(private readonly ObjectiveTargetResolver $objectiveResolver) {}
 
     public function compute(Driver $driver, Carbon $from, Carbon $to): array
     {
@@ -39,7 +41,7 @@ class DriverKpiService
         $done = $rotations->count();
 
         // 1. Rotations — planned share for this driver
-        $plannedTonnage = MonthlyTonnageTarget::sumForPeriod($from, $to);
+        $plannedTonnage = $this->objectiveResolver->resolve($from, $to, FleetObjective::PERIOD_CUSTOM)['fleet']['target_tons'];
         // Capacity is a single fleet-wide setting, identical for every truck.
         $avgCapacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
         $activeDrivers = max(1, Driver::where('is_active', true)->count());
