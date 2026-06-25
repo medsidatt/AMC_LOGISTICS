@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Exports\MissingTransportTrackingExport;
 use App\Exports\TransportTrackingExport;
 use App\Imports\TransportTrackingImport;
-use App\Jobs\SyncDocumentToSharePoint;
 use App\Models\Document;
 use App\Models\Driver;
 use App\Models\Provider;
@@ -930,8 +929,6 @@ EOT;
      */
     private function persistDocument(UploadedFile $file, int $trackingId): void
     {
-        $path = $file->store('transport_trackings', 'public');
-
         $originalName = strtolower($file->getClientOriginalName());
         $type = 'other';
         if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
@@ -942,17 +939,10 @@ EOT;
             $type = 'commune';
         }
 
-        $document = Document::create([
+        Document::storeLocalAndQueueSync($file, [
             'transport_tracking_id' => $trackingId,
-            'file_path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'mime_type' => $file->getMimeType(),
-            'size' => $file->getSize(),
             'type' => $type,
-            'sync_status' => Document::SYNC_PENDING,
-        ]);
-
-        SyncDocumentToSharePoint::dispatch($document->id);
+        ], 'transport_trackings');
     }
 
     /**

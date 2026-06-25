@@ -135,6 +135,45 @@ class SharePointDocumentSyncTest extends TestCase
         Queue::assertPushed(SyncDocumentToSharePoint::class, fn ($job) => $job->documentId === $doc->id);
     }
 
+    public function test_store_local_and_queue_sync_is_reused_for_any_module(): void
+    {
+        Storage::fake('public');
+        Queue::fake();
+
+        $doc = Document::storeLocalAndQueueSync(
+            UploadedFile::fake()->create('devis.pdf', 20, 'application/pdf'),
+            ['type' => 'devis'],
+            'issue-devis',
+        );
+
+        $this->assertSame(Document::SYNC_PENDING, $doc->sync_status);
+        $this->assertSame('devis', $doc->type);
+        $this->assertTrue(str_starts_with($doc->file_path, 'issue-devis/'));   // module folder
+        Storage::disk('public')->assertExists($doc->file_path);
+        Queue::assertPushed(SyncDocumentToSharePoint::class, fn ($job) => $job->documentId === $doc->id);
+    }
+
+    public function test_job_uploads_to_the_folder_derived_from_the_local_path(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('issue-devis/x.pdf', 'BYTES');
+        $doc = Document::create([
+            'type' => 'devis',
+            'file_path' => 'issue-devis/x.pdf', 'original_name' => 'd.pdf',
+            'mime_type' => 'application/pdf', 'size' => 5, 'sync_status' => Document::SYNC_PENDING,
+        ]);
+
+        $sp = Mockery::mock(SharePointStorageService::class);
+        $sp->shouldReceive('isConfigured')->andReturnTrue();
+        $sp->shouldReceive('uploadContent')
+            ->withArgs(fn ($content, $ext, $mime, $folder) => $folder === 'issue-devis')
+            ->andReturn(['success' => true, 'path' => 'sharepoint://issue-devis/r.pdf', 'url' => 'u', 'sharepoint_id' => 'i']);
+
+        (new SyncDocumentToSharePoint($doc->id))->handle($sp);
+
+        $this->assertSame(Document::SYNC_SYNCED, $doc->refresh()->sync_status);
+    }
+
     protected function tearDown(): void
     {
         Mockery::close();
