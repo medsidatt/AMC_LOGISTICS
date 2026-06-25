@@ -31,6 +31,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'must_change_password' => 'boolean',
+        'is_suspended' => 'boolean',
     ];
 
     public function projects()

@@ -16,7 +16,7 @@ class TrackingDashboardController extends Controller
     /** Weight-gap anomaly threshold in TONNES (configurable in fleet settings). */
     private function gapThreshold(): float
     {
-        return (float) (\App\Models\FleetSetting::current()->weight_gap_threshold ?: 0.5);
+        return \App\Models\TransportTracking::weightGapThreshold();
     }
 
     /**
@@ -80,10 +80,7 @@ class TrackingDashboardController extends Controller
             ->selectRaw('SUM(ABS(provider_net_weight - client_net_weight)) as sum_gap')
             ->value('sum_gap') ?? 0;
 
-        $suspiciousDrivers = (clone $q)
-            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [$this->gapThreshold()])
-            ->distinct('driver_id')
-            ->count('driver_id');
+        $suspiciousDrivers = \App\Models\TransportTracking::suspiciousDriverCount($q);
 
         // Month = 22nd of previous month to 21st of current month
         $cmStart = now()->day >= 22
