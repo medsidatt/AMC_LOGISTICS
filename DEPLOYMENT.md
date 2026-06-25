@@ -97,67 +97,58 @@ Verify with `php artisan schedule:list`.
 
 ---
 
-## 4. Queue migration — Phase 1 infrastructure task
+## 4. Background queue (database driver + cron worker)
 
-**Current state (Phase 0): `QUEUE_CONNECTION=sync`.** Jobs run inline inside the
-HTTP request. This is correct until a persistent worker exists — do **not**
-switch to `database` without one, or queued work (driver WhatsApp dispatch,
-mail) would be enqueued and never processed.
+**`QUEUE_CONNECTION=database`.** Long-running work runs as jobs drained by a
+**cron-driven worker** — no Supervisor/Redis/Horizon (the Infomaniak target has
+no persistent process control). The `jobs`, `job_batches` and `failed_jobs`
+tables already exist.
 
-### What is queued
+### The worker is the existing cron
 
-- `App\Jobs\SendDispatchWhatsappJob` (`ShouldQueue`) — driver dispatch
-  notifications. `$tries = 3`, `$backoff = [10, 60, 300]` seconds.
-- Mail (`InvitationMail`, etc.) currently sends synchronously.
+No extra process to run. `bootstrap/app.php` (`->withSchedule`) schedules, every
+minute:
 
-### Driver-compatibility check (done)
-
-The `jobs`, `job_batches` and `failed_jobs` tables already exist
-(`2026_05_20_160200_create_jobs_tables`, `2019_..._create_failed_jobs_table`),
-so the `database` driver is ready schema-wise. `SendDispatchWhatsappJob`
-serialises only a scalar `dispatchId` and re-loads the model in `handle()`, so
-it is safe to queue.
-
-### Switch-over procedure (only after a worker is deployed)
-
-1. Provision a persistent worker (see below) and confirm it is running.
-2. Set `QUEUE_CONNECTION=database` in the server `.env`.
-3. `php artisan config:cache`.
-4. Restart the worker so it picks up the new connection.
-
-### Worker process
-
-Run under a supervisor so it auto-restarts on crash/deploy.
-
-**Supervisor** (`/etc/supervisor/conf.d/amc-queue.conf`):
-
-```ini
-[program:amc-queue]
-process_name=%(program_name)s_%(process_num)02d
-command=php /path/to/artisan queue:work database --queue=default --sleep=3 --tries=3 --max-time=3600
-autostart=true
-autorestart=true
-stopwaitsecs=3600
-numprocs=1
-redirect_stderr=true
-stdout_logfile=/path/to/storage/logs/queue-worker.log
+```
+queue:work database --stop-when-empty --max-time=55 --tries=3 --sleep=1   (withoutOverlapping)
 ```
 
-```bash
-supervisorctl reread && supervisorctl update && supervisorctl start amc-queue:*
-```
+So the **single** production cron entry already documented in §3
+(`* * * * * php artisan schedule:run`) both runs scheduled commands **and**
+drains the queue — a short-lived worker that processes pending jobs and exits
+within the minute. `withoutOverlapping` prevents two workers; the explicit
+`database` connection means a `sync` rollback leaves it a harmless no-op.
 
-If the host has no Supervisor/systemd (e.g. restricted shared hosting), keep
-`sync`, or use a hosted queue (Redis/SQS) with a managed worker.
+### What is queued (Phase 1, incremental)
 
-### Operate the queue
+- ✅ `App\Jobs\SendDispatchWhatsappJob` — driver dispatch notifications.
+  `$tries=3`, `$backoff=[10,60,300]`, `$timeout=60` (< the 90s `retry_after`,
+  so a hung Meta call is killed before re-reservation → no double-send).
+  Idempotent: refuses to send if the row is already sent/delivered/read.
+- ⏳ Excel import — next.
+- ⏳ SharePoint upload — after Excel.
+- Mail + notifications stay **synchronous** this phase.
+- OpenAI analysis stays synchronous (deferred to a later async-AI phase).
 
-- **Deploys:** run `php artisan queue:restart` after each deploy so workers
-  reload new code (a long-lived worker holds the old code in memory otherwise).
-- **Monitor failures:** `php artisan queue:failed`. Retry with
-  `php artisan queue:retry all`; purge with `php artisan queue:flush`.
-- **Retry/timeout:** per-job `$tries`/`$backoff` as above; pass `--max-time`
-  to recycle the worker periodically.
+### Deploy order (must not invert)
+
+1. Deploy the code (the scheduled worker ships in `bootstrap/app.php`).
+2. Confirm the cron (`schedule:run`) is live; `php artisan schedule:list` shows
+   the `queue:work` entry.
+3. Set `QUEUE_CONNECTION=database` in the server `.env`, then `config:cache`.
+   *(Setting `database` before the worker/cron exists would enqueue jobs that
+   never run — flip it last.)*
+
+### Operate / monitor
+
+- **Failures:** `php artisan queue:failed`; retry `php artisan queue:retry all`;
+  purge `php artisan queue:flush`. Job outcomes also log to `storage/logs`.
+- **After each deploy:** `php artisan queue:restart` (and `config:cache`).
+
+### Rollback (instant, code-free)
+
+Set `QUEUE_CONNECTION=sync` + `php artisan config:cache`. Every `ShouldQueue`
+job then runs inline exactly as before — no code revert needed.
 
 ---
 
