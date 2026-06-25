@@ -14,6 +14,7 @@ interface Props {
     period: { type: PlanningMode; start: string; end: string };
     periodTypes: PlanningMode[];
     situation: string;
+    hierarchy: { period_type: PlanningMode; label: string; planned: boolean; target_tons: number | null }[];
     objective: { target_tons: number; target_rotations: number; required_trucks: number; period_type: PlanningMode; start: string; end: string; notes: string | null } | null;
     capacity: { available: number; availability_rate: number | null; coverage: number | null; gap: number | null };
     allocation: AllocationRow[];
@@ -34,7 +35,7 @@ function L({ children }: { children: React.ReactNode }) {
  * drawer so the manager stays inside Planning. Planning data only — no execution
  * metrics (those live in Réalisation).
  */
-export default function Overview({ period, periodTypes, situation, objective, capacity, allocation, constraints }: Props) {
+export default function Overview({ period, periodTypes, situation, hierarchy, objective, capacity, allocation, constraints }: Props) {
     const [drawer, setDrawer] = useState<{ initial: ObjectiveDrawerInitial; editing: boolean } | null>(null);
 
     const covered = capacity.coverage == null ? null : capacity.coverage >= 100;
@@ -76,15 +77,19 @@ export default function Overview({ period, periodTypes, situation, objective, ca
                 {/* Objective + Capacity */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     <Card>
-                        <L>Objectif</L>
-                        {objective ? (
-                            <p className="text-sm leading-relaxed">
-                                <span className="text-2xl font-bold">{fmt(objective.target_tons)} t</span><br />
-                                {fmt(objective.target_rotations)} rotations prévues · {objective.required_trucks} camions requis
-                            </p>
-                        ) : (
-                            <p className="text-sm text-[var(--color-text-muted)]">
-                                Aucun objectif pour la période.{' '}
+                        <L>Objectifs actifs</L>
+                        <div className="space-y-2.5">
+                            {hierarchy.map((h) => (
+                                <div key={h.period_type} className="flex items-baseline justify-between gap-3">
+                                    <span className="text-sm text-[var(--color-text-secondary)]">{h.label}</span>
+                                    {h.planned
+                                        ? <span className="text-lg font-bold tabular-nums">{fmt(h.target_tons as number)} t</span>
+                                        : <span className="text-sm text-[var(--color-text-muted)]">Non planifiée</span>}
+                                </div>
+                            ))}
+                        </div>
+                        {hierarchy.every((h) => !h.planned) && (
+                            <p className="text-sm text-[var(--color-text-muted)] mt-3">
                                 <button onClick={openCreate} className="text-[var(--color-primary)] hover:underline">Définir un objectif</button>
                             </p>
                         )}
