@@ -26,6 +26,22 @@ class SharePointStorageService
      */
     public function upload(UploadedFile $file, string $folder = 'transport_trackings'): array
     {
+        return $this->uploadContent(
+            $file->getContent(),
+            (string) $file->getClientOriginalExtension(),
+            (string) $file->getMimeType(),
+            $folder,
+        );
+    }
+
+    /**
+     * Upload raw content to SharePoint Drive. Provider seam reused by both the
+     * direct UploadedFile path (above) and the background SyncDocumentToSharePoint
+     * job (which uploads a previously stored local file). No logic is duplicated.
+     * Returns ['success' => bool, 'path' => string, 'url' => string, 'sharepoint_id' => string].
+     */
+    public function uploadContent(string $content, string $extension, string $mime, string $folder = 'transport_trackings'): array
+    {
         if (!$this->isConfigured()) {
             return ['success' => false, 'message' => 'SharePoint not configured.'];
         }
@@ -35,14 +51,14 @@ class SharePointStorageService
             return ['success' => false, 'message' => 'Could not get SharePoint token.'];
         }
 
-        $filename = Str::random(40) . '.' . $file->getClientOriginalExtension();
+        $filename = Str::random(40) . ($extension !== '' ? '.' . $extension : '');
         $remotePath = $folder . '/' . $filename;
 
         $siteId = config('services.sharepoint.site_id');
 
         // Upload file content using PUT to the drive
         $response = Http::withToken($token)
-            ->withBody($file->getContent(), $file->getMimeType())
+            ->withBody($content, $mime !== '' ? $mime : 'application/octet-stream')
             ->put("https://graph.microsoft.com/v1.0/sites/{$siteId}/drive/root:/{$remotePath}:/content");
 
         if (!$response->successful()) {

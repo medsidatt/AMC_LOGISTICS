@@ -11,7 +11,18 @@ class Document extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /** External-sync lifecycle (local-first → background provider sync). */
+    public const SYNC_PENDING = 'pending';
+    public const SYNC_SYNCING = 'syncing';
+    public const SYNC_SYNCED  = 'synced';
+    public const SYNC_FAILED  = 'failed';
+
     protected $guarded = [];
+
+    protected $casts = [
+        'synced_at' => 'datetime',
+        'retry_count' => 'integer',
+    ];
 
     public function transportTracking(): BelongsTo
     {
