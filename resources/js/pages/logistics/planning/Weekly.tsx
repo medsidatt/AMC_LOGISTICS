@@ -63,28 +63,22 @@ export default function Realisation({ mode, period, achievement }: Props) {
                             </>
                         )}
 
-                        {/* State 2 — reference target (reporting benchmark only): Reference / Difference */}
+                        {/* State 2 — hierarchical reference (read-only, estimated from planning) */}
                         {isEstimated && (
                             <>
-                                <p className="italic text-[var(--color-text-muted)]">
-                                    Aucun objectif défini pour cette période — cible de référence estimée (non enregistrée).
-                                </p>
-                                <p>Cible de référence : <strong>≈ {fmt(f.target_tons)} t</strong> <span className="text-[var(--color-text-muted)]">(estimé)</span>.</p>
-                                <p><strong>{fmt(f.done_tons)} t</strong> réalisées.</p>
-                                <p>
-                                    Écart :{' '}
-                                    <strong className={diff >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
-                                        {diff >= 0 ? '+' : ''}{fmt(diff)} t
-                                    </strong>{' '}
-                                    <span className="text-[var(--color-text-muted)]">vs référence</span>.
-                                </p>
+                                <p className="font-semibold pt-1">Référence de pilotage</p>
+                                <p><strong>{fmt(f.target_tons)} t</strong></p>
+                                <p className="text-[var(--color-text-muted)]">Calculée à partir des objectifs planifiés.</p>
+                                <p className="text-[var(--color-text-muted)]">Les périodes non planifiées sont estimées à partir de la moyenne des périodes déjà planifiées.</p>
+                                <p className="text-[var(--color-text-muted)]">Cette référence est indicative et n'est jamais enregistrée.</p>
+                                <p className="pt-1"><strong>{fmt(f.done_tons)} t</strong> réalisées · écart <strong>{diff >= 0 ? '+' : ''}{fmt(diff)} t</strong> vs référence.</p>
                             </>
                         )}
 
-                        {/* State 3 — no target at all: realized only */}
+                        {/* State 3 — no reference available: realized only */}
                         {!isManual && !isEstimated && (
                             <>
-                                <p className="text-[var(--color-text-muted)]">Aucun objectif défini pour cette période.</p>
+                                <p className="text-[var(--color-text-muted)]">Aucune référence disponible.</p>
                                 <p><strong>{fmt(f.done_tons)} t</strong> réalisées · <strong>{fmt(f.done_rotations)} rotations</strong>.</p>
                             </>
                         )}
