@@ -79,7 +79,7 @@ export default function ReconciliationPanel({ rows, counts }: Props) {
                                     <td className="px-3 py-2">{statusBadge(r.status)}</td>
                                     <td className="px-3 py-2">
                                         {r.tracking ? (
-                                            <a href={`/transport_trackings/${r.tracking.id}`} className="text-[var(--color-primary)] hover:underline">
+                                            <a href={`/transport_tracking/${r.tracking.id}/show-page`} className="text-[var(--color-primary)] hover:underline">
                                                 {r.tracking.reference}
                                             </a>
                                         ) : '—'}
@@ -87,7 +87,7 @@ export default function ReconciliationPanel({ rows, counts }: Props) {
                                     <td className="px-3 py-2 text-right">
                                         {r.status === 'missing' && r.truck && r.provider && (
                                             <a
-                                                href={`/transport_trackings/create?truck_id=${r.truck.id}&provider_id=${r.provider.id}&provider_date=${r.loaded_at?.slice(0, 10) ?? ''}`}
+                                                href={`/transport_tracking/create-page?truck_id=${r.truck.id}&provider_id=${r.provider.id}&provider_date=${r.loaded_at?.slice(0, 10) ?? ''}`}
                                                 className="text-[var(--color-primary)] hover:underline text-xs"
                                             >
                                                 Créer ticket
