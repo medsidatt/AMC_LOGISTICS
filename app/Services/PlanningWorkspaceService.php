@@ -154,14 +154,37 @@ class PlanningWorkspaceService
     public function commandCenterData(): array
     {
         $today = Carbon::now();
+        $todayStr = $today->toDateString();
 
-        // Active objective = the most specific non-archived objective covering today.
-        $objective = FleetObjective::active()
-            ->with('truckTargets')
-            ->whereDate('start_date', '<=', $today->toDateString())
-            ->whereDate('end_date', '>=', $today->toDateString())
-            ->orderByRaw("FIELD(period_type, 'CUSTOM', 'WEEK', 'MONTH', 'YEAR')")
-            ->first();
+        // Every manually-created objective active today. Planning is hierarchical
+        // (year ⊃ month ⊃ week): a finer objective NEVER replaces or hides a broader
+        // one — they answer different business questions and coexist. One query,
+        // reused for both the hierarchy panel and the operational focus below.
+        $activeToday = FleetObjective::active()
+            ->whereDate('start_date', '<=', $todayStr)
+            ->whereDate('end_date', '>=', $todayStr)
+            ->get();
+
+        // Operational focus (period + capacity + allocation panels) = the most specific
+        // objective. This is an execution window, not a choice of "the" objective — the
+        // OBJECTIFS ACTIFS panel below shows every level.
+        $rank = [FleetObjective::PERIOD_CUSTOM => 0, FleetObjective::PERIOD_WEEK => 1, FleetObjective::PERIOD_MONTH => 2, FleetObjective::PERIOD_YEAR => 3];
+        $objective = $activeToday->sortBy(fn ($o) => $rank[$o->period_type] ?? 9)->values()->first();
+        $objective?->load('truckTargets');
+
+        // OBJECTIFS ACTIFS — each planning level independently (manual only; Planning
+        // never estimates — that is Réalisation's job).
+        $byType = $activeToday->keyBy('period_type');
+        $hierarchy = collect([
+            FleetObjective::PERIOD_YEAR => 'Année',
+            FleetObjective::PERIOD_MONTH => 'Mois',
+            FleetObjective::PERIOD_WEEK => 'Semaine',
+        ])->map(fn ($label, $type) => [
+            'period_type' => $type,
+            'label' => $label,
+            'planned' => $byType->has($type),
+            'target_tons' => $byType->has($type) ? (int) round((float) $byType->get($type)->target_tons) : null,
+        ])->values()->all();
 
         if ($objective) {
             $start = $objective->start_date->copy();
@@ -270,6 +293,7 @@ class PlanningWorkspaceService
             'period' => ['type' => $periodType, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
             'periodTypes' => PlanningPeriodResolver::MODES,
             'situation' => $situation,
+            'hierarchy' => $hierarchy,
             'objective' => $objective ? [
                 'target_tons' => (int) round($targetTons),
                 'target_rotations' => (int) $objective->target_rotations,

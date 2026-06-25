@@ -1,6 +1,18 @@
 /.phpunit.cache
 /node_modules
-/public/build
+
+# ------------------------------------------------------------------
+# Production deployment
+#
+# This project is deployed on Infomaniak.
+# Production only performs `git pull`.
+# It DOES NOT execute npm install or npm run build.
+#
+# Therefore `public/build` MUST remain version controlled.
+# Do NOT ignore or delete it unless the deployment
+# process changes to include a build step.
+# ------------------------------------------------------------------
+
 /public/hot
 /public/storage
 /storage/*.key

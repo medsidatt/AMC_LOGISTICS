@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import Button from '@/components/ui/Button';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import FormInput from '@/components/ui/FormInput';
 import FormTextarea from '@/components/ui/FormTextarea';
 import type { PlanningMode } from '@/types/achievement';
@@ -11,6 +12,7 @@ const TYPE_LABEL: Record<PlanningMode, string> = { WEEK: 'Semaine', MONTH: 'Mois
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-FR');
 
 interface ParentAllocation { parent_label: string; parent_target: number; allocated: number; remaining: number }
+interface ObjectiveConflict { existing_tons: number; new_tons: number }
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const mondayOf = (base: Date) => { const d = new Date(base); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };
 
@@ -50,6 +52,7 @@ export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing
     const [target, setTarget] = useState(initial.target ? String(initial.target) : '');
     const [notes, setNotes] = useState(initial.notes ?? '');
     const [saving, setSaving] = useState(false);
+    const [conflict, setConflict] = useState<ObjectiveConflict | null>(null);
 
     const [start, end] = useMemo(() => rangeFor(type, anchor, customEnd), [type, anchor, customEnd]);
     const targetNum = Number(target) || 0;
@@ -70,7 +73,7 @@ export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing
 
     const overBy = parent ? Math.max(0, parent.allocated + targetNum - parent.parent_target) : 0;
 
-    const save = () => {
+    const save = (override = false) => {
         setSaving(true);
         router.post('/logistics/objectives', {
             period_type: type,
@@ -78,7 +81,17 @@ export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing
             end_date: type === 'CUSTOM' ? end : null,
             target_tons: targetNum,
             notes,
-        }, { onSuccess: () => onClose(), onFinish: () => setSaving(false) });
+            override: override || editing, // editing a locked period is an explicit replace
+        }, {
+            preserveState: true, // keep the drawer mounted if we bounce back to confirm
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const c = (page.props as { flash?: { objectiveConflict?: ObjectiveConflict } }).flash?.objectiveConflict;
+                if (c) { setConflict(c); return; } // existing objective — ask before overwriting
+                onClose();
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -172,11 +185,20 @@ export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing
 
                 <footer className="flex items-center justify-end gap-2 px-5 h-16 border-t border-[var(--color-border)]">
                     <Button variant="secondary" onClick={onClose}>Annuler</Button>
-                    <Button onClick={save} loading={saving} disabled={targetNum <= 0}>
+                    <Button onClick={() => save()} loading={saving} disabled={targetNum <= 0}>
                         {editing ? 'Enregistrer' : "Créer l'objectif"}
                     </Button>
                 </footer>
             </aside>
+
+            <ConfirmDialog
+                open={!!conflict}
+                onClose={() => setConflict(null)}
+                title="Objectif déjà défini"
+                message={conflict ? `Un objectif de ${fmt(conflict.existing_tons)} t existe déjà pour cette période. Le remplacer par ${fmt(conflict.new_tons)} t ?` : ''}
+                confirmLabel="Remplacer"
+                onConfirm={() => save(true)}
+            />
         </>
     );
 }
