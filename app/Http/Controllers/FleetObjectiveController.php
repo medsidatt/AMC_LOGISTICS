@@ -4,21 +4,26 @@ namespace App\Http\Controllers;
 
 use App\Models\FleetObjective;
 use App\Models\Truck;
-use App\Models\TruckRestWindow;
 use App\Services\FleetCapacityService;
 use App\Services\FleetObjectiveService;
 use App\Services\PlanningPeriodResolver;
+use App\Services\PlanningWorkspaceService;
+use App\Services\RotationAchievementService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 /**
- * Objectives — the single authoring surface for multi-level planning objectives
- * (WEEK / MONTH / YEAR / CUSTOM). The list manages definition + lifecycle; the
- * create/edit page also owns the truck allocation (which trucks work vs rest and
- * the resulting redistribution) — the former "Planning flotte / fleet-roster"
- * capability, merged here so there is one place to plan an objective.
+ * Objectives — the authoring surface for the COMMITMENT only: period + target
+ * tonnage (+ optional notes) for WEEK / MONTH / YEAR / CUSTOM. It answers a
+ * single question: "what are we committing to transport?".
+ *
+ * Truck allocation (which trucks work vs rest, per-truck rotations, availability)
+ * is a separate workflow owned by Planning — it answers "how will we achieve it?".
+ * Saving an objective therefore never depends on allocation: capacity coverage is
+ * surfaced as advisory information only, never enforced as a validation rule, so
+ * ambitious / under-resourced / stretch targets can always be recorded.
  *
  * Planned-vs-Actual / achievement KPIs live in the Planning Dashboard, not here.
  */
@@ -28,44 +33,16 @@ class FleetObjectiveController extends Controller
         private readonly FleetObjectiveService $objectives,
         private readonly PlanningPeriodResolver $periods,
         private readonly FleetCapacityService $capacity,
+        private readonly RotationAchievementService $achievement,
+        private readonly PlanningWorkspaceService $planning,
     ) {
         $this->middleware('permission:fleet-roster-plan');
     }
 
-    public function index(Request $request)
-    {
-        $showArchived = $request->boolean('archived');
-
-        $objectives = FleetObjective::with('creator:id,name')
-            ->when(! $showArchived, fn ($q) => $q->active())
-            ->orderByDesc('start_date')
-            ->orderByDesc('id')
-            ->limit(60)
-            ->get();
-
-        $rows = $objectives->map(fn (FleetObjective $o) => [
-            'id' => $o->id,
-            'period_type' => $o->period_type,
-            'start_date' => $o->start_date->toDateString(),
-            'end_date' => $o->end_date->toDateString(),
-            'target_tons' => (float) $o->target_tons,
-            'target_rotations' => (int) $o->target_rotations,
-            'working_trucks' => $o->working_trucks,
-            'notes' => $o->notes,
-            'archived' => $o->archived_at !== null,
-            'created_by' => $o->creator?->name,
-        ])->values();
-
-        return Inertia::render('logistics/objectives/Index', [
-            'objectives' => $rows,
-            'showArchived' => $showArchived,
-            'periodTypes' => PlanningPeriodResolver::MODES,
-        ]);
-    }
-
     /**
-     * The objective authoring page (create or edit): period + target + the truck
-     * allocation (work/rest). Absorbs the old fleet-roster screen.
+     * The objective authoring page (create or edit): period + target + notes.
+     * Also passes a read-only fleet-capacity estimate so the manager can see
+     * whether a target is realistic — advisory only, never a save gate.
      */
     public function create(Request $request)
     {
@@ -82,29 +59,44 @@ class FleetObjectiveController extends Controller
         $periodType = $editing->period_type ?? FleetObjective::PERIOD_WEEK;
         $targetTons = $editing ? (float) $editing->target_tons : 0.0;
 
-        $trucks = Truck::query()
+        // Read-only capacity estimate for the advisory summary. Aggregate only —
+        // no per-truck allocation is exposed on this page (that lives in Planning).
+        $availableTrucks = Truck::query()
             ->where('is_active', true)
-            ->orderBy('matricule')
-            ->get()
-            ->map(function (Truck $t) {
-                $info = $this->capacity->truckDailyCapacity($t);
-                return [
-                    'id' => $t->id,
-                    'matricule' => $t->matricule,
-                    'is_available' => (bool) $t->is_available,
-                    'capacity_tonnage' => $info['capacity_tonnage'],
-                    'target_weekly_capacity_t' => $info['target_weekly_capacity_t'],
-                    'empirical_weekly_capacity_t' => $info['empirical_weekly_capacity_t'],
-                ];
-            })->values();
+            ->where('is_available', true)
+            ->get();
 
-        // Trucks already rested for this exact period (so we pre-check them).
-        $restedIds = TruckRestWindow::query()
-            ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
-            ->where('start_date', $start->toDateString())
-            ->where('end_date', $end->toDateString())
-            ->pluck('truck_id')
-            ->all();
+        $fleetWeeklyCapacityT = round(
+            $availableTrucks->sum(fn (Truck $t) => $this->capacity->truckDailyCapacity($t)['target_weekly_capacity_t']),
+            2,
+        );
+
+        // Compact previous-period context (read-only): the most recent active
+        // objective of the same period type that ended before this one, with its
+        // achieved tonnage. Reuses RotationAchievementService — no logic added.
+        $previous = FleetObjective::query()
+            ->active()
+            ->where('period_type', $periodType)
+            ->whereDate('end_date', '<', $start->toDateString())
+            ->when($editing, fn ($q) => $q->where('id', '!=', $editing->id))
+            ->orderByDesc('end_date')
+            ->first();
+
+        $previousPeriod = null;
+        if ($previous) {
+            $ach = $this->achievement->forPeriod(
+                $previous->start_date->copy(),
+                $previous->end_date->copy(),
+                $previous->period_type,
+            );
+            $previousPeriod = [
+                'start' => $previous->start_date->toDateString(),
+                'end' => $previous->end_date->toDateString(),
+                'target_tons' => round((float) $previous->target_tons, 2),
+                'done_tons' => round((float) ($ach['fleet']['done_tons'] ?? 0), 2),
+                'pct' => $ach['fleet']['pct'] ?? null,
+            ];
+        }
 
         return Inertia::render('logistics/objectives/Create', [
             'editing' => $editing ? ['id' => $editing->id] : null,
@@ -113,8 +105,9 @@ class FleetObjectiveController extends Controller
             'targetTons' => $targetTons,
             'notes' => $editing?->notes ?? '',
             'planCapacityT' => round($this->capacity->defaultCapacityTonnage(), 2),
-            'trucks' => $trucks,
-            'restedTruckIds' => $restedIds,
+            'fleetWeeklyCapacityT' => $fleetWeeklyCapacityT,
+            'availableTruckCount' => $availableTrucks->count(),
+            'previousPeriod' => $previousPeriod,
         ]);
     }
 
@@ -126,46 +119,42 @@ class FleetObjectiveController extends Controller
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'target_tons' => ['required', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:2000'],
-            'rested_truck_ids' => ['array'],
-            'rested_truck_ids.*' => ['integer', 'exists:trucks,id'],
         ]);
 
         $p = $this->periods->resolve($data['period_type'], $data['start_date'], $data['start_date'], $data['end_date'] ?? null);
-        $restedIds = array_values(array_unique($data['rested_truck_ids'] ?? []));
         $userId = $request->user()?->id;
 
-        DB::transaction(function () use ($p, $restedIds, $userId, $data) {
-            // Re-snapshot the surplus-capacity rest windows for this exact period.
-            TruckRestWindow::query()
-                ->where('reason', TruckRestWindow::REASON_SURPLUS_CAPACITY)
-                ->where('start_date', $p['start']->toDateString())
-                ->where('end_date', $p['end']->toDateString())
-                ->delete();
-
-            foreach ($restedIds as $truckId) {
-                TruckRestWindow::create([
-                    'truck_id' => $truckId,
-                    'start_date' => $p['start']->toDateString(),
-                    'end_date' => $p['end']->toDateString(),
-                    'reason' => TruckRestWindow::REASON_SURPLUS_CAPACITY,
-                    'notes' => $data['notes'] ?? 'Repos programmé : objectif assuré par flotte réduite.',
-                    'created_by' => $userId,
-                ]);
-            }
-
+        // Commitment only — no allocation is read or written here. The working set
+        // is derived from whatever rest windows Planning has already set (null),
+        // defaulting to all available trucks. Saving never depends on coverage.
+        DB::transaction(function () use ($p, $userId, $data) {
             $this->objectives->upsert(
                 $p['start'],
                 $p['end'],
                 (float) $data['target_tons'],
                 $userId,
                 $data['notes'] ?? null,
-                $restedIds,
+                null,
                 $p['mode'],
             );
         });
 
-        return redirect()->route('logistics.objectives.index')
+        return redirect('/planning')
             ->with('success', 'Objectif enregistré.');
+    }
+
+    /** Live parent-allocation context for the objective drawer (JSON). Read-only. */
+    public function parentAllocation(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $data = $request->validate([
+            'period_type' => ['required', 'in:' . implode(',', PlanningPeriodResolver::MODES)],
+            'start' => ['required', 'date'],
+            'end' => ['required', 'date'],
+        ]);
+
+        return response()->json(
+            $this->planning->parentAllocation($data['period_type'], $data['start'], $data['end'])
+        );
     }
 
     public function archive(Request $request, FleetObjective $objective)
@@ -173,7 +162,7 @@ class FleetObjectiveController extends Controller
         $objective->archived_at = $objective->archived_at ? null : now();
         $objective->save();
 
-        return redirect()->route('logistics.objectives.index')
-            ->with('success', $objective->archived_at ? 'Objectif archivé.' : 'Objectif réactivé.');
+        // back() so it works from the standalone list and the Planning tab alike.
+        return back()->with('success', $objective->archived_at ? 'Objectif archivé.' : 'Objectif réactivé.');
     }
 }

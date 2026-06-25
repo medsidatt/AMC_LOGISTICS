@@ -62,6 +62,16 @@ class ObjectiveTargetResolver
         return $this->empty();
     }
 
+    /**
+     * Exact period-type match only — NO proration / aggregation fallback. Réalisation
+     * uses this so progress is computed only against an objective of the same period
+     * type (week→weekly, month→monthly, year→annual); otherwise no objective.
+     */
+    public function exactForMode(Carbon $start, Carbon $end, string $mode): array
+    {
+        return $this->exact($mode, $start->toDateString(), $end->toDateString()) ?? $this->empty();
+    }
+
     /** Exact same-level match → use the frozen targets verbatim. */
     private function exact(string $period, string $startStr, string $endStr): ?array
     {

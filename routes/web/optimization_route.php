@@ -31,32 +31,35 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics'], function () {
         Route::delete('/{restWindow}', [TruckRestWindowController::class, 'destroy'])->name('destroy');
     });
 
-    // Legacy fleet-roster URLs → Objectives. Authoring + outcomes were merged into
-    // Objectives / the Planning Dashboard; the old roster + history screens are gone.
+    // Legacy fleet-roster URLs → Planning overview.
     Route::group(['prefix' => 'fleet-roster', 'as' => 'logistics.fleet-roster.'], function () {
-        Route::get('/', fn () => redirect()->route('logistics.objectives.index'))->name('index');
-        Route::get('/history', fn () => redirect()->route('logistics.objectives.index'))->name('history');
+        Route::get('/', fn () => redirect('/planning'))->name('index');
+        Route::get('/history', fn () => redirect('/planning'))->name('history');
     });
 
     Route::group(['prefix' => 'objective-history', 'as' => 'logistics.objective-history.'], function () {
         Route::get('/', [ObjectiveHistoryController::class, 'index'])->name('index');
     });
 
+    // Availability — GET list now lives at /planning/availability; writes stay here.
     Route::group(['prefix' => 'availability', 'as' => 'logistics.availability.'], function () {
-        Route::get('/', [\App\Http\Controllers\AvailabilityController::class, 'index'])->name('index');
+        Route::get('/', fn () => redirect('/planning/availability'))->name('index');
         Route::post('/windows', [\App\Http\Controllers\AvailabilityController::class, 'storeWindow'])->name('windows.store');
         Route::delete('/windows/{window}', [\App\Http\Controllers\AvailabilityController::class, 'destroyWindow'])->name('windows.destroy');
     });
 
+    // Objectives — GET list now lives at /planning/objectives; authoring + writes stay here.
     Route::group(['prefix' => 'objectives', 'as' => 'logistics.objectives.'], function () {
-        Route::get('/', [\App\Http\Controllers\FleetObjectiveController::class, 'index'])->name('index');
+        Route::get('/', fn () => redirect('/planning/objectives'))->name('index');
+        Route::get('/parent-allocation', [\App\Http\Controllers\FleetObjectiveController::class, 'parentAllocation'])->name('parent-allocation');
         Route::get('/create', [\App\Http\Controllers\FleetObjectiveController::class, 'create'])->name('create');
         Route::post('/', [\App\Http\Controllers\FleetObjectiveController::class, 'store'])->name('store');
         Route::post('/{objective}/archive', [\App\Http\Controllers\FleetObjectiveController::class, 'archive'])->name('archive');
     });
 
+    // Crew assignments — GET list now lives at /assignments; writes stay here.
     Route::group(['prefix' => 'affectations', 'as' => 'logistics.affectations.'], function () {
-        Route::get('/', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'index'])->name('index');
+        Route::get('/', fn () => redirect('/assignments'))->name('index');
         Route::post('/assign', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'assign'])->name('assign');
         Route::post('/release', [\App\Http\Controllers\TruckDriverAssignmentController::class, 'release'])->name('release');
     });

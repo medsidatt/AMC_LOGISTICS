@@ -1,6 +1,5 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
-import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import FormInput from '@/components/ui/FormInput';
@@ -35,13 +34,21 @@ interface DriverRow {
 
 interface ProviderOpt { id: number; name: string }
 
-interface Props {
+/** Data the daily dispatch board needs — produced by DispatchWorkspaceService::programData. */
+export interface DispatchBoardData {
     date: string;
     isPast: boolean;
     isTomorrow: boolean;
     drivers: DriverRow[];
     providers: ProviderOpt[];
     dispatchedCount: number;
+}
+
+interface Props extends DispatchBoardData {
+    /** Where date navigation goes (standalone route vs the Operations Dispatch tab). */
+    onGotoDate: (iso: string) => void;
+    /** Link target for the weekly scoreboard. */
+    weeklyHref: string;
 }
 
 type FormRow = { driver_id: number; dispatched: boolean; wish_provider_id: number | null; note: string };
@@ -78,8 +85,6 @@ function NotificationStatusLine({ driver, isPast, canEdit }: { driver: DriverRow
         );
     };
 
-    // No phone — clearest possible signal (status would also be 'skipped'
-    // but we want the action to be "go fix the driver record")
     if (!driver.has_phone) {
         return (
             <div className="text-xs flex items-center gap-1 flex-wrap mt-0.5">
@@ -153,7 +158,6 @@ function NotificationStatusLine({ driver, isPast, canEdit }: { driver: DriverRow
         );
     }
 
-    // pending / null
     return (
         <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 inline-flex items-center gap-1">
             <Clock size={10} /> Notification en attente
@@ -175,7 +179,13 @@ function KpiTile({ value, label, color, icon }: { value: number | string; label:
     );
 }
 
-export default function PlanningIndex({ date, isPast, isTomorrow, drivers, providers, dispatchedCount }: Props) {
+/**
+ * Daily dispatch board — presentational. Shared by the standalone
+ * /logistics/planning page and the Operations Dispatch tab. Saves via the single
+ * dispatch save path (POST /logistics/planning); date navigation is delegated to
+ * the host via onGotoDate so the board stays inside its workspace.
+ */
+export default function DispatchBoard({ date, isPast, isTomorrow, drivers, providers, dispatchedCount, onGotoDate, weeklyHref }: Props) {
     const { can } = usePermission();
     const canEdit = can('daily-dispatch-edit') && !isPast;
 
@@ -204,8 +214,6 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
     const toggleAll = (value: boolean) => {
         setRows((prev) => prev.map((r) => ({ ...r, dispatched: value })));
     };
-
-    const goto = (next: string) => router.get('/logistics/planning', { date: next }, { preserveState: false });
 
     const save = () => {
         setSaving(true);
@@ -240,7 +248,6 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
         return false;
     }, [rows, driversById]);
 
-    // Build the WhatsApp-style program: grouped by carrière, listing trucks.
     const buildProgram = (): string => {
         const dateLabel = isTomorrow ? 'de demain' : `du ${formatLongDate(date)}`;
         const groups = new Map<string, string[]>();
@@ -276,20 +283,19 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
     const tomorrowIso = shiftDate(todayIso, 1);
 
     return (
-        <AuthenticatedLayout>
-            <Head title="Programmation rotations" />
+        <>
             <div className="space-y-4 pb-20">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                         <Users size={22} className="text-emerald-500" />
-                        <h1 className="text-xl font-semibold">Programmation des rotations</h1>
+                        <h2 className="text-lg font-semibold">Programmation des rotations</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="secondary" size="sm" onClick={copyProgram} disabled={selectedCount === 0}>
                             {copied ? <Check size={14} className="mr-1 text-emerald-500" /> : <Copy size={14} className="mr-1" />}
                             {copied ? 'Copié !' : 'Copier le programme'}
                         </Button>
-                        <Button variant="secondary" size="sm" onClick={() => router.visit('/logistics/planning/weekly')}>
+                        <Button variant="secondary" size="sm" onClick={() => router.visit(weeklyHref)}>
                             <Calendar size={14} className="mr-1" /> Tableau hebdomadaire
                         </Button>
                     </div>
@@ -301,7 +307,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                         <div className="flex items-center gap-3 min-w-0">
                             <button
                                 type="button"
-                                onClick={() => goto(shiftDate(date, -1))}
+                                onClick={() => onGotoDate(shiftDate(date, -1))}
                                 className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] transition shrink-0"
                                 title="Jour précédent"
                             >
@@ -318,7 +324,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                             </div>
                             <button
                                 type="button"
-                                onClick={() => goto(shiftDate(date, 1))}
+                                onClick={() => onGotoDate(shiftDate(date, 1))}
                                 className="p-2 rounded-lg hover:bg-[var(--color-surface-hover)] transition shrink-0"
                                 title="Jour suivant"
                             >
@@ -329,11 +335,11 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                             <FormInput
                                 type="date"
                                 value={date}
-                                onChange={(e) => goto(e.target.value)}
+                                onChange={(e) => onGotoDate(e.target.value)}
                                 wrapperClass="mb-0"
                             />
-                            <Button variant="secondary" size="sm" onClick={() => goto(todayIso)}>Aujourd'hui</Button>
-                            <Button variant="secondary" size="sm" onClick={() => goto(tomorrowIso)}>Demain</Button>
+                            <Button variant="secondary" size="sm" onClick={() => onGotoDate(todayIso)}>Aujourd'hui</Button>
+                            <Button variant="secondary" size="sm" onClick={() => onGotoDate(tomorrowIso)}>Demain</Button>
                         </div>
                     </div>
                 </Card>
@@ -506,9 +512,7 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                                                 canEdit ? 'hover:bg-[var(--color-surface-hover)] cursor-pointer' : 'opacity-70 cursor-not-allowed',
                                             )}
                                         >
-                                            <div className="w-6 h-6 rounded border-2 border-[var(--color-border)] flex items-center justify-center shrink-0">
-                                                {/* empty */}
-                                            </div>
+                                            <div className="w-6 h-6 rounded border-2 border-[var(--color-border)] flex items-center justify-center shrink-0" />
                                             <span className="text-sm">{orig?.name ?? '—'}</span>
                                         </button>
                                     );
@@ -533,6 +537,6 @@ export default function PlanningIndex({ date, isPast, isTomorrow, drivers, provi
                     </div>
                 </div>
             )}
-        </AuthenticatedLayout>
+        </>
     );
 }

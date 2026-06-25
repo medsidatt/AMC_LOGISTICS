@@ -76,15 +76,37 @@ class RotationAchievementService
         $gpsOnly = $loops->filter(fn ($l) => empty($l['transport_tracking_id']));
         $gpsOnlyByTruck = $gpsOnly->groupBy('truck_id')->map->count();
 
-        // Target resolution. With a view mode (multi-period scoreboard) targets
-        // resolve hierarchically (week → month → year, prorated/aggregated). Without
-        // one (legacy callers) we keep the exact same-period weekly snapshot.
+        // Target resolution. With a view mode (Réalisation scoreboard) the objective
+        // must be EXACT for the selected period type (week→weekly, month→monthly,
+        // year→annual) — no proration/aggregation fallback, so the wrong objective is
+        // never attached to the period. Without a view mode (legacy callers) we keep
+        // the exact same-period weekly snapshot.
         if ($viewMode !== null) {
-            $resolved = $this->objectiveResolver->resolve($start, $end, $viewMode);
+            $resolved = $this->objectiveResolver->exactForMode($start, $end, $viewMode);
             $perTruckTargets = $resolved['per_truck'];
             $fleetTarget = $resolved['source'] !== 'none' ? $resolved['fleet'] : null;
             $targetSource = $resolved['source'];
             $targetCoverage = $resolved['coverage'];
+
+            // Manual objectives ALWAYS take precedence over a derived reference. Order:
+            //   1. exact objective for the selected period            (handled above)
+            //   2. manual CHILD objectives inside the period          (month→weeks, year→months)
+            //   3. derived reference from the parent objective        (read-only benchmark)
+            //   4. no target
+            // A derived reference is therefore only ever produced for a period that has
+            // neither its own manual objective nor manual children — it can never
+            // overwrite manual data. References are read-only: never persisted, never
+            // distributed to trucks, never shown in Planning. Per-truck targets stay
+            // empty so the truck table shows realized only (we never fabricate planning).
+            if ($targetSource === 'none') {
+                $reference = $this->manualChildAggregate($start, $end, $viewMode)
+                    ?? $this->referenceTarget($start, $end, $viewMode, $defaultCap);
+                if ($reference !== null) {
+                    $fleetTarget = $reference;
+                    $targetSource = 'estimated';
+                    $targetCoverage = 0.0;
+                }
+            }
         } else {
             $objective = FleetObjective::with('truckTargets')
                 ->where('period_type', FleetObjective::PERIOD_WEEK)
@@ -221,6 +243,156 @@ class RotationAchievementService
                 'distance_km' => $l['distance_km'],
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Step 2 of Réalisation resolution: a period with no exact objective but with manual
+     * CHILD objectives inside it (month→weeks, year→months) reports the SUM of those
+     * manual children — never a parent-derived figure that would ignore them, so manually
+     * planned tonnage always stays authoritative. Returns null when the mode has no child
+     * level (week/custom) or no manual children exist (→ fall through to a derived
+     * reference). Carries no per-truck targets: like any reference it shows realized-only.
+     */
+    private function manualChildAggregate(Carbon $start, Carbon $end, string $viewMode): ?array
+    {
+        $childType = match ($viewMode) {
+            FleetObjective::PERIOD_MONTH => FleetObjective::PERIOD_WEEK,
+            FleetObjective::PERIOD_YEAR => FleetObjective::PERIOD_MONTH,
+            default => null, // WEEK / CUSTOM have no child level
+        };
+        if ($childType === null) {
+            return null;
+        }
+
+        $children = FleetObjective::active()
+            ->where('period_type', $childType)
+            ->whereDate('start_date', '>=', $start->toDateString())
+            ->whereDate('end_date', '<=', $end->toDateString())
+            ->get(['target_tons', 'target_rotations']);
+
+        if ($children->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'target_tons' => round((float) $children->sum('target_tons'), 2),
+            'target_rotations' => (int) $children->sum('target_rotations'),
+        ];
+    }
+
+    /**
+     * State 2 (Réalisation reporting reference). A period with NO manual objective that
+     * sits inside a parent objective (month→year, week→month) gets a read-only benchmark:
+     *
+     *   parent_remaining = parent_target − Σ(manual child targets)
+     *   reference        = parent_remaining × this period's share
+     *
+     * The share is weighted by operational days AND available fleet capacity across the
+     * parent's *unallocated* sibling periods (never an equal split). The available fleet
+     * is constant across future periods, so the capacity term scales every weight equally
+     * — operational days drive the split, while capacity keeps the figure grounded in what
+     * the fleet can actually move.
+     *
+     * This is a reporting benchmark, NOT an objective: never persisted, never distributed
+     * to trucks, never surfaced in Planning. Returns null when there is no parent, the
+     * mode has no parent (year/custom), the parent is already fully committed by manual
+     * children, or the selected period is not an unallocated sibling.
+     */
+    private function referenceTarget(Carbon $start, Carbon $end, string $viewMode, float $defaultCap): ?array
+    {
+        [$parentType, $siblingType] = match ($viewMode) {
+            FleetObjective::PERIOD_WEEK => [FleetObjective::PERIOD_MONTH, FleetObjective::PERIOD_WEEK],
+            FleetObjective::PERIOD_MONTH => [FleetObjective::PERIOD_YEAR, FleetObjective::PERIOD_MONTH],
+            default => [null, null], // YEAR / CUSTOM have no parent
+        };
+        if ($parentType === null) {
+            return null;
+        }
+
+        $parent = FleetObjective::active()
+            ->where('period_type', $parentType)
+            ->whereDate('start_date', '<=', $start->toDateString())
+            ->whereDate('end_date', '>=', $end->toDateString())
+            ->orderByRaw('DATEDIFF(end_date, start_date) ASC')
+            ->first(['start_date', 'end_date', 'target_tons']);
+        if (! $parent) {
+            return null;
+        }
+
+        // Manual children of the same level: their committed tonnage leaves the parent
+        // budget, and their periods are excluded from the redistribution.
+        $manualChildren = FleetObjective::active()
+            ->where('period_type', $siblingType)
+            ->whereDate('start_date', '>=', $parent->start_date->toDateString())
+            ->whereDate('end_date', '<=', $parent->end_date->toDateString())
+            ->get(['start_date', 'target_tons']);
+
+        $parentRemaining = (float) $parent->target_tons - (float) $manualChildren->sum('target_tons');
+        if ($parentRemaining <= 0) {
+            return null; // parent already fully committed by manual children — no reference
+        }
+
+        $manualStarts = $manualChildren->map(fn ($c) => $c->start_date->toDateString())->all();
+
+        // Available fleet capacity (constant across future periods) — keeps the reference
+        // grounded in real fleet capability while operational days drive the split.
+        $availableCapacityT = (float) Truck::query()
+            ->where('is_active', true)
+            ->where('is_available', true)
+            ->sum('capacity_tonnage');
+        $capacityWeight = $availableCapacityT > 0 ? $availableCapacityT : 1.0;
+
+        // Weight (operational-days × capacity) of every UNALLOCATED sibling, plus the
+        // selected period's own weight.
+        $totalWeight = 0.0;
+        $selectedWeight = 0.0;
+        $selectedStart = $start->toDateString();
+        foreach ($this->siblingPeriods($siblingType, $parent->start_date->copy(), $parent->end_date->copy()) as $sib) {
+            if (in_array($sib['start']->toDateString(), $manualStarts, true)) {
+                continue; // has a manual objective — excluded from redistribution
+            }
+            $weight = max(1, $this->calendar->operationalDays($sib['start'], $sib['end'])) * $capacityWeight;
+            $totalWeight += $weight;
+            if ($sib['start']->toDateString() === $selectedStart) {
+                $selectedWeight = $weight;
+            }
+        }
+
+        if ($totalWeight <= 0 || $selectedWeight <= 0) {
+            return null; // selected period is not an unallocated sibling — no reference
+        }
+
+        $referenceTons = round($parentRemaining * ($selectedWeight / $totalWeight), 2);
+
+        return [
+            'target_tons' => $referenceTons,
+            'target_rotations' => $defaultCap > 0 ? (int) round($referenceTons / $defaultCap) : 0,
+        ];
+    }
+
+    /**
+     * Canonical sibling periods inside a parent range: months (1st→last) for a year
+     * parent, weeks (Mon→Sat) for a month parent — matching how manual objectives are
+     * stored, so each manual child aligns to exactly one sibling.
+     */
+    private function siblingPeriods(string $siblingType, Carbon $parentStart, Carbon $parentEnd): array
+    {
+        $out = [];
+        if ($siblingType === FleetObjective::PERIOD_MONTH) {
+            $cursor = $parentStart->copy()->startOfMonth();
+            while ($cursor->lte($parentEnd)) {
+                $out[] = ['start' => $cursor->copy()->startOfMonth(), 'end' => $cursor->copy()->endOfMonth()];
+                $cursor->addMonth();
+            }
+        } elseif ($siblingType === FleetObjective::PERIOD_WEEK) {
+            $cursor = $parentStart->copy()->startOfWeek(Carbon::MONDAY);
+            while ($cursor->lte($parentEnd)) {
+                $out[] = ['start' => $cursor->copy(), 'end' => $cursor->copy()->addDays(5)];
+                $cursor->addWeek();
+            }
+        }
+
+        return $out;
     }
 
     /**
