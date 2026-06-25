@@ -10,10 +10,10 @@
 ---
 
 ## Current Focus
-Housekeeping before infrastructure — **H1 (code audit) done**; **H2 (architecture validation)** + **H3 (UI consistency)** next.
+Housekeeping before infrastructure — **H1 (code audit)** + **H2 (architecture validation)** done; **H3 (UI consistency)** next.
 
 ## Next Phase
-Housekeeping H2 — architecture validation (module ownership, workflow boundaries, naming, folder structure). Then Production Phase 1 · Queues (`DEPLOYMENT.md §4`).
+Housekeeping H3 — UI consistency (layout, filters, forms, tables, buttons, typography, spacing, responsive, a11y). Then Production Phase 1 · Queues (`DEPLOYMENT.md §4`).
 
 ---
 
@@ -77,6 +77,7 @@ Housekeeping H2 — architecture validation (module ownership, workflow boundari
 - `operationsBadges` runs a count query per request for dispatch users — add caching.
 - `redistributeOpenObjectives()` iterates objectives without an `active()` filter (touches archived rows) — review.
 - Weight-gap threshold fetched inline in `DriverKpiService`/`TruckKpiService`/`FleetKpiService` — consolidate to `TransportTracking::weightGapThreshold()` (reconcile `?:` vs `??` for a 0 threshold; no KPI test coverage yet). *[found H1]*
+- Folder structure: `logistics/objectives/Create` + `logistics/planning/Weekly` belong to the operations workflow but live under `logistics/` — relocate to `operations/` (cosmetic; churns render names + build). *[found H2]*
 - Untracked `docs/audit/*` and `docs/backlog/*` — decide commit vs discard.
 
 ## Resolved Debt
