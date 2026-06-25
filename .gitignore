@@ -1,7 +1,18 @@
 /.phpunit.cache
 /node_modules
-# public/build is intentionally COMMITTED — the Infomaniak deploy only runs
-# `git pull` (no Node/`npm run build`). See DEPLOYMENT.md. Do not re-ignore it.
+
+# ------------------------------------------------------------------
+# Production deployment
+#
+# This project is deployed on Infomaniak.
+# Production only performs `git pull`.
+# It DOES NOT execute npm install or npm run build.
+#
+# Therefore `public/build` MUST remain version controlled.
+# Do NOT ignore or delete it unless the deployment
+# process changes to include a build step.
+# ------------------------------------------------------------------
+
 /public/hot
 /public/storage
 /storage/*.key
