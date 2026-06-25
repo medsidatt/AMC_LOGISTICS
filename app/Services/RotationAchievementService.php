@@ -90,16 +90,15 @@ class RotationAchievementService
 
             // Manual objectives ALWAYS take precedence over a derived reference. Order:
             //   1. exact objective for the selected period            (handled above)
-            //   2. manual CHILD objectives inside the period          (month→weeks, year→months)
-            //   3. derived reference from the parent objective        (read-only benchmark)
+            //   2. hierarchical-mean reference from manual CHILD       (month→weeks, year→months)
+            //      objectives: Σ(manual children) + missing slots × mean(manual children)
+            //   3. parent-remaining reference                         (ONLY when no manual children)
             //   4. no target
-            // A derived reference is therefore only ever produced for a period that has
-            // neither its own manual objective nor manual children — it can never
-            // overwrite manual data. References are read-only: never persisted, never
-            // distributed to trucks, never shown in Planning. Per-truck targets stay
-            // empty so the truck table shows realized only (we never fabricate planning).
+            // A reference is read-only: never persisted, never distributed to trucks, never
+            // shown in Planning. Per-truck targets stay empty so the truck table shows
+            // realized only (we never fabricate planning).
             if ($targetSource === 'none') {
-                $reference = $this->manualChildAggregate($start, $end, $viewMode)
+                $reference = $this->hierarchicalChildReference($start, $end, $viewMode)
                     ?? $this->referenceTarget($start, $end, $viewMode, $defaultCap);
                 if ($reference !== null) {
                     $fleetTarget = $reference;
@@ -246,14 +245,23 @@ class RotationAchievementService
     }
 
     /**
-     * Step 2 of Réalisation resolution: a period with no exact objective but with manual
-     * CHILD objectives inside it (month→weeks, year→months) reports the SUM of those
-     * manual children — never a parent-derived figure that would ignore them, so manually
-     * planned tonnage always stays authoritative. Returns null when the mode has no child
-     * level (week/custom) or no manual children exist (→ fall through to a derived
-     * reference). Carries no per-truck targets: like any reference it shows realized-only.
+     * Step 2 of Réalisation resolution — the hierarchical-mean reference. A period with
+     * no exact objective but with manual CHILD objectives inside it (month→weeks,
+     * year→months) builds a read-only reference from those children:
+     *
+     *   reference = Σ(manual children) + (missing child slots × mean(manual children))
+     *
+     * Every child slot in the period contributes — the manually-planned ones at their
+     * committed figure, the unplanned ones estimated at the mean of the planned
+     * siblings. Manual planning always wins; estimates only fill the gaps. Example
+     * (year, Jan=2200 Feb=2100 Mar=1900): 6200 + 9 × 2066.67 = 24 800.
+     *
+     * Returns null when the mode has no child level (week/custom) or no manual child
+     * exists (→ fall through to the parent-remaining reference). Carries no per-truck
+     * targets: like any reference it shows realized-only and is never persisted,
+     * distributed, or surfaced in Planning.
      */
-    private function manualChildAggregate(Carbon $start, Carbon $end, string $viewMode): ?array
+    private function hierarchicalChildReference(Carbon $start, Carbon $end, string $viewMode): ?array
     {
         $childType = match ($viewMode) {
             FleetObjective::PERIOD_MONTH => FleetObjective::PERIOD_WEEK,
@@ -271,12 +279,19 @@ class RotationAchievementService
             ->get(['target_tons', 'target_rotations']);
 
         if ($children->isEmpty()) {
-            return null;
+            return null; // no manual children → parent-remaining reference instead
         }
 
+        // Fill the unplanned sibling slots with the mean of the planned ones.
+        $totalSlots = count($this->siblingPeriods($childType, $start->copy(), $end->copy()));
+        $missing = max(0, $totalSlots - $children->count());
+
+        $meanTons = (float) $children->avg('target_tons');
+        $meanRot = (float) $children->avg('target_rotations');
+
         return [
-            'target_tons' => round((float) $children->sum('target_tons'), 2),
-            'target_rotations' => (int) $children->sum('target_rotations'),
+            'target_tons' => round((float) $children->sum('target_tons') + $missing * $meanTons, 2),
+            'target_rotations' => (int) round((float) $children->sum('target_rotations') + $missing * $meanRot),
         ];
     }
 
