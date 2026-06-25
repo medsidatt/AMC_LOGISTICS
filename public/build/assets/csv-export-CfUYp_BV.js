@@ -1,0 +1,2 @@
+function m(s,c,r="export.csv"){const a=c.map(o=>`"${o.label}"`).join(";"),l=s.map(o=>c.map(b=>{let e=o[b.key];return e&&typeof e=="object"&&(e=e.name??e.matricule??e.label??JSON.stringify(e)),`"${String(e??"").replace(/"/g,'""')}"`}).join(";")),p="\uFEFF"+[a,...l].join(`
+`),i=new Blob([p],{type:"text/csv;charset=utf-8;"}),n=URL.createObjectURL(i),t=document.createElement("a");t.href=n,t.download=r,t.click(),URL.revokeObjectURL(n)}export{m as e};

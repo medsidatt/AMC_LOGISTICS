@@ -38,28 +38,46 @@ It has been scrubbed from the template, but **git history still contains it**
 
 ---
 
-## 2. Build & release (fresh clone → running app)
+## 2. Build & release — compiled assets are COMMITTED
 
-Compiled assets are **not** committed (`/public/build` is gitignored). The
-deploy pipeline must build them:
+> **The Infomaniak deployment target runs only `git pull` — it has no Node.js
+> and never runs `npm run build`.** Therefore the Vite output **`public/build/`
+> (including `manifest.json`) is intentionally version-controlled.** This is the
+> project's established strategy; removing/ignoring it breaks production with
+> `ViteManifestNotFoundException: public/build/manifest.json`. **Do not
+> re-ignore `public/build` during future cleanups.**
+
+### Whoever has Node builds locally, then commits the result
+
+After any change to `resources/js` or `resources/css`, the **developer** (who
+has Node) rebuilds and commits the assets so production receives them on the
+next `git pull`:
 
 ```bash
-git clone <repo> && cd amc-logistics
-composer install --no-dev --optimize-autoloader   # PHP deps
-npm ci                                             # JS deps (lockfile-exact)
-npm run type-check                                 # tsc --noEmit, must be 0 errors
-npm run build                                      # Vite -> public/build
-php artisan key:generate                           # first install only
-php artisan migrate --force                        # apply schema
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+npm ci                 # JS deps (lockfile-exact)
+npm run type-check     # tsc --noEmit, must be 0 errors
+npm run build          # Vite -> public/build (manifest.json + assets/)
+git add public/build   # commit the compiled assets with the code change
 ```
 
-A redeploy of code-only changes still needs `npm run build` whenever
-`resources/js` or `resources/css` changed, and `php artisan migrate --force`
-whenever a migration was added. Run `php artisan optimize:clear` after a deploy
-if cached config/routes went stale.
+Keep code and built assets in the **same commit** so they never go out of sync
+(no stale manifest in production).
+
+### On the Infomaniak server (deploy)
+
+```bash
+git pull                         # brings PHP code AND public/build together
+composer install --no-dev --optimize-autoloader
+php artisan migrate --force      # when a migration was added
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+php artisan optimize:clear       # if cached config/routes went stale
+```
+
+No `npm`/Node step runs on the server — the manifest is already in the repo.
+
+> If deployment later moves to a host with Node.js or CI/CD, the strategy can be
+> revisited then (gitignore `public/build` and add `npm ci && npm run build` to
+> the pipeline) — but only once that build step actually exists.
 
 ---
 
