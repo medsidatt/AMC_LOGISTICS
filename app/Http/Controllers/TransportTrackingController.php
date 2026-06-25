@@ -11,6 +11,7 @@ use App\Models\Provider;
 use App\Models\Transporter;
 use App\Models\TransportTracking;
 use App\Models\Truck;
+use App\Support\FleetIdentifier;
 use App\Services\SharePointStorageService;
 use App\Services\TripSegmentBuilderService;
 use App\Services\WeightGapDetector;
@@ -215,6 +216,7 @@ class TransportTrackingController extends Controller
         $validated = $request->validate([
             'truck_id' => 'required|string',
             'driver_id' => 'required|string',
+            'transporter_id' => 'nullable|exists:transporters,id',
             'provider_id' => 'nullable|exists:providers,id',
 
             'product' => 'required|in:0/3,3/8,8/16',
@@ -236,30 +238,9 @@ class TransportTrackingController extends Controller
             'client_net_weight' => 'nullable|numeric',
         ]);
 
-        /** ---------------- Resolve Truck ---------------- */
-        $truckInput = $validated['truck_id'];
-
-        $truck = is_numeric($truckInput)
-            ? Truck::find($truckInput)
-            : Truck::where('matricule', $truckInput)->first();
-
-        if (!$truck) {
-            $truck = Truck::create([
-                'matricule' => $truckInput,
-                'transporter_id' => $request->input('transporter_id'),
-            ]);
-        }
-
-        /** ---------------- Resolve Driver ---------------- */
-        $driverInput = $validated['driver_id'];
-
-        $driver = is_numeric($driverInput)
-            ? Driver::find($driverInput)
-            : Driver::where('name', $driverInput)->first();
-
-        if (!$driver) {
-            $driver = Driver::create(['name' => $driverInput]);
-        }
+        /** ---------------- Resolve Truck & Driver ---------------- */
+        $truck = $this->resolveTruck($validated['truck_id'], $validated['transporter_id'] ?? null);
+        $driver = $this->resolveDriver($validated['driver_id']);
 
         /** ---------------- Prepare Data ---------------- */
         $data = collect($validated)
@@ -607,6 +588,7 @@ class TransportTrackingController extends Controller
         $validated = $request->validate([
             'truck_id' => 'required|string',
             'driver_id' => 'required|string',
+            'transporter_id' => 'nullable|exists:transporters,id',
             'provider_id' => 'nullable|exists:providers,id',
 
             'product' => 'required|in:0/3,3/8,8/16',
@@ -628,30 +610,9 @@ class TransportTrackingController extends Controller
             'client_net_weight' => 'nullable|numeric',
         ]);
 
-        /** ---------------- Resolve Truck ---------------- */
-        $truckInput = $validated['truck_id'];
-
-        $truck = is_numeric($truckInput)
-            ? Truck::find($truckInput)
-            : Truck::where('matricule', $truckInput)->first();
-
-        if (!$truck) {
-            $truck = Truck::create([
-                'matricule' => $truckInput,
-                'transporter_id' => $request->input('transporter_id'),
-            ]);
-        }
-
-        /** ---------------- Resolve Driver ---------------- */
-        $driverInput = $validated['driver_id'];
-
-        $driver = is_numeric($driverInput)
-            ? Driver::find($driverInput)
-            : Driver::where('name', $driverInput)->first();
-
-        if (!$driver) {
-            $driver = Driver::create(['name' => $driverInput]);
-        }
+        /** ---------------- Resolve Truck & Driver ---------------- */
+        $truck = $this->resolveTruck($validated['truck_id'], $validated['transporter_id'] ?? null);
+        $driver = $this->resolveDriver($validated['driver_id']);
 
         /** ---------------- Prepare Data ---------------- */
         $data = [
@@ -1161,6 +1122,52 @@ EOT;
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Resolve an existing truck by id or matricule, creating one only from a
+     * plausible plate. Blank, whitespace, or placeholder input is rejected so
+     * it cannot spawn a phantom truck.
+     */
+    private function resolveTruck(string $input, ?int $transporterId): Truck
+    {
+        $input = trim($input);
+
+        $truck = is_numeric($input)
+            ? Truck::find($input)
+            : Truck::where('matricule', $input)->first();
+
+        if ($truck) {
+            return $truck;
+        }
+
+        abort_unless(FleetIdentifier::isPlausible($input), 422, "Immatriculation invalide : « {$input} ».");
+
+        return Truck::create([
+            'matricule' => $input,
+            'transporter_id' => $transporterId,
+        ]);
+    }
+
+    /**
+     * Resolve an existing driver by id or name, creating one only from a
+     * plausible name. Placeholder input is rejected to avoid phantom drivers.
+     */
+    private function resolveDriver(string $input): Driver
+    {
+        $input = trim($input);
+
+        $driver = is_numeric($input)
+            ? Driver::find($input)
+            : Driver::where('name', $input)->first();
+
+        if ($driver) {
+            return $driver;
+        }
+
+        abort_unless(FleetIdentifier::isPlausible($input), 422, "Nom de conducteur invalide : « {$input} ».");
+
+        return Driver::create(['name' => $input]);
     }
 }
 
