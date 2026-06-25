@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import FormInput from '@/components/ui/FormInput';
 import { usePermission } from '@/hooks/usePermission';
 import type { PlanningMode } from '@/types/achievement';
@@ -74,6 +75,7 @@ export default function ObjectiveAuthoring({ editing, periodTypes, period, targe
     const [target, setTarget] = useState(String(targetTons || ''));
     const [notes, setNotes] = useState(initialNotes ?? '');
     const [saving, setSaving] = useState(false);
+    const [conflict, setConflict] = useState<{ existing_tons: number; new_tons: number } | null>(null);
 
     const [start, end] = useMemo(() => rangeFor(type, anchor, customEnd), [type, anchor, customEnd]);
     const weeks = useMemo(() => Math.max(1, daysBetween(start, end) / 7), [start, end]);
@@ -89,7 +91,7 @@ export default function ObjectiveAuthoring({ editing, periodTypes, period, targe
         return perTruck > 0 && targetNum > 0 ? Math.ceil(targetNum / perTruck) : 0;
     }, [fleetCapacity, availableTruckCount, targetNum]);
 
-    const save = () => {
+    const save = (override = false) => {
         setSaving(true);
         router.post('/logistics/objectives', {
             period_type: type,
@@ -97,7 +99,16 @@ export default function ObjectiveAuthoring({ editing, periodTypes, period, targe
             end_date: type === 'CUSTOM' ? end : null,
             target_tons: targetNum,
             notes,
-        }, { onFinish: () => setSaving(false) });
+            override: override || !!editing, // editing a locked period is an explicit replace
+        }, {
+            preserveState: true, // keep the form if we bounce back to confirm a replace
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const c = (page.props as { flash?: { objectiveConflict?: { existing_tons: number; new_tons: number } } }).flash?.objectiveConflict;
+                if (c) setConflict(c); // existing objective — ask before overwriting
+            },
+            onFinish: () => setSaving(false),
+        });
     };
 
     return (
@@ -241,13 +252,22 @@ export default function ObjectiveAuthoring({ editing, periodTypes, period, targe
                     />
                     {canEdit && (
                         <div className="mt-4 flex">
-                            <Button onClick={save} loading={saving} disabled={targetNum <= 0} className="h-11 w-full sm:w-auto sm:ml-auto px-5">
+                            <Button onClick={() => save()} loading={saving} disabled={targetNum <= 0} className="h-11 w-full sm:w-auto sm:ml-auto px-5">
                                 <Target size={15} className="mr-1.5" /> {editing ? 'Enregistrer' : 'Créer l’objectif'}
                             </Button>
                         </div>
                     )}
                 </Card>
             </div>
+
+            <ConfirmDialog
+                open={!!conflict}
+                onClose={() => setConflict(null)}
+                title="Objectif déjà défini"
+                message={conflict ? `Un objectif de ${fmt(conflict.existing_tons)} t existe déjà pour cette période. Le remplacer par ${fmt(conflict.new_tons)} t ?` : ''}
+                confirmLabel="Remplacer"
+                onConfirm={() => save(true)}
+            />
         </AuthenticatedLayout>
     );
 }

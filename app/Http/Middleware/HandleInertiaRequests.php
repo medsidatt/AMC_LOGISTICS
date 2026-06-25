@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'objectiveConflict' => fn () => $request->session()->get('objectiveConflict'),
             ],
             // Live counts for the Operations workflow sidebar badges (Réconciliation
             // + Exceptions). Lazy + gated so it only runs for operational users.
