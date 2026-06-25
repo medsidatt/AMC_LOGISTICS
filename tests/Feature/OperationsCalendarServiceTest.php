@@ -77,11 +77,13 @@ class OperationsCalendarServiceTest extends TestCase
     {
         $user = User::query()->permission('fleet-settings-edit')->firstOrFail();
 
+        // Calendar moved into the flat Planning workflow (/planning/calendar,
+        // operations/planning/Calendar); the old settings URL 302-redirects there.
         $this->actingAs($user)
-            ->get('/settings/operations-calendar')
+            ->get('/planning/calendar')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('settings/OperationsCalendar')
+                ->component('operations/planning/Calendar')
                 ->has('calendar.working_weekdays')
                 ->has('days'));
     }
