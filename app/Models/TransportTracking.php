@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Http\Traits\TracksActions;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Auth\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -180,6 +181,28 @@ class TransportTracking extends Model
     public function expectedTicket(): HasOne
     {
         return $this->hasOne(ExpectedTransportTicket::class);
+    }
+
+    /**
+     * Weight-gap anomaly threshold in tonnes (the theft-detection threshold,
+     * configurable in fleet settings). Single source for every dashboard.
+     */
+    public static function weightGapThreshold(): float
+    {
+        return (float) (FleetSetting::current()->weight_gap_threshold ?: 0.5);
+    }
+
+    /**
+     * Count of distinct drivers with at least one over-threshold weight gap
+     * within the given (already-filtered) query — the "suspicious drivers"
+     * signal shared by the transport dashboards.
+     */
+    public static function suspiciousDriverCount(Builder $scope): int
+    {
+        return (clone $scope)
+            ->whereRaw('ABS(provider_net_weight - client_net_weight) > ?', [static::weightGapThreshold()])
+            ->distinct('driver_id')
+            ->count('driver_id');
     }
 
 }

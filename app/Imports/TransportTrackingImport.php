@@ -7,6 +7,7 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Models\Driver;
 use App\Models\Provider;
+use App\Support\FleetIdentifier;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -34,22 +35,22 @@ class TransportTrackingImport implements ToModel, WithHeadingRow, WithCalculated
             return null;
         }
 
-        // Transporter
-        $transporter = !empty($row['transporter'])
-            ? Transporter::firstOrCreate(['name' => $row['transporter']])
+        // Transporter — skip blank/placeholder cells so they can't spawn phantoms.
+        $transporter = FleetIdentifier::isPlausible($row['transporter'] ?? null)
+            ? Transporter::firstOrCreate(['name' => trim($row['transporter'])])
             : null;
 
         // Truck
-        $truck = !empty($row['truck_number'])
+        $truck = FleetIdentifier::isPlausible($row['truck_number'] ?? null)
             ? Truck::firstOrCreate(
-                ['matricule' => $row['truck_number']],
+                ['matricule' => trim($row['truck_number'])],
                 ['transporter_id' => $transporter?->id]
             )
             : null;
 
         // Driver
-        $driver = !empty($row['driver'])
-            ? Driver::firstOrCreate(['name' => $row['driver']])
+        $driver = FleetIdentifier::isPlausible($row['driver'] ?? null)
+            ? Driver::firstOrCreate(['name' => trim($row['driver'])])
             : null;
 
         // Provider
