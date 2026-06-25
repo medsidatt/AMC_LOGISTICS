@@ -934,68 +934,6 @@ EOT;
         ]);
     }
 
-    // dashboard
-    /* public function dashboard()
-      {
-          // Fetch all data
-          $trackings = TransportTracking::all()->map(function($item){
-              // Parse numeric values
-              $item->client_net_weight = (float) str_replace(',', '.', $item->client_net_weight);
-              $item->client_gross_weight = (float) str_replace(',', '.', $item->client_gross_weight);
-              $item->client_tare_weight = (float) str_replace(',', '.', $item->client_tare_weight);
-              $item->provider_net_weight = (float) str_replace(',', '.', $item->provider_net_weight);
-              $item->provider_gross_weight = (float) str_replace(',', '.', $item->provider_gross_weight);
-              $item->provider_tare_weight = (float) str_replace(',', '.', $item->provider_tare_weight);
-              $item->gap = (float) str_replace(',', '.', strip_tags($item->gap));
-
-              // Differences
-              $item->gross_net_diff_client = $item->client_gross_weight - $item->client_net_weight;
-              $item->gross_net_diff_provider = $item->provider_gross_weight - $item->provider_net_weight;
-              $item->client_provider_diff = $item->client_net_weight - $item->provider_net_weight;
-
-              // Ensure base and product_type exist
-              $item->base = $item->base ?? 'sn';
-              $item->product = $item->product ?? 'unknown';
-
-              return $item;
-          });
-
-          // Driver stats
-          $driverStats = $trackings->groupBy('driver_id')->map(function($group){
-              return [
-                  'total_deliveries' => $group->count(),
-                  'total_gap' => $group->sum('gap'),
-                  'avg_gap' => round($group->avg('gap'), 2),
-                  'by_base' => $group->groupBy('base')->map(fn($g,$base)=>['total_deliveries'=>$g->count(),'total_gap'=>$g->sum('gap')]),
-                  'by_product_type' => $group->groupBy('product')->map(fn($g,$type)=>['total_deliveries'=>$g->count(),'total_gap'=>$g->sum('gap')]),
-              ];
-          });
-
-          // Transporter stats
-          $transporterStats = $trackings->groupBy('transporter_id')->map(function($group){
-              return [
-                  'total_deliveries' => $group->count(),
-                  'total_gap' => $group->sum('gap'),
-                  'by_base' => $group->groupBy('base')->map(fn($g,$base)=>['total_deliveries'=>$g->count(),'total_gap'=>$g->sum('gap')]),
-                  'by_product_type' => $group->groupBy('product')->map(fn($g,$type)=>['total_deliveries'=>$g->count(),'total_gap'=>$g->sum('gap')]),
-              ];
-          });
-
-          // Daily stats
-          $dailyStats = $trackings->groupBy('date')->map(function($group){
-              return [
-                  'total_deliveries' => $group->count(),
-                  'total_client_weight' => $group->sum('client_net_weight'),
-                  'total_provider_weight' => $group->sum('provider_net_weight'),
-                  'avg_gap' => round($group->avg('gap'), 2),
-                  'by_base' => $group->groupBy('base')->map(fn($g,$base)=>['total_deliveries'=>$g->count(),'total_gap'=>$g->sum('gap')]),
-              ];
-          });
-
-          return view('pages.transport_trackings.dashboard', compact('driverStats','transporterStats','dailyStats','trackings'));
-      }*/
-
-
     public function export(Request $request)
     {
         // Accept the canonical Index keys; fall back to legacy *_filter keys for backward compatibility.

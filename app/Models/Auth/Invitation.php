@@ -12,11 +12,6 @@ class Invitation extends Model
 
     protected $fillable = ['name', 'email', 'role_name', 'token', 'expires_at', 'is_used'];
 
-    /*public function isExpired(): bool
-    {
-        return $this->expires_at && $this->expires_at->isPast();
-    }*/
-
     public function isExpired(): bool
     {
         $expiresAt = $this->expires_at ? Carbon::parse($this->expires_at) : null;

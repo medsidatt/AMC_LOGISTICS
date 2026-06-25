@@ -87,13 +87,6 @@ class TransportTracking extends Model
         return null;
     }
 
-    // gap
-    /* public function getGapAttribute()
-     {
-         return $this->provider_net_weight - $this->client_net_weight;
-     }*/
-
-
     protected static function boot(): void
     {
 
