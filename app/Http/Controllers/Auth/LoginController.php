@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Support\SilentSso;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
@@ -54,6 +55,17 @@ class LoginController extends Controller
      */
     protected function authenticated(\Illuminate\Http\Request $request, $user)
     {
+        // Suspended accounts must not retain an authenticated session even for
+        // a single request. The global EnsureUserIsActive middleware is the
+        // backstop; this blocks the login attempt itself.
+        if ($user->is_suspended) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect('/login')->with('error', 'Votre compte a été suspendu. Contactez l\'administrateur.');
+        }
+
         if ($user->hasRole('Driver')) {
             return redirect('/dashboard');
         }
