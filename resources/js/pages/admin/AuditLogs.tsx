@@ -1,16 +1,3 @@
-// PLAN-NOTE (à retirer plus tard) ────────────────────────────────────────────
-// Itération actuelle : filtres enrichis (sujet, presets de période), nouveau
-// diff field-par-field, bouton Exporter (xlsx).
-// Prochaines itérations envisagées :
-//   - Page détail dédiée par entrée (route /admin/audit-logs/{log}) au lieu
-//     de l'ouverture en ligne — utile pour partager un lien direct.
-//   - Lien profond depuis la cellule "Sujet" vers la ressource correspondante
-//     (truck/driver/user/project show page) si subject_id est résoluble.
-//   - Composant `AuditTrail` réutilisable affichant l'historique d'une
-//     ressource (à intégrer dans les pages Show des modèles trackés).
-//   - Sélecteur multi-action (cocher plusieurs actions à la fois).
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
