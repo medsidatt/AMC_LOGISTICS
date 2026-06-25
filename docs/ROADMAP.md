@@ -32,6 +32,7 @@ Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return i
 | Réalisation · Hierarchical-mean reference estimation | ✅ | `04857584` |
 | Réconciliation · Missing-ticket worklist + nightly reconcile | ✅ | (existing) |
 | Analytics · Real `suspiciousDrivers` metric (de-fabricated) | ✅ | `39730420` |
+| Opérations · **Transports** sidebar entry (ticket system of record) + canonical-link fix (`/transport_trackings/*` 404s) | ✅ | *(nav branch)* |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 
@@ -77,6 +78,8 @@ Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return i
 
 ## Technical Debt
 - **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
+- **Orphaned `TransportDashboard`** (`/transport_tracking/dashboard`) — no live link; overlaps Réalisation's achievement KPIs. Per the workflow split (KPIs → Réalisation), fold its unique charts (monthly tonnage, timeline gantt) into Réalisation/Analytics, then remove the page + route + `dashboard()` method. *[found Operations nav audit]*
+- **Legacy Blade nav** (`main.blade.php` / `welcome.blade.php` / `navigation/sidebar.blade.php`) is dead (Inertia renders via `app.blade.php` + `Sidebar.tsx`) — housekeeping removal. *[found Operations nav audit]*
 - `config/app.php` ships a hardcoded `AJAX_TOKEN` fallback (`MySecretToken123`) — remove once prod sets a real token.
 - Tests run against the **live dev DB** via `DatabaseTransactions` (no separate test DB).
 - `operationsBadges` runs a count query per request for dispatch users — add caching.
