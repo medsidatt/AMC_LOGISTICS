@@ -75,11 +75,12 @@ class FleetSettingsController extends Controller
 
         $setting->update($data);
 
-        // The default capacity is a FALLBACK for trucks without a configured rated
-        // capacity — it does NOT overwrite per-truck capacities. Open objectives are
-        // re-planned so the change takes effect for trucks using the fallback.
+        // The default capacity / target rotations are FALLBACKS for trucks without a
+        // configured override — they do NOT overwrite per-truck values. Open objectives
+        // are re-planned when either changes so Planning stays consistent with settings.
         $capacityChanged = (string) ($oldValues['default_capacity_tonnage'] ?? '') !== (string) ($data['default_capacity_tonnage'] ?? '');
-        if ($capacityChanged) {
+        $rotationsChanged = (string) ($oldValues['target_rotations_per_week'] ?? '') !== (string) ($data['target_rotations_per_week'] ?? '');
+        if ($capacityChanged || $rotationsChanged) {
             $this->fleetObjectives->redistributeOpenObjectives();
         }
 

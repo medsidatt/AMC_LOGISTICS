@@ -7,68 +7,13 @@ use App\Models\Truck;
 use App\Models\TruckDriverAssignment;
 use App\Services\TruckDriverAssignmentService;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 
 class TruckDriverAssignmentController extends Controller
 {
-    public function __construct(private readonly TruckDriverAssignmentService $service)
-    {
+    public function __construct(
+        private readonly TruckDriverAssignmentService $service,
+    ) {
         $this->middleware('permission:driver-truck-assign');
-    }
-
-    public function index()
-    {
-        $trucks = Truck::query()
-            ->where('is_active', true)
-            ->with(['activeAssignments.driver:id,name'])
-            ->orderBy('matricule')
-            ->get(['id', 'matricule'])
-            ->map(function (Truck $t) {
-                $titulaire = $t->activeAssignments->firstWhere('role', TruckDriverAssignment::ROLE_TITULAIRE);
-                $assistant = $t->activeAssignments->firstWhere('role', TruckDriverAssignment::ROLE_ASSISTANT);
-                $slot = fn ($a) => $a ? ['assignment_id' => $a->id, 'driver_id' => $a->driver_id, 'name' => $a->driver?->name, 'since' => $a->started_at?->format('d/m/Y')] : null;
-
-                return [
-                    'id' => $t->id,
-                    'matricule' => $t->matricule,
-                    'titulaire' => $slot($titulaire),
-                    'assistant' => $slot($assistant),
-                    'parking' => $titulaire === null,
-                ];
-            })
-            ->sortByDesc('parking')
-            ->values();
-
-        $assignedIds = TruckDriverAssignment::query()->whereNull('ended_at')->pluck('driver_id')->unique()->all();
-        $available = Driver::query()
-            ->where('is_active', true)
-            ->whereNotIn('id', $assignedIds)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (Driver $d) => ['id' => $d->id, 'name' => $d->name])
-            ->values();
-
-        $history = TruckDriverAssignment::query()
-            ->with(['truck:id,matricule', 'driver:id,name'])
-            ->whereNotNull('ended_at')
-            ->orderByDesc('ended_at')
-            ->limit(50)
-            ->get()
-            ->map(fn (TruckDriverAssignment $a) => [
-                'id' => $a->id,
-                'truck' => $a->truck?->matricule,
-                'driver' => $a->driver?->name,
-                'role' => TruckDriverAssignment::ROLE_LABELS[$a->role] ?? $a->role,
-                'started_at' => $a->started_at?->format('d/m/Y'),
-                'ended_at' => $a->ended_at?->format('d/m/Y'),
-            ]);
-
-        return Inertia::render('logistics/affectations/Index', [
-            'trucks' => $trucks,
-            'availableDrivers' => $available,
-            'history' => $history,
-            'roles' => TruckDriverAssignment::ROLE_LABELS,
-        ]);
     }
 
     public function assign(Request $request)

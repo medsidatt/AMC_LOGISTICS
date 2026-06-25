@@ -4,8 +4,9 @@ import {
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
     AlertTriangle, Activity, History, Target, ChevronDown, CalendarDays, CalendarOff,
+    CalendarRange, Send, FileWarning,
 } from 'lucide-react';
-import {useState, useEffect, type ReactNode} from 'react';
+import {useState, useEffect, Fragment, type ReactNode} from 'react';
 import {clsx} from 'clsx';
 import {usePermission} from '@/hooks/usePermission';
 
@@ -18,6 +19,10 @@ interface NavItem {
     permission?: string | string[];
     /** Any-of these roles reveals the item (for routes gated by role, not permission). */
     role?: string | string[];
+    /** Live count badge fed from shared `operationsBadges`. */
+    badge?: 'missing' | 'exceptions';
+    /** Render a divider above this item (used to set the cockpit apart). */
+    separatorBefore?: boolean;
 }
 
 interface NavSection {
@@ -52,8 +57,10 @@ function pickActiveHref(url: string, items: NavItem[]): string | null {
     return best ? best.item.href : null;
 }
 
-function SidebarLink({item, collapsed, activeHref}: { item: NavItem; collapsed: boolean; activeHref: string | null }) {
+function SidebarLink({item, collapsed, activeHref, badgeCount}: { item: NavItem; collapsed: boolean; activeHref: string | null; badgeCount?: number }) {
     const isActive = item.href === activeHref;
+    const showBadge = typeof badgeCount === 'number' && badgeCount > 0;
+    const badgeColor = item.badge === 'missing' ? 'bg-red-500' : 'bg-amber-500';
 
     return (
         <li>
@@ -68,8 +75,18 @@ function SidebarLink({item, collapsed, activeHref}: { item: NavItem; collapsed: 
                 )}
                 title={collapsed ? item.label : undefined}
             >
-                <span className="flex-shrink-0 w-5 h-5">{item.icon}</span>
-                {!collapsed && <span className="truncate">{item.label}</span>}
+                <span className="flex-shrink-0 w-5 h-5 relative">
+                    {item.icon}
+                    {collapsed && showBadge && (
+                        <span className={clsx('absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full ring-2 ring-[var(--color-sidebar-bg)]', badgeColor)} />
+                    )}
+                </span>
+                {!collapsed && <span className="truncate flex-1">{item.label}</span>}
+                {!collapsed && showBadge && (
+                    <span className={clsx('inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold text-white', badgeColor)}>
+                        {badgeCount}
+                    </span>
+                )}
             </a>
         </li>
     );
@@ -83,93 +100,42 @@ function SidebarLink({item, collapsed, activeHref}: { item: NavItem; collapsed: 
  */
 const mainSections: NavSection[] = [
     {
-        // Transport — the freight ledger (records only; analytics/reports moved out).
-        header: 'Transport',
+        // Operations — the daily logistics lifecycle, one route per stage.
+        header: 'Opérations',
         items: [
-            {label: 'Suivi Transport', href: '/transport_tracking', icon: <List size={18}/>, permission: 'transport-tracking-list'},
+            {label: 'Planification', href: '/planning', match: '/planning', icon: <CalendarRange size={18}/>, permission: 'fleet-roster-plan'},
+            {label: 'Répartition', href: '/dispatch', match: '/dispatch', icon: <Send size={18}/>, permission: 'daily-dispatch-list'},
+            {label: 'Réalisation', href: '/realisation', match: '/realisation', icon: <Activity size={18}/>, permission: 'daily-dispatch-list'},
+            {label: 'Réconciliation', href: '/reconciliation', match: '/reconciliation', icon: <FileWarning size={18}/>, permission: 'live-fleet-view', badge: 'missing'},
         ],
     },
     {
-        // Fleet — your own assets + their resource assignment.
-        header: 'Flotte',
+        header: 'Ressources',
         items: [
             {label: 'Camions', href: '/trucks', icon: <Truck size={18}/>, permission: 'truck-list'},
             {label: 'Conducteurs', href: '/drivers', icon: <IdCard size={18}/>, permission: 'driver-list'},
-            {label: 'Affectations', href: '/logistics/affectations', icon: <Network size={18}/>, match: '/logistics/affectations', permission: 'driver-truck-assign'},
-        ],
-    },
-    {
-        // Partners / master data — external parties (moved out of Transport/Flotte).
-        header: 'Partenaires',
-        items: [
-            {label: 'Fournisseurs', href: '/providers', icon: <Factory size={18}/>, permission: 'provider-list'},
-            {label: 'Transporteurs', href: '/transporters', icon: <Network size={18}/>, permission: 'transporter-list'},
+            {label: 'Affectations', href: '/assignments', match: '/assignments', icon: <Network size={18}/>, permission: 'driver-truck-assign'},
         ],
     },
     {
         header: 'Maintenance',
         items: [
-            {label: 'Vue d\'ensemble', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance', permission: 'maintenance-list'},
+            {label: 'Maintenance', href: '/maintenance', icon: <Wrench size={18}/>, match: '/maintenance', permission: 'maintenance-list'},
         ],
     },
     {
-        // Compliance & HSE — inspections + checklist validation workflow.
-        header: 'Conformité & HSE',
+        header: 'Conformité',
         items: [
             {label: 'Inspections', href: '/hse/inspections', icon: <ShieldCheck size={18}/>, match: '/hse/inspections', permission: 'inspection-list'},
-            {label: 'Validation checklists', href: '/logistics/validation/checklists', icon: <ClipboardCheck size={18}/>, match: '/logistics/validation/checklists', permission: 'weekly-checklist-validate'},
         ],
     },
     {
-        // Fleet Planning — strategic demand + supply. Each item = one capability.
-        header: 'Planification',
-        items: [
-            {label: 'Tableau de planification', href: '/logistics/planning/weekly', icon: <Activity size={18}/>, match: '/logistics/planning/weekly', permission: 'daily-dispatch-list'},
-            {label: 'Objectifs', href: '/logistics/objectives', icon: <Target size={18}/>, match: '/logistics/objectives', permission: 'fleet-roster-plan'},
-            {label: 'Disponibilité flotte', href: '/logistics/availability', icon: <CalendarOff size={18}/>, match: '/logistics/availability', permission: 'fleet-roster-plan'},
-            {label: 'Calendrier opérationnel', href: '/settings/operations-calendar', icon: <CalendarDays size={18}/>, match: '/settings/operations-calendar', permission: 'fleet-settings-edit'},
-            {label: 'Configuration planification', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
-        ],
-    },
-    {
-        // Operations & Dispatch — daily execution (extracted from Planning).
-        header: 'Opérations & Répartition',
-        items: [
-            {label: 'Répartition quotidienne', href: '/logistics/planning', icon: <Users size={18}/>, match: '/logistics/planning', permission: 'daily-dispatch-list'},
-        ],
-    },
-    {
-        header: 'Sécurité & GPS',
-        items: [
-            {label: 'Cartographie flotte', href: '/logistics/fleet-map', icon: <Map size={18}/>, match: '/logistics/fleet-map', permission: 'fleet-map-view'},
-            {label: 'Incidents de vol', href: '/logistics/theft-incidents', icon: <ShieldAlert size={18}/>, match: '/logistics/theft-incidents', permission: 'logistics-dashboard'},
-            {label: 'Lieux (géofences)', href: '/logistics/places', icon: <MapPin size={18}/>, match: '/logistics/places', permission: 'logistics-dashboard'},
-        ],
-    },
-    {
-        // Analytics & Reporting — insight (moved out of Transport).
-        header: 'Analyse & Rapports',
-        items: [
-            {label: 'Analytiques', href: '/dashboard/trackings', icon: <BarChart3 size={18}/>, match: '/dashboard/', permission: 'transport-tracking-list'},
-            {label: 'Rapports', href: '/reports', icon: <FileSpreadsheet size={18}/>, match: '/reports', permission: 'report-view'},
-        ],
-    },
-    {
-        // Fuel & Energy — fuel data ingestion (moved out of Administration).
-        header: 'Carburant',
-        items: [
-            {label: 'Import carburant', href: '/fuel/import', icon: <Fuel size={18}/>, match: '/fuel/import', permission: 'fuel-import'},
-        ],
-    },
-    {
-        // Administration — IAM + compliance/audit trails only.
         header: 'Administration',
         items: [
+            {label: 'Paramètres', href: '/settings/fleet', icon: <Settings size={18}/>, match: '/settings/fleet', permission: 'fleet-settings-edit'},
             {label: 'Utilisateurs', href: '/users', icon: <Users size={18}/>, permission: 'user-list'},
-            {label: 'Invitations', href: '/auth/invitations', icon: <Mail size={18}/>, match: '/auth/invitations', permission: 'invitation-list'},
             {label: 'Rôles', href: '/roles', icon: <ShieldCheck size={18}/>, permission: 'role-list'},
-            {label: 'Modifications d\'objectifs', href: '/logistics/objective-history', icon: <History size={18}/>, match: '/logistics/objective-history', permission: 'objective-history-list'},
-            {label: 'Journal d\'activité', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
+            {label: 'Journal', href: '/admin/audit-logs', icon: <Activity size={18}/>, match: '/admin/audit-logs', permission: 'audit-log-view'},
         ],
     },
 ];
@@ -202,8 +168,12 @@ interface SidebarProps {
 }
 
 export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) {
-    const {url} = usePage();
+    const {url, props} = usePage();
     const {can, hasRole} = usePermission();
+
+    const badges = (props as { operationsBadges?: { missing?: number; exceptions?: number } | null }).operationsBadges ?? null;
+    const badgeFor = (item: NavItem): number | undefined =>
+        item.badge ? (badges?.[item.badge] ?? 0) : undefined;
 
     // Drivers get a dedicated self-service space; everyone else gets the
     // permission-filtered main navigation (admins see all, custom roles see
@@ -309,8 +279,13 @@ export default function Sidebar({collapsed, onClose, mobileOpen}: SidebarProps) 
                                         </li>
                                     )}
                                     {isOpen && section.items.map((item) => (
-                                        <SidebarLink key={item.href} item={item} collapsed={collapsed}
-                                                     activeHref={activeHref}/>
+                                        <Fragment key={item.href}>
+                                            {item.separatorBefore && (
+                                                <li className="my-1.5 border-t border-[var(--color-sidebar-border)]" />
+                                            )}
+                                            <SidebarLink item={item} collapsed={collapsed}
+                                                         activeHref={activeHref} badgeCount={badgeFor(item)}/>
+                                        </Fragment>
                                     ))}
                                 </div>
                             );

@@ -5,39 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\CalendarDay;
 use App\Models\OperationsCalendar;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 
 /**
- * Manage the (single, default) operations calendar: the working-week pattern and
- * the exception days (holidays / shutdowns / one-off working days) that pacing
- * and projection count against.
+ * Operations calendar writes (the single, default calendar): the working-week
+ * pattern and the exception days (holidays / shutdowns / one-off working days) that
+ * pacing and projection count against. The editor UI lives at /planning/calendar
+ * (Planning owns the calendar); this controller owns only the writes.
  */
 class OperationsCalendarController extends Controller
 {
     public function __construct()
     {
         $this->middleware('permission:fleet-settings-edit');
-    }
-
-    public function edit()
-    {
-        $calendar = OperationsCalendar::where('is_default', true)
-            ->with(['days' => fn ($q) => $q->orderBy('date')])
-            ->firstOrFail();
-
-        return Inertia::render('settings/OperationsCalendar', [
-            'calendar' => [
-                'id' => $calendar->id,
-                'name' => $calendar->name,
-                'working_weekdays' => $calendar->workingWeekdays(),
-            ],
-            'days' => $calendar->days->map(fn (CalendarDay $d) => [
-                'id' => $d->id,
-                'date' => $d->date->toDateString(),
-                'day_type' => $d->day_type,
-                'note' => $d->note,
-            ])->values(),
-        ]);
     }
 
     public function updateWeekdays(Request $request)

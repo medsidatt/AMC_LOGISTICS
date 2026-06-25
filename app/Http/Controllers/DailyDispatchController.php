@@ -19,64 +19,8 @@ class DailyDispatchController extends Controller
     public function __construct(
         private readonly RotationAchievementService $achievement,
     ) {
-        $this->middleware('permission:daily-dispatch-list', ['only' => ['index', 'weekly']]);
+        $this->middleware('permission:daily-dispatch-list', ['only' => ['weekly']]);
         $this->middleware('permission:daily-dispatch-edit', ['only' => ['store', 'destroy', 'renotify']]);
-    }
-
-    public function index(Request $request)
-    {
-        $date = $request->query('date')
-            ? Carbon::parse($request->query('date'))
-            : Carbon::tomorrow();
-
-        $dispatchedByDriver = DailyDispatch::query()
-            ->whereDate('dispatch_date', $date->toDateString())
-            ->with(['creator:id,name'])
-            ->get()
-            ->keyBy('driver_id');
-
-        // Done-today per truck (ticket + GPS) for the achievement column.
-        $dayAchievement = $this->achievement->forDay($date)['by_truck'];
-        $trucks = Truck::where('is_active', true)->get(['id', 'matricule'])->keyBy('id');
-
-        $drivers = Driver::query()
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name', 'phone', 'whatsapp_opt_in_at', 'current_truck_id'])
-            ->map(function (Driver $d) use ($dispatchedByDriver, $dayAchievement, $trucks) {
-                $dispatch = $dispatchedByDriver->get($d->id);
-                $truckId = $dispatch?->truck_id ?? $d->current_truck_id;
-                $ach = $truckId ? ($dayAchievement[$truckId] ?? null) : null;
-                return [
-                    'id' => $d->id,
-                    'name' => $d->name,
-                    'has_phone' => ! empty($d->phone),
-                    'opted_in' => $d->whatsapp_opt_in_at !== null,
-                    'dispatched' => $dispatch !== null,
-                    'dispatch_id' => $dispatch?->id,
-                    'wish_provider_id' => $dispatch?->wish_provider_id,
-                    'notified_at' => $dispatch?->notified_at?->format('d/m/Y H:i'),
-                    'notification_status' => $dispatch?->notification_status,
-                    'notification_error' => $dispatch?->notification_error
-                        ? mb_substr($dispatch->notification_error, 0, 120)
-                        : null,
-                    'current_status' => $dispatch?->current_status,
-                    'note' => $dispatch?->notes,
-                    'truck' => $truckId ? ($trucks->get($truckId)->matricule ?? null) : null,
-                    'done_today' => $ach['done'] ?? 0,
-                    'ticket_manquant' => $ach['missing'] ?? false,
-                ];
-            })
-            ->values();
-
-        return Inertia::render('logistics/planning/Index', [
-            'date' => $date->toDateString(),
-            'isPast' => $date->isPast() && !$date->isToday(),
-            'isTomorrow' => $date->isTomorrow(),
-            'drivers' => $drivers,
-            'providers' => Provider::query()->orderBy('name')->get(['id', 'name']),
-            'dispatchedCount' => $dispatchedByDriver->count(),
-        ]);
     }
 
     /**
@@ -173,19 +117,16 @@ class DailyDispatchController extends Controller
 
         $notifier->notifyForDispatchIds($toNotify);
 
-        return redirect()
-            ->route('logistics.planning.index', ['date' => $date])
-            ->with('success', sprintf('Programmation enregistrée : %d ajoutés, %d modifiés, %d retirés.', $added, $updated, $removed));
+        // back() so the same save path serves both the standalone route and the
+        // Operations Dispatch tab — returns to whichever surface posted.
+        return back()->with('success', sprintf('Programmation enregistrée : %d ajoutés, %d modifiés, %d retirés.', $added, $updated, $removed));
     }
 
     public function destroy(DailyDispatch $dispatch)
     {
-        $date = $dispatch->dispatch_date->toDateString();
         $dispatch->delete();
 
-        return redirect()
-            ->route('logistics.planning.index', ['date' => $date])
-            ->with('success', 'Programmation retirée.');
+        return back()->with('success', 'Programmation retirée.');
     }
 
     /**

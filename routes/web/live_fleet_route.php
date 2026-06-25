@@ -11,6 +11,6 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'logistics/live', 'as' => 'l
 });
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'reports/ticket-gap', 'as' => 'reports.ticket_gap.'], function () {
-    Route::get('/', [TicketGapController::class, 'index'])->name('index');
+    Route::get('/', fn () => redirect('/reconciliation'))->name('index');
     Route::post('/{expected}/dismiss', [TicketGapController::class, 'dismiss'])->name('dismiss');
 });

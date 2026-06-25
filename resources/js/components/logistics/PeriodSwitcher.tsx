@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { clsx } from 'clsx';
 import { useState } from 'react';
+import FormSelect from '@/components/ui/FormSelect';
 import type { PlanningMode } from '@/types/achievement';
 
 const MODES: { value: PlanningMode; label: string }[] = [
@@ -11,7 +11,7 @@ const MODES: { value: PlanningMode; label: string }[] = [
     { value: 'CUSTOM', label: 'Personnalisé' },
 ];
 
-const BASE = '/logistics/planning/weekly';
+const BASE = '/realisation';
 
 function shift(iso: string, mode: PlanningMode, dir: number): string {
     const d = new Date(iso + 'T00:00:00');
@@ -29,16 +29,16 @@ function periodLabel(mode: PlanningMode, start: string, end: string): string {
 }
 
 /**
- * Period selector for the planning scoreboard: Week / Month / Year / Custom.
- * Navigation re-requests the same route with the resolved mode + anchor, keeping
- * the URL shareable.
+ * Réalisation period FILTER (not navigation tabs). A period is filter state on the
+ * single /realisation route — changes issue an Inertia request with preserveState /
+ * preserveScroll / replace so the URL stays shareable without stacking history.
  */
 export default function PeriodSwitcher({ mode, period }: { mode: PlanningMode; period: { start: string; end: string } }) {
     const [customStart, setCustomStart] = useState(period.start);
     const [customEnd, setCustomEnd] = useState(period.end);
 
     const go = (params: Record<string, string>) =>
-        router.get(BASE, params, { preserveState: false, preserveScroll: true });
+        router.get(BASE, params, { preserveState: true, preserveScroll: true, replace: true });
 
     const setMode = (m: PlanningMode) =>
         m === 'CUSTOM' ? go({ mode: 'CUSTOM', start: customStart, end: customEnd }) : go({ mode: m, anchor: period.start });
@@ -49,23 +49,16 @@ export default function PeriodSwitcher({ mode, period }: { mode: PlanningMode; p
 
     return (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div role="group" aria-label="Type de période" className="inline-flex rounded-lg border border-[var(--color-border)] p-0.5 bg-[var(--color-surface)] self-start">
-                {MODES.map((m) => (
-                    <button
-                        key={m.value}
-                        type="button"
-                        aria-pressed={mode === m.value}
-                        onClick={() => setMode(m.value)}
-                        className={clsx(
-                            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer',
-                            mode === m.value
-                                ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]',
-                        )}
-                    >
-                        {m.label}
-                    </button>
-                ))}
+            <div className="flex items-center gap-2">
+                <span className="text-sm text-[var(--color-text-secondary)]">Période</span>
+                <div className="w-44">
+                    <FormSelect
+                        options={MODES}
+                        value={mode}
+                        onChange={(v) => setMode((v as PlanningMode) ?? 'WEEK')}
+                        wrapperClass="mb-0"
+                    />
+                </div>
             </div>
 
             {mode === 'CUSTOM' ? (

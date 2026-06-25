@@ -131,8 +131,6 @@ class RoleController extends Controller
             'name' => 'required',
         ]);
 
-//        dd($request->all());
-
         $role = Role::findOrFail($id);
         $role->name = $request->input('name');
         $role->guard_name = $request->input('guard', 'web'); // Added 'web' as default
