@@ -10,10 +10,10 @@
 ---
 
 ## Current Focus
-**Housekeeping complete (H1–H3).** Production Phase 1 (infrastructure) is next.
+**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch) done** — `database` queue + cron worker live.
 
 ## Next Phase
-Production Phase 1 · Queues — migrate `sync → database` and stand up a persistent worker (`DEPLOYMENT.md §4`).
+Phase 1 · **Step 2 — Excel import** (store file → queue the import). Then Step 3 — SharePoint upload. (OpenAI analysis deferred → P1.5, see backlog.)
 
 ---
 
@@ -45,7 +45,9 @@ Production Phase 1 · Queues — migrate `sync → database` and stand up a pers
 | Security · User suspension enforced server-side | ✅ | `98e6f30b` |
 | Security · Phantom truck/driver guard (data integrity) | ✅ | `7b4d54d7` |
 | Config · Safe `.env.example` + `DEPLOYMENT.md` | ✅ | `2ad1a259` |
-| Queues · `sync → database` + worker | 🟠 pending | — |
+| Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | *(Step 1)* |
+| Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ | *(this commit)* |
+| Queues · Step 2 Excel import / Step 3 SharePoint upload | 🟠 next | — |
 | Scheduler · cron entry on server (`schedule:run`) | 🟠 pending (server) | — |
 | Test infra · dedicated test DB + CI pipeline | 🟠 pending | — |
 | Security · rotate leaked mail password + `AJAX_TOKEN`; drop hardcoded fallback | 🟠 pending (server) | — |
@@ -81,6 +83,7 @@ Production Phase 1 · Queues — migrate `sync → database` and stand up a pers
 - UI: convert hand-rolled forms (`logistics/places/{Create,Edit}`) + raw `<textarea>` (`trucks/{Create,Edit}`, `logistics/demands/Create`) to `Form*` components — needs visual verification. *[found H3]*
 - UI: `dashboard/PeriodFilter` raw toggle buttons → shared `Button`/a `PeriodControl` wrapper. *[found H3]*
 - UI: hardcoded `text-red-500` (#ef4444) vs `--color-danger` (#ea5455) across ~19 files — standardize the danger token (deliberate; shifts shade). *[found H3]*
+- **Phase 1.5 — Async AI analysis** (deferred; OpenAI stays synchronous until delivered as a *complete* experience — do not ship a partial async AI). Must include: analysis **result storage** (persistent history), **job status tracking**, **polling or WebSocket** result delivery, retry/failure handling, and **frontend progress states**. Reuse the existing OpenAI prompt logic in `TransportTrackingController@analyze/analyzeAll`; move only orchestration into a job.
 - Analytics · Audit-log enhancements (from removed PLAN-NOTE): dedicated detail page `/admin/audit-logs/{log}`; deep-link Subject cell to the resource Show; reusable `AuditTrail` component for Show pages; multi-action filter selector.
 - Untracked `docs/audit/*` and `docs/backlog/*` — decide commit vs discard.
 

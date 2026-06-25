@@ -44,6 +44,17 @@ class SendDispatchWhatsappJobTest extends TestCase
         ]);
     }
 
+    public function test_job_declares_queue_safety_contract(): void
+    {
+        // timeout must stay below the database queue's retry_after (90s) so a
+        // hung send is killed before the queue re-reserves and double-sends.
+        $job = new SendDispatchWhatsappJob(1);
+        $this->assertSame(3, $job->tries);
+        $this->assertSame(60, $job->timeout);
+        $this->assertLessThan(90, $job->timeout);
+        $this->assertSame([10, 60, 300], $job->backoff);
+    }
+
     public function test_successful_send_marks_dispatch_as_sent_with_wamid(): void
     {
         Http::fake([
