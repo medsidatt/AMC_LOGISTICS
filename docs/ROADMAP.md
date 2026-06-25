@@ -10,10 +10,10 @@
 ---
 
 ## Current Focus
-Production Phase 1 — infrastructure hardening (queues, test DB + CI, secret rotation, scheduler cron).
+Housekeeping before infrastructure — **H1 (code audit) done**; **H2 (architecture validation)** + **H3 (UI consistency)** next.
 
 ## Next Phase
-Track B · Queues — migrate `sync → database` and stand up a persistent worker (`DEPLOYMENT.md §4`).
+Housekeeping H2 — architecture validation (module ownership, workflow boundaries, naming, folder structure). Then Production Phase 1 · Queues (`DEPLOYMENT.md §4`).
 
 ---
 
@@ -76,9 +76,11 @@ Track B · Queues — migrate `sync → database` and stand up a persistent work
 - Tests run against the **live dev DB** via `DatabaseTransactions` (no separate test DB).
 - `operationsBadges` runs a count query per request for dispatch users — add caching.
 - `redistributeOpenObjectives()` iterates objectives without an `active()` filter (touches archived rows) — review.
+- Weight-gap threshold fetched inline in `DriverKpiService`/`TruckKpiService`/`FleetKpiService` — consolidate to `TransportTracking::weightGapThreshold()` (reconcile `?:` vs `??` for a 0 threshold; no KPI test coverage yet). *[found H1]*
 - Untracked `docs/audit/*` and `docs/backlog/*` — decide commit vs discard.
 
 ## Resolved Debt
+- **H1 dead-code sweep**: removed orphan `RequestExplanation` mail, 3 dead commented blocks (old `dashboard()`, `isExpired()`, `getGapAttribute()`), and 5 orphan frontend files (`AcceptInvitation` page, `Can`/`QuickFilters`/`AchievementSummary`/`FormFileUpload` components). Verified 0 references; tsc/build/tests green.
 - Build artifacts tracked then mis-ignored → settled on committed-artifacts strategy (`af98ee45`).
 - Fabricated dashboard metric (`suspiciousDrivers: 0`) → real calculation (`39730420`).
 - Stale planning tests vs flat nav → updated (`d1236463`).
