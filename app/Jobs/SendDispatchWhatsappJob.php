@@ -11,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -27,6 +28,10 @@ class SendDispatchWhatsappJob implements ShouldQueue
 
     public int $tries = 3;
     public array $backoff = [10, 60, 300];
+
+    /** Hard cap below the database queue's retry_after (90s) so a hung Meta
+     *  API call is killed before the queue would re-reserve and double-send. */
+    public int $timeout = 60;
 
     public function __construct(public int $dispatchId)
     {
@@ -79,6 +84,12 @@ class SendDispatchWhatsappJob implements ShouldQueue
         } catch (WhatsappSendException $e) {
             // Let Laravel's retry mechanism handle transient failures; only
             // write the failure on the final attempt.
+            Log::warning('Dispatch WhatsApp send failed', [
+                'dispatch_id' => $this->dispatchId,
+                'attempt' => $this->attempts(),
+                'tries' => $this->tries,
+                'error' => $e->getMessage(),
+            ]);
             if ($this->attempts() >= $this->tries) {
                 $dispatch->markFailed($e->getMessage());
             }
@@ -86,6 +97,12 @@ class SendDispatchWhatsappJob implements ShouldQueue
         }
 
         $dispatch->markSent($wamid);
+
+        Log::info('Dispatch WhatsApp sent', [
+            'dispatch_id' => $this->dispatchId,
+            'driver_id' => $driver->id,
+            'wamid' => $wamid,
+        ]);
     }
 
     public function failed(Throwable $e): void

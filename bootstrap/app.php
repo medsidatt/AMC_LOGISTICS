@@ -120,5 +120,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('logistics:reconcile-expected-tickets')
             ->dailyAt('23:00')
             ->withoutOverlapping();
+
+        // Background queue worker — cron-driven (the Infomaniak target has no
+        // Supervisor/daemon). Each minute schedule:run launches a short-lived
+        // worker that drains the database queue and exits; --max-time bounds it
+        // under a minute and withoutOverlapping prevents two workers at once.
+        // Explicit `database` connection so a sync rollback (jobs run inline)
+        // leaves this a harmless no-op against an empty queue.
+        $schedule->command('queue:work database --stop-when-empty --max-time=55 --tries=3 --sleep=1')
+            ->everyMinute()
+            ->withoutOverlapping();
     })
     ->create();
