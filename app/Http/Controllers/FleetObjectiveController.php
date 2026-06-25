@@ -124,6 +124,26 @@ class FleetObjectiveController extends Controller
         $p = $this->periods->resolve($data['period_type'], $data['start_date'], $data['start_date'], $data['end_date'] ?? null);
         $userId = $request->user()?->id;
 
+        // Never silently overwrite an existing manual objective. If one already covers
+        // this exact period, bounce back (no write) so the UI can ask the planner to
+        // confirm the replacement; `override` is sent once they accept (or when editing
+        // a locked period). Manual planning is authoritative — read-only until confirmed.
+        $existing = FleetObjective::active()
+            ->where('period_type', $p['mode'])
+            ->whereDate('start_date', $p['start']->toDateString())
+            ->whereDate('end_date', $p['end']->toDateString())
+            ->first(['id', 'target_tons']);
+
+        if ($existing && ! $request->boolean('override')) {
+            return back()->with('objectiveConflict', [
+                'period_type' => $p['mode'],
+                'start' => $p['start']->toDateString(),
+                'end' => $p['end']->toDateString(),
+                'existing_tons' => round((float) $existing->target_tons, 2),
+                'new_tons' => round((float) $data['target_tons'], 2),
+            ]);
+        }
+
         // Commitment only — no allocation is read or written here. The working set
         // is derived from whatever rest windows Planning has already set (null),
         // defaulting to all available trucks. Saving never depends on coverage.
