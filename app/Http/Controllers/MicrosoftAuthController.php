@@ -91,6 +91,11 @@ class MicrosoftAuthController extends Controller
             );
         }
 
+        if ($user->is_suspended) {
+            SilentSso::markFailed($request);
+            return $this->failToLogin($request, 'Votre compte a été suspendu. Contactez l\'administrateur.');
+        }
+
         SilentSso::clearCooldown($request);
         Auth::login($user);
 
@@ -135,6 +140,11 @@ class MicrosoftAuthController extends Controller
         });
 
         $request->session()->forget('invitation_token');
+
+        if ($user->is_suspended) {
+            return $this->failToLogin($request, 'Votre compte a été suspendu. Contactez l\'administrateur.');
+        }
+
         SilentSso::clearCooldown($request);
         Auth::login($user);
 
