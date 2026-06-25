@@ -12,9 +12,7 @@ use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\DriverKpiService;
 use App\Services\SharePointDailyChecklistService;
-use App\Services\SharePointStorageService;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +26,6 @@ class DriverController extends Controller
     public function __construct(
         private readonly SharePointDailyChecklistService $sharePointDailyChecklistService,
         private readonly DriverKpiService $kpiService,
-        private readonly SharePointStorageService $sharePointStorage,
     ) {
         $this->middleware('permission:driver-list', ['only' => ['index', 'show', 'showPage']]);
         $this->middleware('permission:driver-create', ['only' => ['create', 'store']]);
@@ -665,19 +662,10 @@ class DriverController extends Controller
                 ]);
 
                 if ($request->hasFile("attachments.$category")) {
-                    $file = $request->file("attachments.$category");
-                    $upload = $this->uploadDocument($file, 'issue-devis');
-
-                    Document::create([
+                    Document::storeLocalAndQueueSync($request->file("attachments.$category"), [
                         'daily_checklist_issue_id' => $issue->id,
                         'type' => 'devis',
-                        'file_path' => $upload['path'],
-                        'original_name' => $file->getClientOriginalName(),
-                        'mime_type' => $file->getMimeType(),
-                        'size' => $file->getSize(),
-                        'sharepoint_id' => $upload['sharepoint_id'],
-                        'sharepoint_url' => $upload['url'],
-                    ]);
+                    ], 'issue-devis');
                 }
             }
 
@@ -760,19 +748,10 @@ class DriverController extends Controller
             ]);
 
             if ($request->hasFile('devis')) {
-                $file = $request->file('devis');
-                $upload = $this->uploadDocument($file, 'issue-devis');
-
-                Document::create([
+                Document::storeLocalAndQueueSync($request->file('devis'), [
                     'daily_checklist_issue_id' => $issue->id,
                     'type' => 'devis',
-                    'file_path' => $upload['path'],
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                    'sharepoint_id' => $upload['sharepoint_id'],
-                    'sharepoint_url' => $upload['url'],
-                ]);
+                ], 'issue-devis');
             }
 
             return redirect()->route('drivers.issues')->with('success', 'Coût enregistré.');
@@ -782,31 +761,6 @@ class DriverController extends Controller
         }
     }
 
-    /**
-     * Upload a document to SharePoint, falling back to local public storage.
-     * Returns [path, url, sharepoint_id].
-     */
-    private function uploadDocument(UploadedFile $file, string $folder): array
-    {
-        if ($this->sharePointStorage->isConfigured()) {
-            $result = $this->sharePointStorage->upload($file, $folder);
-            if ($result['success'] ?? false) {
-                return [
-                    'path' => $result['path'],
-                    'url' => $result['url'],
-                    'sharepoint_id' => $result['sharepoint_id'] ?? null,
-                ];
-            }
-        }
-
-        $path = $file->store($folder, 'public');
-
-        return [
-            'path' => $path,
-            'url' => asset('storage/' . $path),
-            'sharepoint_id' => null,
-        ];
-    }
 
     /**
      * Show the form for editing the specified resource.

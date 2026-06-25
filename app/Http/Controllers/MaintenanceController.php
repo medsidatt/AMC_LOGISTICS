@@ -803,19 +803,10 @@ class MaintenanceController extends Controller
             ]);
 
             if ($request->hasFile('devis')) {
-                $file = $request->file('devis');
-                $upload = $this->uploadDocument($file, 'inspection-devis');
-
-                Document::create([
+                Document::storeLocalAndQueueSync($request->file('devis'), [
                     'inspection_checklist_issue_id' => $issue->id,
                     'type' => 'devis',
-                    'file_path' => $upload['path'],
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                    'sharepoint_id' => $upload['sharepoint_id'],
-                    'sharepoint_url' => $upload['url'],
-                ]);
+                ], 'inspection-devis');
             }
 
             return back()->with('success', 'Coût enregistré avec succès.');
