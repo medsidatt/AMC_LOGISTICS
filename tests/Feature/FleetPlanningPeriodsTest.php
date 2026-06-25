@@ -160,4 +160,29 @@ class FleetPlanningPeriodsTest extends TestCase
 
         $this->assertSame(999.0, (float) $objective->fresh()->target_tons);
     }
+
+    public function test_recreating_over_an_archived_objective_reactivates_it(): void
+    {
+        $payload = ['period_type' => 'WEEK', 'start_date' => '2032-10-04', 'target_tons' => 300];
+
+        $this->actingAs($this->planner())->post('/logistics/objectives', $payload)->assertRedirect('/planning');
+        $objective = \App\Models\FleetObjective::where('period_type', 'WEEK')
+            ->whereDate('start_date', '<=', '2032-10-04')
+            ->whereDate('end_date', '>=', '2032-10-04')
+            ->firstOrFail();
+
+        // Archive it (hidden from the active list).
+        $objective->update(['archived_at' => now()]);
+        $this->assertNotNull($objective->fresh()->archived_at);
+
+        // Re-creating for the same period must bring it back ACTIVE (no override needed —
+        // an archived objective is not surfaced, so there is nothing to confirm).
+        $this->actingAs($this->planner())
+            ->post('/logistics/objectives', [...$payload, 'target_tons' => 350])
+            ->assertRedirect('/planning');
+
+        $fresh = $objective->fresh();
+        $this->assertNull($fresh->archived_at, 'recreated objective must be active (visible)');
+        $this->assertSame(350.0, (float) $fresh->target_tons);
+    }
 }

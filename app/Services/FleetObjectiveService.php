@@ -23,7 +23,7 @@ class FleetObjectiveService
      * Working set = active && available && not in a surplus rest window for the
      * period. When $restedIds is null it is derived from the rest windows.
      */
-    public function upsert(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null, string $periodType = FleetObjective::PERIOD_WEEK): FleetObjective
+    public function upsert(Carbon $start, Carbon $end, float $targetTons, ?int $userId, ?string $notes, ?array $restedIds = null, string $periodType = FleetObjective::PERIOD_WEEK, bool $activate = false): FleetObjective
     {
         if ($restedIds === null) {
             $restedIds = TruckRestWindow::query()
@@ -56,16 +56,26 @@ class FleetObjectiveService
         // (capacity-capped) tonnage — so ambitious / under-resourced / stretch
         // targets survive intact. The per-truck distribution below is the plan
         // for that target, not a ceiling on it.
+        $values = [
+            'target_tons' => round($targetTons, 2),
+            'target_rotations' => $plannedRotations,
+            'working_trucks' => $workingTrucks->count(),
+            'rested_trucks' => $excludedCount,
+            'notes' => $notes,
+            'created_by' => $userId,
+        ];
+
+        // A user-initiated save/create must yield an ACTIVE objective: re-creating one
+        // over a previously archived period reactivates it (otherwise the row is updated
+        // but stays archived → the "new" objective never appears). Internal re-snapshots
+        // (truck availability) pass $activate=false and never touch the archived state.
+        if ($activate) {
+            $values['archived_at'] = null;
+        }
+
         $objective = FleetObjective::updateOrCreate(
             ['period_type' => $periodType, 'start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
-            [
-                'target_tons' => round($targetTons, 2),
-                'target_rotations' => $plannedRotations,
-                'working_trucks' => $workingTrucks->count(),
-                'rested_trucks' => $excludedCount,
-                'notes' => $notes,
-                'created_by' => $userId,
-            ],
+            $values,
         );
 
         // Snapshot per-truck targets (frozen). Excluded trucks get a 0-target row
