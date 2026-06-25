@@ -154,7 +154,7 @@ class OperationsController extends Controller
                 'subtitle' => $r->provider?->name ?? '—',
                 'at' => optional($r->loaded_at)?->toIso8601String(),
                 'link' => ($r->truck && $r->provider)
-                    ? '/transport_trackings/create?truck_id='.$r->truck->id.'&provider_id='.$r->provider->id.'&provider_date='.(optional($r->loaded_at)?->toDateString() ?? '')
+                    ? '/transport_tracking/create-page?truck_id='.$r->truck->id.'&provider_id='.$r->provider->id.'&provider_date='.(optional($r->loaded_at)?->toDateString() ?? '')
                     : '/reconciliation',
             ]);
 

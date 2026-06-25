@@ -4,7 +4,7 @@ import {
     Wrench, Users, Mail, ShieldCheck, FileSpreadsheet,
     ClipboardCheck, Route, X, Map, ShieldAlert, MapPin, Settings, Fuel,
     AlertTriangle, Activity, History, Target, ChevronDown, CalendarDays, CalendarOff,
-    CalendarRange, Send, FileWarning,
+    CalendarRange, Send, FileWarning, Package,
 } from 'lucide-react';
 import {useState, useEffect, Fragment, type ReactNode} from 'react';
 import {clsx} from 'clsx';
@@ -105,6 +105,7 @@ const mainSections: NavSection[] = [
         items: [
             {label: 'Planification', href: '/planning', match: '/planning', icon: <CalendarRange size={18}/>, permission: 'fleet-roster-plan'},
             {label: 'Répartition', href: '/dispatch', match: '/dispatch', icon: <Send size={18}/>, permission: 'daily-dispatch-list'},
+            {label: 'Transports', href: '/transport_tracking', match: '/transport_tracking', icon: <Package size={18}/>, permission: 'transport-tracking-list'},
             {label: 'Réalisation', href: '/realisation', match: '/realisation', icon: <Activity size={18}/>, permission: 'daily-dispatch-list'},
             {label: 'Réconciliation', href: '/reconciliation', match: '/reconciliation', icon: <FileWarning size={18}/>, permission: 'live-fleet-view', badge: 'missing'},
         ],
