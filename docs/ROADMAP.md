@@ -10,10 +10,13 @@
 ---
 
 ## Current Focus
-**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch)** — code on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2 — SharePoint Background Upload** — Architecture Review (development may continue; deployment gated on Step 1 approval).
+**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp)** — on `main`, **Waiting for Production Validation**. **Step 2 (SharePoint upload)** — **implemented + locally verified** on `feature/production-phase2-sharepoint` (local-first + `sync_status` lifecycle); awaiting `merge → develop`. Deployment to `main` gated on Step 1 approval.
 
 ## Next Phase
-Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return immediately → queue the SharePoint sync). Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI analysis deferred → P1.5.)
+Open Step 1's production gate → then deploy Step 2. Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
+
+## Standard integration pattern (platform rule)
+Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
 
 ---
 
@@ -47,7 +50,7 @@ Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return i
 | Config · Safe `.env.example` + `DEPLOYMENT.md` | ✅ | `2ad1a259` |
 | Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | `2c499bea` |
 | Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ code · ⏳ prod-validation | `2c499bea` |
-| Queues · Step 2 **SharePoint Background Upload** (active bottleneck) | 🟠 architecture review | — |
+| Queues · Step 2 **SharePoint Background Upload** — local-first + `sync_status`, `SyncDocumentToSharePoint` job | ✅ code · ⏳ prod-deploy (gated on Step 1) | *(feature branch)* |
 | Queues · ~~Excel import~~ | ❌ dropped — orphaned legacy (→ housekeeping removal) | — |
 | Queues · Step 3 — re-audit next bottleneck (not reserved) | ⚪ later | — |
 | Scheduler · cron entry on server (`schedule:run`) | 🟠 pending (server) | — |
@@ -76,6 +79,7 @@ Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return i
 ---
 
 ## Technical Debt
+- **Extend local-first SharePoint pattern** to the other inline uploaders — `DriverController`, `MaintenanceController`, `LogisticsInspectionController` (still upload to SharePoint synchronously). Reuse `SyncDocumentToSharePoint` + `Document.sync_status`. *(future Phase 1 step / measured per bottleneck)*
 - **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
 - `config/app.php` ships a hardcoded `AJAX_TOKEN` fallback (`MySecretToken123`) — remove once prod sets a real token.
 - Tests run against the **live dev DB** via `DatabaseTransactions` (no separate test DB).
