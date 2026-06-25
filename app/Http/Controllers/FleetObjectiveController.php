@@ -156,6 +156,7 @@ class FleetObjectiveController extends Controller
                 $data['notes'] ?? null,
                 null,
                 $p['mode'],
+                activate: true, // a create/save always yields an active (visible) objective
             );
         });
 
