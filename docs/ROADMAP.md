@@ -10,10 +10,10 @@
 ---
 
 ## Current Focus
-Housekeeping before infrastructure — **H1 (code audit)** + **H2 (architecture validation)** done; **H3 (UI consistency)** next.
+**Housekeeping complete (H1–H3).** Production Phase 1 (infrastructure) is next.
 
 ## Next Phase
-Housekeeping H3 — UI consistency (layout, filters, forms, tables, buttons, typography, spacing, responsive, a11y). Then Production Phase 1 · Queues (`DEPLOYMENT.md §4`).
+Production Phase 1 · Queues — migrate `sync → database` and stand up a persistent worker (`DEPLOYMENT.md §4`).
 
 ---
 
@@ -78,9 +78,14 @@ Housekeeping H3 — UI consistency (layout, filters, forms, tables, buttons, typ
 - `redistributeOpenObjectives()` iterates objectives without an `active()` filter (touches archived rows) — review.
 - Weight-gap threshold fetched inline in `DriverKpiService`/`TruckKpiService`/`FleetKpiService` — consolidate to `TransportTracking::weightGapThreshold()` (reconcile `?:` vs `??` for a 0 threshold; no KPI test coverage yet). *[found H1]*
 - Folder structure: `logistics/objectives/Create` + `logistics/planning/Weekly` belong to the operations workflow but live under `logistics/` — relocate to `operations/` (cosmetic; churns render names + build). *[found H2]*
+- UI: convert hand-rolled forms (`logistics/places/{Create,Edit}`) + raw `<textarea>` (`trucks/{Create,Edit}`, `logistics/demands/Create`) to `Form*` components — needs visual verification. *[found H3]*
+- UI: `dashboard/PeriodFilter` raw toggle buttons → shared `Button`/a `PeriodControl` wrapper. *[found H3]*
+- UI: hardcoded `text-red-500` (#ef4444) vs `--color-danger` (#ea5455) across ~19 files — standardize the danger token (deliberate; shifts shade). *[found H3]*
+- Analytics · Audit-log enhancements (from removed PLAN-NOTE): dedicated detail page `/admin/audit-logs/{log}`; deep-link Subject cell to the resource Show; reusable `AuditTrail` component for Show pages; multi-action filter selector.
 - Untracked `docs/audit/*` and `docs/backlog/*` — decide commit vs discard.
 
 ## Resolved Debt
+- **H3 UI consistency**: audit confirmed broad consistency (shared component library used throughout); removed a dead `PLAN-NOTE` comment block (`admin/AuditLogs.tsx`), ideas preserved in backlog above. Larger form/button conversions deferred (need visual verification; color changes excluded).
 - **H1 dead-code sweep**: removed orphan `RequestExplanation` mail, 3 dead commented blocks (old `dashboard()`, `isExpired()`, `getGapAttribute()`), and 5 orphan frontend files (`AcceptInvitation` page, `Can`/`QuickFilters`/`AchievementSummary`/`FormFileUpload` components). Verified 0 references; tsc/build/tests green.
 - Build artifacts tracked then mis-ignored → settled on committed-artifacts strategy (`af98ee45`).
 - Fabricated dashboard metric (`suspiciousDrivers: 0`) → real calculation (`39730420`).
