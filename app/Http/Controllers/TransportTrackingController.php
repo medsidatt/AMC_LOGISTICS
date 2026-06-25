@@ -873,6 +873,7 @@ EOT;
         $totalRotationsPerdues = (clone $q)->whereRaw('(provider_net_weight - client_net_weight) > ?', [$threshold])->count();
         $totalRotationsNormal = (clone $q)->whereRaw('ABS(client_net_weight - provider_net_weight) BETWEEN 0 AND ?', [$threshold])->count();
         $totalPoidsAnomalies = (clone $q)->whereRaw('client_net_weight > provider_net_weight')->sum(DB::raw('client_net_weight - provider_net_weight'));
+        $suspiciousDrivers = TransportTracking::suspiciousDriverCount($q);
 
         // Monthly data
         $year = date('Y');
@@ -926,6 +927,7 @@ EOT;
                 'pctAnomalies' => $safe($totalPoidsAnomalies, $totalTransported),
                 'pctPerdues' => $safe($totalRotationsPerdues, $totalCount),
                 'pctNormal' => $safe($totalRotationsNormal, $totalCount),
+                'suspiciousDrivers' => $suspiciousDrivers,
             ],
             'months' => $monthLabels,
             'monthlyWeights' => $monthlyWeights,

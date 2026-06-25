@@ -41,6 +41,7 @@ interface Props {
         pctAnomalies: number;
         pctPerdues: number;
         pctNormal: number;
+        suspiciousDrivers: number;
     };
     months: string[];
     monthlyWeights: number[];
@@ -67,7 +68,7 @@ export default function TransportDashboard({ filters: initialFilters, filterOpti
         totalTransported: kpis.totalTransported,
         anomaliesCount: kpis.totalCount - kpis.rotationsNormal,
         totalTrips: kpis.totalCount,
-        suspiciousDrivers: 0,
+        suspiciousDrivers: kpis.suspiciousDrivers,
     });
 
     const conflictCount = timelineEvents.filter((e) => e.hasConflict).length;
