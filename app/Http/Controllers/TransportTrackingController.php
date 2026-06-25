@@ -718,7 +718,6 @@ class TransportTrackingController extends Controller
     public function analyze(Request $request)
     {
         $question = $request->input('question');
-//        dd($question);
 
         $prompt = <<<EOT
 You are a non SQL expert but you have data stored in a SQL database.

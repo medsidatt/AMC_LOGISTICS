@@ -47,7 +47,7 @@ export interface Projection {
 
 export type PlanningMode = 'WEEK' | 'MONTH' | 'YEAR' | 'CUSTOM';
 
-export type TargetSource = 'exact' | 'derived' | 'aggregated' | 'none';
+export type TargetSource = 'exact' | 'estimated' | 'derived' | 'aggregated' | 'none';
 
 export interface Achievement {
     period: { start: string; end: string };

@@ -95,11 +95,13 @@ class AvailabilityServiceTest extends TestCase
     {
         $user = User::query()->permission('fleet-roster-plan')->firstOrFail();
 
+        // Availability moved into the flat Planning workflow
+        // (/planning/availability, operations/planning/Availability).
         $this->actingAs($user)
-            ->get('/logistics/availability')
+            ->get('/planning/availability')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('logistics/Availability')
+                ->component('operations/planning/Availability')
                 ->has('fleet')
                 ->has('trucks')
                 ->has('windows')

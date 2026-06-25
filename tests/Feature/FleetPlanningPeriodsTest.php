@@ -28,7 +28,7 @@ class FleetPlanningPeriodsTest extends TestCase
     {
         foreach (['WEEK', 'MONTH', 'YEAR'] as $mode) {
             $this->actingAs($this->planner())
-                ->get("/logistics/planning/weekly?mode={$mode}&anchor=2026-06-17")
+                ->get("/realisation?mode={$mode}&anchor=2026-06-17")
                 ->assertOk()
                 ->assertInertia(fn (Assert $page) => $page
                     ->component('logistics/planning/Weekly')
@@ -43,7 +43,7 @@ class FleetPlanningPeriodsTest extends TestCase
     public function test_scoreboard_renders_for_custom_range(): void
     {
         $this->actingAs($this->planner())
-            ->get('/logistics/planning/weekly?mode=CUSTOM&start=2026-06-01&end=2026-06-30')
+            ->get('/realisation?mode=CUSTOM&start=2026-06-01&end=2026-06-30')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('logistics/planning/Weekly')
@@ -54,31 +54,36 @@ class FleetPlanningPeriodsTest extends TestCase
 
     public function test_objective_management_page_renders(): void
     {
+        // Objectives moved into the flat Planning workflow (/planning/objectives,
+        // operations/planning/Objectives); /logistics/objectives 302-redirects there.
         $this->actingAs($this->planner())
-            ->get('/logistics/objectives')
+            ->get('/planning/objectives')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('logistics/objectives/Index')
+                ->component('operations/planning/Objectives')
                 ->has('objectives'));
     }
 
     public function test_objective_authoring_page_renders(): void
     {
+        // Authoring is commitment-only now: per-truck allocation ('trucks') moved to
+        // Planning, replaced by advisory capacity context.
         $this->actingAs($this->planner())
             ->get('/logistics/objectives/create')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('logistics/objectives/Create')
-                ->has('trucks')
                 ->has('periodTypes')
-                ->has('planCapacityT'));
+                ->has('planCapacityT')
+                ->has('fleetWeeklyCapacityT')
+                ->has('availableTruckCount'));
     }
 
-    public function test_legacy_fleet_roster_redirects_to_objectives(): void
+    public function test_legacy_fleet_roster_redirects_to_planning(): void
     {
         $this->actingAs($this->planner())
             ->get('/logistics/fleet-roster')
-            ->assertRedirect('/logistics/objectives');
+            ->assertRedirect('/planning');
     }
 
     public function test_fleet_settings_renders_without_planning_objectives(): void
@@ -104,19 +109,19 @@ class FleetPlanningPeriodsTest extends TestCase
             ->assertNotFound(); // route removed (objectives no longer managed in settings)
     }
 
-    public function test_creating_an_objective_persists_target_and_truck_rest(): void
+    public function test_creating_an_objective_persists_commitment(): void
     {
-        $truck = \App\Models\Truck::where('is_active', true)->firstOrFail();
-
+        // Authoring is commitment-only: it stores Period + Target + Notes and
+        // redirects to the Planning overview. Truck allocation (rest windows) is no
+        // longer set here — it lives in Planning.
         $this->actingAs($this->planner())
             ->post('/logistics/objectives', [
                 'period_type' => 'WEEK',
                 'start_date' => '2026-09-07', // any day; resolver canonicalises to Mon–Sat
                 'target_tons' => 500,
-                'rested_truck_ids' => [$truck->id],
                 'notes' => 'merge end-to-end test',
             ])
-            ->assertRedirect('/logistics/objectives');
+            ->assertRedirect('/planning');
 
         $objective = \App\Models\FleetObjective::where('period_type', 'WEEK')
             ->whereDate('start_date', '<=', '2026-09-07')
@@ -125,9 +130,5 @@ class FleetPlanningPeriodsTest extends TestCase
 
         $this->assertNotNull($objective, 'objective created');
         $this->assertGreaterThan(0, (int) $objective->target_rotations);
-        $this->assertDatabaseHas('truck_rest_windows', [
-            'truck_id' => $truck->id,
-            'reason' => \App\Models\TruckRestWindow::REASON_SURPLUS_CAPACITY,
-        ]);
     }
 }

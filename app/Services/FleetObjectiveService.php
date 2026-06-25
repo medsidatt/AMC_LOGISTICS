@@ -51,12 +51,15 @@ class FleetObjectiveService
         $distribution = $this->capacity->distributeTargetRotations($targetTons, $workingTrucks);
 
         $plannedRotations = (int) array_sum(array_column($distribution, 'rotations'));
-        $plannedTons = round(array_sum(array_column($distribution, 'tons')), 2);
 
+        // Persist the COMMITTED target the manager set — never the distributed
+        // (capacity-capped) tonnage — so ambitious / under-resourced / stretch
+        // targets survive intact. The per-truck distribution below is the plan
+        // for that target, not a ceiling on it.
         $objective = FleetObjective::updateOrCreate(
             ['period_type' => $periodType, 'start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
             [
-                'target_tons' => $plannedTons,
+                'target_tons' => round($targetTons, 2),
                 'target_rotations' => $plannedRotations,
                 'working_trucks' => $workingTrucks->count(),
                 'rested_trucks' => $excludedCount,

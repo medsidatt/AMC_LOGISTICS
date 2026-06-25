@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\DailyChecklistIssue;
+use App\Models\ExpectedTransportTicket;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -42,6 +44,13 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            // Live counts for the Operations workflow sidebar badges (Réconciliation
+            // + Exceptions). Lazy + gated so it only runs for operational users.
+            'operationsBadges' => fn () => ($user && $user->can('daily-dispatch-list')) ? (function () {
+                $missing = ExpectedTransportTicket::query()->status(ExpectedTransportTicket::STATUS_MISSING)->count();
+                $flagged = DailyChecklistIssue::query()->where('flagged', true)->whereNull('resolved_at')->count();
+                return ['missing' => $missing, 'exceptions' => $missing + $flagged];
+            })() : null,
             'locale' => app()->getLocale(),
             'appName' => config('app.name', 'AMC Travaux SN'),
         ];
