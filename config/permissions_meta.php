@@ -40,9 +40,6 @@ return [
             'client-demand-list', 'client-demand-create', 'client-demand-edit', 'client-demand-delete',
             'fleet-roster-plan', 'daily-dispatch-list', 'daily-dispatch-edit', 'objective-history-list',
         ],
-        'Sécurité' => [
-            'fleet-map-view',
-        ],
         'Tableaux & rapports' => [
             'logistics-dashboard', 'report-view',
         ],
@@ -115,8 +112,6 @@ return [
         'daily-dispatch-list' => 'Voir la programmation',
         'daily-dispatch-edit' => 'Gérer la programmation',
         'objective-history-list' => "Voir l'historique des objectifs",
-
-        'fleet-map-view' => 'Voir la cartographie flotte',
 
         'logistics-dashboard' => 'Tableau de bord logistique',
         'report-view' => 'Voir les rapports',

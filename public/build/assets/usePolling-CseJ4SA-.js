@@ -1,1 +1,0 @@
-import{r as s,a as c}from"./app-T1oPDo76.js";function o({interval:r,only:t,enabled:u=!0}){const e=s.useRef(null);s.useEffect(()=>{if(!(!u||r<=0))return e.current=setInterval(()=>{c.reload({only:t})},r*1e3),()=>{e.current&&clearInterval(e.current)}},[r,u,t])}export{o as u};

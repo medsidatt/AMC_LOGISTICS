@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Events\TruckPositionUpdated;
 use App\Models\Truck;
 use App\Models\TruckTelemetrySnapshot;
 use Illuminate\Support\Carbon;
@@ -61,22 +60,6 @@ class TelemetrySnapshotService
         ]);
 
         $this->updateTruckCache($truck, $telemetry);
-
-        // Push the fresh position to every connected browser via Pusher.
-        // Best-effort: never let a broadcast failure block the sync.
-        try {
-            $hasPosition = isset($telemetry['latitude'], $telemetry['longitude'])
-                && $telemetry['latitude'] !== null
-                && $telemetry['longitude'] !== null;
-            if ($hasPosition) {
-                TruckPositionUpdated::dispatch($truck->fresh());
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Failed to broadcast TruckPositionUpdated', [
-                'truck_id' => $truck->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
 
         return $snapshot;
     }

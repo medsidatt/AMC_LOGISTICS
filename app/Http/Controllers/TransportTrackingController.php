@@ -957,39 +957,6 @@ EOT;
     }
 
     /**
-     * Trip replay Inertia page — rendered as a shell; the heavy payload
-     * (snapshots, stops, incidents) is fetched client-side from
-     * /api/trip-replay/{tt} so large trails don't bloat the HTML response.
-     */
-    public function replayPage(TransportTracking $transportTracking)
-    {
-        $transportTracking->load(['truck:id,matricule', 'provider:id,name']);
-
-        return Inertia::render('transport-trackings/Replay', [
-            'transport' => [
-                'id' => $transportTracking->id,
-                'reference' => $transportTracking->reference,
-                'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
-                'client_date' => $transportTracking->client_date?->format('d/m/Y'),
-                'provider_net_weight' => $transportTracking->provider_net_weight,
-                'client_net_weight' => $transportTracking->client_net_weight,
-                'gap' => $transportTracking->gap,
-                'start_km' => $transportTracking->start_km,
-                'end_km' => $transportTracking->end_km,
-                'truck' => $transportTracking->truck ? [
-                    'id' => $transportTracking->truck->id,
-                    'matricule' => $transportTracking->truck->matricule,
-                ] : null,
-                'provider' => $transportTracking->provider ? [
-                    'id' => $transportTracking->provider->id,
-                    'name' => $transportTracking->provider->name,
-                ] : null,
-            ],
-            'dataUrl' => url("/api/trip-replay/{$transportTracking->id}"),
-        ]);
-    }
-
-    /**
      * Rebuild the trip segment for this transport and run the weight-gap
      * detector. Best-effort: never blocks the caller on failure.
      */

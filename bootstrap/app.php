@@ -108,13 +108,6 @@ return Application::configure(basePath: dirname(__DIR__))
             ->cron('*/5 0-4,23 * * *')
             ->withoutOverlapping(5);
 
-        // Fleet-wide light position pass — keeps /logistics/fleet-map fresh
-        // for ALL active trucks (not just the dispatched ones). ONE bulk
-        // Fleeti call per tick, no per-asset detail.
-        $schedule->command('fleeti:sync-fleet-positions')
-            ->cron('*/2 5-22 * * *')
-            ->withoutOverlapping(5);
-
         // Nightly: reconcile GPS-observed quarry loadings against TransportTracking
         // tickets. Closes the under-ticketing gap.
         $schedule->command('logistics:reconcile-expected-tickets')

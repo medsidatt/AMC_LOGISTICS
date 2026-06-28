@@ -2,7 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import { ShieldCheck, ClipboardList, Calendar, AlertTriangle, Wrench, ShieldAlert, Truck } from 'lucide-react';
+import { ShieldCheck, ClipboardList, Calendar, AlertTriangle, Wrench, Truck } from 'lucide-react';
 
 interface RecentInspection {
     id: number;
@@ -22,28 +22,17 @@ interface MaintenanceOverdueTruck {
     level: string;
 }
 
-interface SecurityIncident {
-    id: number;
-    truck: string | null;
-    type: string;
-    severity: string;
-    status: string;
-    detected_at: string | null;
-}
-
 interface Props {
     kpis: {
         inspections_this_week: number;
         inspections_this_month: number;
         trucks_overdue_inspection: number;
         maintenance_overdue: number;
-        security_incidents_open: number;
         active_trucks: number;
     };
     recentInspections: RecentInspection[];
     trucksNeedingInspection: { id: number; matricule: string }[];
     maintenanceOverdue: MaintenanceOverdueTruck[];
-    securityIncidents: SecurityIncident[];
 }
 
 function KpiCard({
@@ -80,22 +69,6 @@ function KpiCard({
     return href ? <Link href={href} className="block">{body}</Link> : body;
 }
 
-const SEVERITY_VARIANT: Record<string, 'default' | 'warning' | 'danger' | 'info'> = {
-    low: 'info',
-    medium: 'warning',
-    high: 'danger',
-};
-
-const SEVERITY_LABEL: Record<string, string> = { low: 'Basse', medium: 'Moyenne', high: 'Haute' };
-
-const INCIDENT_TYPE_LABEL: Record<string, string> = {
-    fuel_siphoning: 'Siphonnage carburant',
-    weight_gap: 'Écart de poids',
-    unauthorized_stop: 'Arrêt non autorisé',
-    route_deviation: 'Déviation d\'itinéraire',
-    off_hours_movement: 'Mouvement hors heures',
-};
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
         <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-2 mb-1">
@@ -104,11 +77,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-export default function HseDashboard({ kpis, recentInspections, trucksNeedingInspection, maintenanceOverdue, securityIncidents }: Props) {
+export default function HseDashboard({ kpis, recentInspections, trucksNeedingInspection, maintenanceOverdue }: Props) {
     const alertsCount =
         kpis.trucks_overdue_inspection +
-        kpis.maintenance_overdue +
-        kpis.security_incidents_open;
+        kpis.maintenance_overdue;
 
     return (
         <AuthenticatedLayout>
@@ -165,13 +137,6 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                         variant={kpis.maintenance_overdue > 0 ? 'danger' : 'success'}
                         href="/maintenance"
                     />
-                    <KpiCard
-                        icon={<ShieldAlert size={18} />}
-                        label="Incidents ouverts"
-                        value={kpis.security_incidents_open}
-                        variant={kpis.security_incidents_open > 0 ? 'danger' : 'success'}
-                        href="/logistics/theft-incidents"
-                    />
                 </div>
 
                 {/* ── Inspections récentes ── */}
@@ -227,7 +192,7 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
 
                 {/* ── 3 listes d'alerte côte à côte ── */}
                 <SectionLabel>Listes de suivi</SectionLabel>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card>
                         <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">
                             <AlertTriangle size={14} className="text-amber-500" /> Camions à inspecter
@@ -272,33 +237,6 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                         )}
                     </Card>
 
-                    <Card>
-                        <div className="flex items-center justify-between mb-3">
-                            <h2 className="text-sm font-semibold flex items-center gap-2">
-                                <ShieldAlert size={14} className="text-red-500" /> Incidents récents
-                            </h2>
-                            <Link href="/logistics/theft-incidents" className="text-xs text-[var(--color-primary)] hover:underline">Tout →</Link>
-                        </div>
-                        {securityIncidents.length === 0 ? (
-                            <p className="text-xs text-[var(--color-text-muted)] py-3 text-center">Aucun incident en cours.</p>
-                        ) : (
-                            <ul className="space-y-0.5">
-                                {securityIncidents.map((inc) => (
-                                    <li key={inc.id} className="flex items-center justify-between border-b border-[var(--color-border)] py-1.5 last:border-0 gap-2">
-                                        <div className="min-w-0">
-                                            <div className="text-sm font-medium truncate">{inc.truck ?? '—'}</div>
-                                            <div className="text-xs text-[var(--color-text-muted)] truncate">
-                                                {INCIDENT_TYPE_LABEL[inc.type] ?? inc.type} · {inc.detected_at}
-                                            </div>
-                                        </div>
-                                        <Link href={`/logistics/theft-incidents/${inc.id}`} className="shrink-0">
-                                            <Badge variant={SEVERITY_VARIANT[inc.severity] ?? 'default'}>{SEVERITY_LABEL[inc.severity] ?? inc.severity}</Badge>
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </Card>
                 </div>
             </div>
         </AuthenticatedLayout>

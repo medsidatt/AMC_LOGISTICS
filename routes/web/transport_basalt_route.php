@@ -135,6 +135,7 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
     Route::get('/{maintenance}/pdf', [MaintenanceController::class, 'exportRecordPdf'])->name('record-pdf');
 });
 
+// ── Analytics (transport KPI dashboards — Phase 2 consolidation into Réalisation) ──
 Route::middleware('auth')->get('/dashboard/trackings', [TrackingDashboardController::class, 'index'])->name('dashboard.trackings');
 Route::middleware('auth')->get('/dashboard/fleeti', [TrackingDashboardController::class, 'fleeti'])->name('dashboard.fleeti');
 Route::middleware('auth')->get('/dashboard/rotations', [TrackingDashboardController::class, 'rotations'])->name('dashboard.rotations');
@@ -146,8 +147,4 @@ Route::group(['prefix' => 'reports', 'as' => 'reports.', 'middleware' => ['auth'
     Route::get('/fleet/excel', [\App\Http\Controllers\ReportController::class, 'exportFleetExcel'])->name('fleet.excel');
     Route::get('/maintenance/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceExcel'])->name('maintenance.excel');
     Route::get('/maintenance-due/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceDueExcel'])->name('maintenance-due.excel');
-
-    Route::get('/idle-hourly', [\App\Http\Controllers\ReportController::class, 'idleHourly'])->name('idle-hourly');
-    Route::get('/idle-hourly/data', [\App\Http\Controllers\ReportController::class, 'idleHourlyData'])->name('idle-hourly.data');
-    Route::get('/idle-hourly/excel', [\App\Http\Controllers\ReportController::class, 'exportIdleHourlyExcel'])->name('idle-hourly.excel');
 });
