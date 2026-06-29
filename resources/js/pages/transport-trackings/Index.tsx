@@ -148,18 +148,6 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
 
     const isPdf = (doc: TrackingDocument) => doc.mime_type === 'application/pdf';
 
-    // Operational status badges (Phase 5.3A) — flags computed server-side from
-    // existing definitions; this only renders them where operators work.
-    const statusBadges = (r: Tracking) => {
-        const b: React.ReactNode[] = [];
-        if (r.flags.incomplete) b.push(<Badge key="i" variant="warning">Incomplet</Badge>);
-        if (r.flags.weight_anomaly) b.push(<Badge key="a" variant="danger">Écart</Badge>);
-        if (r.flags.no_attachment) b.push(<Badge key="n" variant="muted">Sans pièce</Badge>);
-        if (r.flags.docs_unsynced) b.push(<Badge key="s" variant="info">Sync…</Badge>);
-        if (b.length === 0) b.push(<Badge key="c" variant="success">Complet</Badge>);
-        return <div className="flex flex-wrap gap-1">{b}</div>;
-    };
-
     const STATUS_FILTERS: { key: string; label: string }[] = [
         { key: '', label: 'Tous' },
         { key: 'incomplete', label: 'Incomplets' },
@@ -185,7 +173,7 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
         return '/transport_tracking/export' + (qs ? `?${qs}` : '');
     })();
 
-    const columns: { key: SortKey | 'truck' | 'driver' | 'provider' | 'files' | 'status' | 'actions'; label: string; sortable: boolean; hideOnMobile?: boolean; render: (r: Tracking) => React.ReactNode }[] = [
+    const columns: { key: SortKey | 'truck' | 'driver' | 'provider' | 'files' | 'actions'; label: string; sortable: boolean; hideOnMobile?: boolean; render: (r: Tracking) => React.ReactNode }[] = [
         { key: 'reference', label: 'Réf.', sortable: true, render: (r) => r.reference },
         { key: 'truck', label: 'Camion', sortable: false, hideOnMobile: true, render: (r) => r.truck?.matricule ?? '-' },
         { key: 'driver', label: 'Conducteur', sortable: false, hideOnMobile: true, render: (r) => r.driver?.name ?? '-' },
@@ -198,7 +186,6 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
             if (g > 0) return <Badge variant="info">+{g.toLocaleString('fr-FR')}</Badge>;
             return <Badge variant="success">0</Badge>;
         } },
-        { key: 'status', label: 'État', sortable: false, render: (r) => statusBadges(r) },
         { key: 'client_date', label: 'Date', sortable: true, hideOnMobile: true, render: (r) => r.client_date ?? r.provider_date ?? '-' },
         { key: 'files', label: 'Fichiers', sortable: false, hideOnMobile: true, render: (r) => (
             r.documents && r.documents.length > 0 ? (
