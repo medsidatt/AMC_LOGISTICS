@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\MissingTransportTrackingExport;
 use App\Exports\TransportTrackingExport;
 use App\Imports\TransportTrackingImport;
+use App\Jobs\SyncDocumentToSharePoint;
 use App\Models\Document;
 use App\Models\Driver;
 use App\Models\Provider;
@@ -276,28 +277,7 @@ class TransportTrackingController extends Controller
         /** ---------------- Files Upload ---------------- */
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
-                $upload = $this->uploadFile($file);
-
-                $originalName = strtolower($file->getClientOriginalName());
-                $type = 'other';
-                if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
-                    $type = 'provider';
-                } elseif (strpos($originalName, 'client') !== false) {
-                    $type = 'client';
-                } elseif (strpos($originalName, 'commune') !== false) {
-                    $type = 'commune';
-                }
-
-                Document::create([
-                    'transport_tracking_id' => $record->id,
-                    'file_path' => $upload['path'],
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                    'type' => $type,
-                    'sharepoint_id' => $upload['sharepoint_id'] ?? null,
-                    'sharepoint_url' => $upload['url'] ?? null,
-                ]);
+                $this->persistDocument($file, $record->id);
             }
         }
 
@@ -642,28 +622,7 @@ class TransportTrackingController extends Controller
         /** ---------------- Files (Append mode) ---------------- */
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $file) {
-                $upload = $this->uploadFile($file);
-
-                $originalName = strtolower($file->getClientOriginalName());
-                $type = 'other';
-                if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
-                    $type = 'provider';
-                } elseif (strpos($originalName, 'client') !== false) {
-                    $type = 'client';
-                } elseif (strpos($originalName, 'commune') !== false) {
-                    $type = 'commune';
-                }
-
-                Document::create([
-                    'transport_tracking_id' => $transportTracking->id,
-                    'file_path' => $upload['path'],
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(),
-                    'size' => $file->getSize(),
-                    'type' => $type,
-                    'sharepoint_id' => $upload['sharepoint_id'] ?? null,
-                    'sharepoint_url' => $upload['url'] ?? null,
-                ]);
+                $this->persistDocument($file, $transportTracking->id);
             }
         }
 
@@ -963,28 +922,37 @@ EOT;
      * Upload a file to SharePoint (with local fallback).
      * Returns [path, url, sharepoint_id]
      */
-    private function uploadFile(UploadedFile $file, string $folder = 'transport_trackings'): array
+    /**
+     * Local-first document persistence. Store the file locally (fast), create the
+     * Document with a `pending` sync state so it is immediately viewable, then
+     * queue the SharePoint migration. The upload logic itself lives in the job +
+     * SharePointStorageService — none is duplicated here.
+     */
+    private function persistDocument(UploadedFile $file, int $trackingId): void
     {
-        $sp = app(SharePointStorageService::class);
+        $path = $file->store('transport_trackings', 'public');
 
-        if ($sp->isConfigured()) {
-            $result = $sp->upload($file, $folder);
-            if ($result['success']) {
-                return [
-                    'path' => $result['path'],
-                    'url' => $result['url'],
-                    'sharepoint_id' => $result['sharepoint_id'] ?? null,
-                ];
-            }
+        $originalName = strtolower($file->getClientOriginalName());
+        $type = 'other';
+        if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
+            $type = 'provider';
+        } elseif (strpos($originalName, 'client') !== false) {
+            $type = 'client';
+        } elseif (strpos($originalName, 'commune') !== false) {
+            $type = 'commune';
         }
 
-        // Fallback to local storage
-        $path = $file->store($folder, 'public');
-        return [
-            'path' => $path,
-            'url' => asset('storage/' . $path),
-            'sharepoint_id' => null,
-        ];
+        $document = Document::create([
+            'transport_tracking_id' => $trackingId,
+            'file_path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getMimeType(),
+            'size' => $file->getSize(),
+            'type' => $type,
+            'sync_status' => Document::SYNC_PENDING,
+        ]);
+
+        SyncDocumentToSharePoint::dispatch($document->id);
     }
 
     /**
