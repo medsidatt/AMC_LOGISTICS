@@ -1,73 +1,50 @@
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
+import PageHeader from '@/components/ui/PageHeader';
 import DataTable from '@/components/ui/DataTable';
 import Button from '@/components/ui/Button';
-import Modal from '@/components/ui/Modal';
-import FormInput from '@/components/ui/FormInput';
 import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
-import { Plus } from 'lucide-react';
+import CounterpartyFormDrawer from '@/components/counterparty/CounterpartyFormDrawer';
+import CounterpartyDetailsDrawer from '@/components/counterparty/CounterpartyDetailsDrawer';
+import { Plus, Building2 } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
-
-interface Provider {
-    id: number;
-    name: string;
-    phone: string | null;
-    email: string | null;
-    address: string | null;
-    website: string | null;
-}
+import { useWorkspaceDrawer } from '@/hooks/useWorkspaceDrawer';
+import type { Provider, ProviderPaginator } from './types';
 
 interface Props {
-    providers: { data: Provider[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
+    providers: ProviderPaginator;
     filters: { search?: string };
 }
 
-export default function ProvidersIndex({ providers, filters }: Props) {
-    const [modal, setModal] = useState<'create' | 'edit' | 'show' | null>(null);
-    const [selected, setSelected] = useState<Provider | null>(null);
-    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
+const icon = <Building2 size={18} className="text-[var(--color-primary)]" />;
+
+export default function ProvidersWorkspace({ providers }: Props) {
     const { can } = usePermission();
     const canCreate = can('provider-create');
     const canEdit = can('provider-edit');
     const canDelete = can('provider-delete');
 
-    const createForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
-    const editForm = useForm({ name: '', phone: '', email: '', address: '', website: '' });
+    const { drawer, openCreate, openView, openEdit, close } = useWorkspaceDrawer('/providers');
+    const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
 
-    const openEdit = (p: Provider) => {
-        setSelected(p);
-        editForm.setData({ name: p.name, phone: p.phone ?? '', email: p.email ?? '', address: p.address ?? '', website: p.website ?? '' });
-        setModal('edit');
-    };
-
-    const openShow = (p: Provider) => { setSelected(p); setModal('show'); };
-
-    const submitCreate = (e: React.FormEvent) => {
-        e.preventDefault();
-        createForm.post('/providers/store', { onSuccess: () => { setModal(null); createForm.reset(); } });
-    };
-
-    const submitEdit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selected) return;
-        editForm.put(`/providers/${selected.id}/update`, { onSuccess: () => setModal(null) });
-    };
+    const byId = (id: number | null): Provider | null => providers.data.find((p) => p.id === id) ?? null;
+    const viewed = drawer.mode === 'view' ? byId(drawer.id) : null;
+    const editing = drawer.mode === 'edit' ? byId(drawer.id) : null;
 
     return (
         <AuthenticatedLayout title="Fournisseurs">
             <Head title="Fournisseurs" />
 
-            {canCreate && (
-                <div className="flex justify-end mb-4">
-                    <Button icon={<Plus size={16} />} onClick={() => { createForm.reset(); setModal('create'); }}>
-                        Ajouter
-                    </Button>
-                </div>
-            )}
+            <PageHeader
+                icon={<Building2 size={22} className="text-[var(--color-primary)]" />}
+                title="Fournisseurs"
+                subtitle="Fournisseurs de matériaux"
+                actions={canCreate ? <Button icon={<Plus size={16} />} onClick={() => openCreate()}>Ajouter</Button> : undefined}
+            />
 
             <Card padding={false}>
                 <div className="p-5">
@@ -82,8 +59,8 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                                 key: 'actions', label: 'Actions', sortable: false,
                                 render: (r) => (
                                     <ActionButtons
-                                        onView={() => openShow(r)}
-                                        onEdit={canEdit ? () => openEdit(r) : undefined}
+                                        onView={() => openView(r.id)}
+                                        onEdit={canEdit ? () => openEdit(r.id) : undefined}
                                         onDelete={canDelete ? () => setDeleteUrl(`/providers/${r.id}/destroy`) : undefined}
                                     />
                                 ),
@@ -92,6 +69,7 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                         perPage={providers.per_page}
                         searchable
                         exportable
+                        emptyMessage="Aucun fournisseur"
                     />
                 </div>
                 <div className="px-5 pb-5">
@@ -99,55 +77,16 @@ export default function ProvidersIndex({ providers, filters }: Props) {
                 </div>
             </Card>
 
-            {/* Create Modal */}
-            <Modal open={modal === 'create'} onClose={() => setModal(null)} title="Nouveau fournisseur">
-                <form onSubmit={submitCreate}>
-                    <FormInput label="Nom" name="name" value={createForm.data.name} onChange={(e) => createForm.setData('name', e.target.value)} error={createForm.errors.name} required autoFocus />
-                    <FormInput label="Téléphone" name="phone" value={createForm.data.phone} onChange={(e) => createForm.setData('phone', e.target.value)} error={createForm.errors.phone} />
-                    <FormInput label="Email" type="email" name="email" value={createForm.data.email} onChange={(e) => createForm.setData('email', e.target.value)} error={createForm.errors.email} />
-                    <FormInput label="Adresse" name="address" value={createForm.data.address} onChange={(e) => createForm.setData('address', e.target.value)} error={createForm.errors.address} />
-                    <FormInput label="Site web" name="website" value={createForm.data.website} onChange={(e) => createForm.setData('website', e.target.value)} error={createForm.errors.website} />
-                    <div className="flex justify-end gap-2 mt-6">
-                        <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>
-                        <Button type="submit" loading={createForm.processing}>Créer</Button>
-                    </div>
-                </form>
-            </Modal>
-
-            {/* Edit Modal */}
-            <Modal open={modal === 'edit'} onClose={() => setModal(null)} title="Modifier fournisseur">
-                <form onSubmit={submitEdit}>
-                    <FormInput label="Nom" name="name" value={editForm.data.name} onChange={(e) => editForm.setData('name', e.target.value)} error={editForm.errors.name} required autoFocus />
-                    <FormInput label="Téléphone" name="phone" value={editForm.data.phone} onChange={(e) => editForm.setData('phone', e.target.value)} error={editForm.errors.phone} />
-                    <FormInput label="Email" type="email" name="email" value={editForm.data.email} onChange={(e) => editForm.setData('email', e.target.value)} error={editForm.errors.email} />
-                    <FormInput label="Adresse" name="address" value={editForm.data.address} onChange={(e) => editForm.setData('address', e.target.value)} error={editForm.errors.address} />
-                    <FormInput label="Site web" name="website" value={editForm.data.website} onChange={(e) => editForm.setData('website', e.target.value)} error={editForm.errors.website} />
-                    <div className="flex justify-end gap-2 mt-6">
-                        <Button variant="secondary" onClick={() => setModal(null)}>Annuler</Button>
-                        <Button type="submit" loading={editForm.processing}>Enregistrer</Button>
-                    </div>
-                </form>
-            </Modal>
-
-            {/* Show Modal */}
-            <Modal open={modal === 'show'} onClose={() => setModal(null)} title={selected?.name ?? 'Fournisseur'}>
-                {selected && (
-                    <div className="space-y-3">
-                        {[
-                            ['Nom', selected.name],
-                            ['Téléphone', selected.phone],
-                            ['Email', selected.email],
-                            ['Adresse', selected.address],
-                            ['Site web', selected.website],
-                        ].map(([label, value]) => (
-                            <div key={label as string}>
-                                <p className="text-xs text-[var(--color-text-muted)] uppercase">{label}</p>
-                                <p className="text-sm text-[var(--color-text)]">{value || '-'}</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </Modal>
+            {/* One drawer at a time, derived from the URL via the shared hook + shared Counterparty drawers. */}
+            {drawer.mode === 'create' && (
+                <CounterpartyFormDrawer mode="create" basePath="/providers" entityLabel="fournisseur" icon={icon} onClose={() => close()} onSaved={() => close({ replace: true })} />
+            )}
+            {viewed && (
+                <CounterpartyDetailsDrawer entity={viewed} icon={icon} canEdit={canEdit} onEdit={() => openEdit(viewed.id)} onClose={() => close()} />
+            )}
+            {editing && (
+                <CounterpartyFormDrawer mode="edit" basePath="/providers" entityLabel="fournisseur" icon={icon} record={editing} onClose={() => openView(editing.id)} onSaved={() => openView(editing.id, { replace: true })} />
+            )}
 
             <ConfirmDialog open={!!deleteUrl} onClose={() => setDeleteUrl(null)} deleteUrl={deleteUrl ?? undefined} />
         </AuthenticatedLayout>

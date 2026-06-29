@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Provider;
+use App\Support\CounterpartyRules;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -10,9 +11,9 @@ class ProviderController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('permission:provider-list', ['only' => ['index', 'show']]);
-        $this->middleware('permission:provider-create', ['only' => ['create', 'store']]);
-        $this->middleware('permission:provider-edit', ['only' => ['edit', 'update']]);
+        $this->middleware('permission:provider-list', ['only' => ['index']]);
+        $this->middleware('permission:provider-create', ['only' => ['store']]);
+        $this->middleware('permission:provider-edit', ['only' => ['update']]);
         $this->middleware('permission:provider-delete', ['only' => ['destroy']]);
     }
 
@@ -41,13 +42,7 @@ class ProviderController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:providers,name',
-            'address' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'website' => 'nullable|max:255',
-        ]);
+        $request->validate(CounterpartyRules::base('providers'));
 
         Provider::create($request->only('name', 'address', 'phone', 'email', 'website'));
 
@@ -56,13 +51,7 @@ class ProviderController extends Controller
 
     public function update(Request $request, Provider $provider)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:providers,name,' . $provider->id,
-            'address' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'website' => 'nullable|max:255',
-        ]);
+        $request->validate(CounterpartyRules::base('providers', $provider->id));
 
         $provider->update($request->only('name', 'address', 'phone', 'email', 'website'));
 

@@ -13,10 +13,8 @@ use Illuminate\Support\Facades\Route;
 // /----- Providers Routes -----/
 Route::group(['prefix' => 'providers', 'as' => 'providers.', 'middleware' => ['auth']], function () {
     Route::get('/', [ProviderController::class, 'index'])->name('index');
-    Route::get('/{provider}/show', [ProviderController::class, 'show'])->name('show');
-    Route::get('/create', [ProviderController::class, 'create'])->name('create');
+    // Create/edit/details happen in drawers on the /providers workspace (?create=1 / ?view={id} / ?edit={id}).
     Route::post('/store', [ProviderController::class, 'store'])->name('store');
-    Route::get('/{provider}/edit', [ProviderController::class, 'edit'])->name('edit');
     Route::put('/{provider}/update', [ProviderController::class, 'update'])->name('update');
     Route::delete('/{provider}/destroy', [ProviderController::class, 'destroy'])->name('destroy');
 });
@@ -24,10 +22,8 @@ Route::group(['prefix' => 'providers', 'as' => 'providers.', 'middleware' => ['a
 // ----- Transporters Routes -----/
 Route::group(['prefix' => 'transporters', 'as' => 'transporters.', 'middleware' => ['auth']], function () {
     Route::get('/', [TransporterController::class, 'index'])->name('index');
-    Route::get('/{transporter}/show', [TransporterController::class, 'show'])->name('show');
-    Route::get('/create', [TransporterController::class, 'create'])->name('create');
+    // Create/edit/details happen in drawers on the /transporters workspace (?create=1 / ?view={id} / ?edit={id}).
     Route::post('/store', [TransporterController::class, 'store'])->name('store');
-    Route::get('/{transporter}/edit', [TransporterController::class, 'edit'])->name('edit');
     Route::put('/{transporter}/update', [TransporterController::class, 'update'])->name('update');
     Route::delete('/{transporter}/destroy', [TransporterController::class, 'destroy'])->name('destroy');
 });

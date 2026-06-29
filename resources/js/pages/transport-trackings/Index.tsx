@@ -12,11 +12,21 @@ import TransportFilters from './components/TransportFilters';
 import TransportDetailsDrawer from './components/TransportDetailsDrawer';
 import TransportFormDrawer, { type TransportFormRefs, type TransportEditRecord, type TransportPrefill } from './components/TransportFormDrawer';
 import { apiFetch } from '@/utils/csrf';
-import { Plus, FileText, Image as ImageIcon, ChevronUp, ChevronDown, ChevronsUpDown, Search, Download, Package, Loader2 } from 'lucide-react';
+import { Plus, FileText, Image as ImageIcon, ChevronUp, ChevronDown, ChevronsUpDown, Search, Download, Package, Loader2, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 import { usePermission } from '@/hooks/usePermission';
 
-interface TrackingDocument { id: number; original_name: string; mime_type: string; type: string; file_url: string }
+interface TrackingDocument { id: number; original_name: string; mime_type: string; type: string; sync_status: string | null; file_url: string }
+
+interface TrackingFlags {
+    incomplete: boolean;
+    missing_provider_weights: boolean;
+    missing_client_weights: boolean;
+    missing_dates: boolean;
+    no_attachment: boolean;
+    docs_unsynced: boolean;
+    weight_anomaly: boolean;
+}
 
 interface Tracking {
     id: number;
@@ -28,11 +38,23 @@ interface Tracking {
     provider_net_weight: number | null;
     client_net_weight: number | null;
     gap: number;
-    has_files: boolean;
+    flags: TrackingFlags;
+    reconciliation: string | null;
     documents: TrackingDocument[];
     truck: { id: number; matricule: string } | null;
     driver: { id: number; name: string } | null;
     provider: { id: number; name: string } | null;
+}
+
+interface MissingTicket {
+    id: number;
+    truck: string | null;
+    truck_id: number;
+    provider: string | null;
+    provider_id: number;
+    loaded_at: string | null;
+    provider_date: string | null;
+    status: string;
 }
 
 interface DropdownItem { id: number | string; name?: string; matricule?: string }
@@ -47,17 +69,20 @@ interface Props {
     providers: DropdownItem[];
     products: DropdownItem[];
     formRefs: TransportFormRefs;
+    missingTickets: MissingTicket[];
+    missingTicketsCount: number;
 }
 
 type SortKey = 'reference' | 'client_date' | 'provider_date' | 'provider_net_weight' | 'client_net_weight' | 'gap' | 'product' | 'base';
 type FormState = { mode: 'create'; prefill?: TransportPrefill | null } | { mode: 'edit'; record: TransportEditRecord };
 
-export default function TrackingsIndex({ trackings, filters, sort, transporters, trucks, drivers, providers, products, formRefs }: Props) {
+export default function TrackingsIndex({ trackings, filters, sort, transporters, trucks, drivers, providers, products, formRefs, missingTickets, missingTicketsCount }: Props) {
     const [deleteUrl, setDeleteUrl] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [detailsId, setDetailsId] = useState<number | null>(null);
     const [formState, setFormState] = useState<FormState | null>(null);
     const [editLoadingId, setEditLoadingId] = useState<number | null>(null);
+    const [bannerOpen, setBannerOpen] = useState(false);
     const { can } = usePermission();
     const canCreate = can('transport-tracking-create');
     const canEdit = can('transport-tracking-edit');
@@ -123,6 +148,19 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
 
     const isPdf = (doc: TrackingDocument) => doc.mime_type === 'application/pdf';
 
+    const STATUS_FILTERS: { key: string; label: string }[] = [
+        { key: '', label: 'Tous' },
+        { key: 'incomplete', label: 'Incomplets' },
+        { key: 'anomaly', label: 'Écart de poids' },
+        { key: 'no_attachment', label: 'Sans pièce' },
+        { key: 'missing_provider_weights', label: 'Poids fourn. manquant' },
+        { key: 'missing_client_weights', label: 'Poids client manquant' },
+        { key: 'unsynced', label: 'Non synchronisés' },
+    ];
+
+    const applyStatus = (status: string) =>
+        router.get('/transport_tracking', buildParams({ status: status || null }), { preserveState: true, preserveScroll: true });
+
     const displayData = search
         ? trackings.data.filter((row) => [row.reference, row.truck?.matricule, row.driver?.name, row.provider?.name, row.product, row.client_date, row.provider_date]
             .filter(Boolean).join(' ').toLowerCase().includes(search.toLowerCase()))
@@ -184,10 +222,57 @@ export default function TrackingsIndex({ trackings, filters, sort, transporters,
                 ) : undefined}
             />
 
+            {missingTicketsCount > 0 && (
+                <Card className="mb-4 border-l-4 border-l-amber-500">
+                    <button type="button" onClick={() => setBannerOpen((o) => !o)} className="w-full flex items-center justify-between text-left gap-3">
+                        <span className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
+                            <AlertTriangle size={16} className="text-amber-500" />
+                            {missingTicketsCount} chargement(s) GPS sans ticket
+                        </span>
+                        <span className="text-xs text-[var(--color-text-muted)]">{bannerOpen ? 'Masquer' : 'Voir'}</span>
+                    </button>
+                    {bannerOpen && (
+                        <div className="mt-3 space-y-1.5 max-h-72 overflow-y-auto">
+                            {missingTickets.map((m) => (
+                                <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">
+                                    <span className="flex-1 min-w-0 truncate">
+                                        <span className="font-medium text-[var(--color-text)]">{m.truck ?? '—'}</span>
+                                        <span className="text-[var(--color-text-muted)]"> · {m.provider ?? '—'} · {m.loaded_at ?? '—'}</span>
+                                    </span>
+                                    {canCreate && (
+                                        <Button variant="secondary" onClick={() => setFormState({ mode: 'create', prefill: { truck_id: m.truck_id, provider_id: m.provider_id, provider_date: m.provider_date ?? undefined } })}>
+                                            Créer ticket
+                                        </Button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </Card>
+            )}
+
             <TransportFilters filters={filters} sort={sort} trucks={trucks} drivers={drivers} providers={providers} transporters={transporters} products={products} />
 
             <Card padding={false}>
                 <div className="p-5">
+                    <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                        {STATUS_FILTERS.map((f) => {
+                            const active = (filters.status ?? '') === f.key;
+                            return (
+                                <button
+                                    key={f.key || 'all'}
+                                    type="button"
+                                    onClick={() => applyStatus(f.key)}
+                                    className={clsx('px-3 py-1.5 rounded-full text-xs font-medium border transition',
+                                        active
+                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                                            : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]')}
+                                >
+                                    {f.label}
+                                </button>
+                            );
+                        })}
+                    </div>
                     <div className="mb-4 flex flex-wrap items-center gap-2">
                         <div className="relative flex-1 min-w-[200px]">
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
