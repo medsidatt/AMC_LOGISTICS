@@ -88,18 +88,17 @@ Route::group(['prefix' => 'trucks', 'as' => 'trucks.', 'middleware' => ['auth']]
 // ----- Transport_tracking Routes -----/
 Route::group(['prefix' => 'transport_tracking', 'as' => 'transport_tracking.', 'middleware' => ['auth']], function () {
     Route::get('/', [TransportTrackingController::class, 'index'])->name('index');
-    Route::get('/create-page', [TransportTrackingController::class, 'createPage'])->name('create-page');
+    // show-page: JSON for the details drawer; HTML hits redirect to the workspace (?view=ID).
     Route::get('/{transport_tracking}/show-page', [TransportTrackingController::class, 'showPage'])->name('show-page');
-    Route::get('/create', [TransportTrackingController::class, 'create'])->name('create');
+    Route::get('/{transport_tracking}/edit-data', [TransportTrackingController::class, 'editPage'])->name('edit-data');
     Route::get('/import', [TransportTrackingController::class, 'import'])->name('import');
     Route::post('/import', [TransportTrackingController::class, 'import'])->name('import');
     Route::post('/store', [TransportTrackingController::class, 'store'])->name('store');
     Route::get('/show/{transport_tracking}', [TransportTrackingController::class, 'show'])->name('show');
 
+    Route::post('/{transport_tracking}/documents', [TransportTrackingController::class, 'uploadDocuments'])->name('documents.store');
     Route::delete('/{id}/document/{documentId}', [TransportTrackingController::class, 'deleteDocument'])->name('document.delete');
 
-    Route::get('/{transport_tracking}/edit-page', [TransportTrackingController::class, 'editPage'])->name('edit-page');
-    Route::get('/{transport_tracking}/edit', [TransportTrackingController::class, 'edit'])->name('edit');
     Route::put('/{transport_tracking}/update', [TransportTrackingController::class, 'update'])->name('update');
     Route::delete('/{transport_tracking}/destroy', [TransportTrackingController::class, 'destroy'])->name('destroy');
 
@@ -107,7 +106,6 @@ Route::group(['prefix' => 'transport_tracking', 'as' => 'transport_tracking.', '
     Route::get('/file-page/{id}', [TransportTrackingController::class, 'filePage'])->name('file-page');
     Route::get('/preview-files/{id}', [TransportTrackingController::class, 'previewFiles'])->name('preview-files');
 
-    Route::get('/ask-ai', [TransportTrackingController::class, 'askAI'])->name('ask-ai.get');
     Route::post('/ask-ai', [TransportTrackingController::class, 'analyze'])->name('ask-ai');
     Route::post('/analyze-all', [TransportTrackingController::class, 'analyzeAll'])->name('analyze-all');
 

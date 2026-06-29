@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 
@@ -79,19 +80,19 @@ export default function ReconciliationPanel({ rows, counts }: Props) {
                                     <td className="px-3 py-2">{statusBadge(r.status)}</td>
                                     <td className="px-3 py-2">
                                         {r.tracking ? (
-                                            <a href={`/transport_tracking/${r.tracking.id}/show-page`} className="text-[var(--color-primary)] hover:underline">
+                                            <button onClick={() => router.visit(`/transport_tracking?view=${r.tracking!.id}`)} className="text-[var(--color-primary)] hover:underline">
                                                 {r.tracking.reference}
-                                            </a>
+                                            </button>
                                         ) : '—'}
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                         {r.status === 'missing' && r.truck && r.provider && (
-                                            <a
-                                                href={`/transport_tracking/create-page?truck_id=${r.truck.id}&provider_id=${r.provider.id}&provider_date=${r.loaded_at?.slice(0, 10) ?? ''}`}
+                                            <button
+                                                onClick={() => router.visit(`/transport_tracking?create=1&truck_id=${r.truck!.id}&provider_id=${r.provider!.id}&provider_date=${r.loaded_at?.slice(0, 10) ?? ''}`)}
                                                 className="text-[var(--color-primary)] hover:underline text-xs"
                                             >
                                                 Créer ticket
-                                            </a>
+                                            </button>
                                         )}
                                     </td>
                                 </tr>
