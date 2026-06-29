@@ -47,9 +47,8 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
     Route::get('/', [DriverController::class, 'index'])->name('index');
     Route::get('/{driver}/show-page', [DriverController::class, 'showPage'])->name('show-page');
     Route::get('/{driver}/show', [DriverController::class, 'show'])->name('show');
-    Route::get('/create', [DriverController::class, 'create'])->name('create');
     Route::post('/store', [DriverController::class, 'store'])->name('store');
-    Route::get('/{driver}/edit', [DriverController::class, 'edit'])->name('edit');
+    Route::get('/{driver}/edit-data', [DriverController::class, 'edit'])->name('edit-data');
     Route::put('/{driver}/update', [DriverController::class, 'update'])->name('update');
     Route::post('/{driver}/toggle-active', [DriverController::class, 'toggleActive'])->name('toggle-active');
     Route::delete('/{driver}/destroy', [DriverController::class, 'destroy'])->name('destroy');

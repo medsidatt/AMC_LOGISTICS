@@ -40,6 +40,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | Opérations · **Transports** sidebar entry (ticket system of record) + canonical-link fix (`/transport_trackings/*` 404s) | ✅ | *(nav branch)* |
 | **SPA Foundation + Trucks pilot** — shared `Drawer/PageHeader/FormActions/DetailPanel/EmptyState`; `ObjectiveDrawer` extracted onto generic `Drawer`; Trucks Create/Edit → drawers, details drawer + `?edit=` deep-link, profile page kept; 0 `window.location` nav | ✅ | `feature/spa-foundation-trucks` |
 | **Transport Tracking SPA workspace** — Create/Edit → form drawer; tabbed details drawer (Détails/Documents/Analyse IA, synchronous AI); new `Tabs`+`FilterBar`+`DocumentManager`; server-side filters/pagination kept; `?view`/`?edit`/`?create` deep-links (Réconciliation/Reports SPA-fied); create-prefill done; legacy `ask-ai` Blade removed | ✅ | `feature/spa-tt-workspace` |
+| **Drivers SPA workspace** — legacy create/edit modals → shared `DriverFormDrawer`; quick `DriverDetailsDrawer` (DetailPanel + toggle/discipline/profil); `PageHeader`; `?view`/`?edit` deep-links (Dispatch board edit links SPA-fied via JSON `edit-data` fallback); KPI profile page kept; dead `create()`/`edit()` Blade removed | ✅ | `feature/spa-drivers-workspace` |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 

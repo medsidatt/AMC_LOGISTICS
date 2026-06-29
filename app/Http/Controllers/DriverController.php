@@ -28,7 +28,7 @@ class DriverController extends Controller
         private readonly DriverKpiService $kpiService,
     ) {
         $this->middleware('permission:driver-list', ['only' => ['index', 'show', 'showPage']]);
-        $this->middleware('permission:driver-create', ['only' => ['create', 'store']]);
+        $this->middleware('permission:driver-create', ['only' => ['store']]);
         $this->middleware('permission:driver-edit', ['only' => ['edit', 'update']]);
         $this->middleware('permission:driver-delete', ['only' => ['destroy']]);
     }
@@ -114,14 +114,6 @@ class DriverController extends Controller
             'drivers' => $drivers,
             'totals' => $totals,
         ]);
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        return view('pages.drivers.create');
     }
 
     /**
@@ -763,11 +755,22 @@ class DriverController extends Controller
 
 
     /**
-     * Show the form for editing the specified resource.
+     * Edit-drawer data (JSON) — the driver's editable fields. Used when the driver
+     * is not on the current paginated page (e.g. a Dispatch board deep-link); the
+     * in-list edit reuses the row directly.
      */
     public function edit(Driver $driver)
     {
-        return view('pages.drivers.edit', compact('driver'));
+        return response()->json([
+            'driver' => [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'email' => $driver->email,
+                'phone' => $driver->phone,
+                'address' => $driver->address,
+                'is_active' => (bool) $driver->is_active,
+            ],
+        ]);
     }
 
     /**
