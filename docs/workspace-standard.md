@@ -1,8 +1,26 @@
-# Administration Workspace Standard
+# Platform Workspace Standard
 
-Reference implementation: **Roles** (`resources/js/pages/roles/`). Every remaining
-Administration module (Users, Providers, Transporters, Entities) reuses this
-architecture — do not redesign it per-module.
+**This is the platform-wide reference**, not just Administration. Reference
+implementation: **Roles** (`resources/js/pages/roles/`). Every workspace — current
+and future — follows these conventions unless there is a justified business reason
+not to. The goal is one coherent application: same workspace behaviour, same drawer
+lifecycle, same URL state, same component library, same interaction patterns.
+
+## 0. Workspace vs dedicated page — and navigation
+- **CRUD lives in a workspace.** Listing, create, edit, details, delete all happen
+  on one Index page with drawers (sections 1–8 below). This is the default.
+- **A dedicated page exists only when the workflow genuinely requires one** —
+  analytics, dashboards, complex visualization, multi-entity assignment workflows,
+  reports, geographic/map UX, or compliance read-views. A page is justified by the
+  *workflow*, never by "a module exists."
+- **Placement:** CRUD → workspace · details → Details Drawer · editing → Form
+  Drawer · browser history must reflect drawer state.
+- **Navigation represents business workflows, not CRUD screens.** Do not add a
+  sidebar entry just because a module exists. Master-data reached contextually
+  (e.g. Providers/Transporters/Entities) need not be in the sidebar.
+- **Duplication:** in every phase, watch for duplicate controllers / forms /
+  validation / DataTable configs / drawers / detail layouts. Extract a shared piece
+  only when duplication is *proven* — avoid premature abstraction.
 
 ## 1. One workspace page, drawers for everything
 - A single Index page (`<module>/Index.tsx`) renders `PageHeader` + `DataTable`
