@@ -4,22 +4,25 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
-use Yajra\DataTables\DataTables;
 
 class RoleController extends Controller
 {
     function __construct()
     {
         $this->middleware('permission:role-list', ['only' => ['index']]);
-        $this->middleware('permission:role-create', ['only' => ['create', 'store']]);
-        $this->middleware('permission:role-edit', ['only' => ['edit', 'update']]);
+        $this->middleware('permission:role-create', ['only' => ['store']]);
+        $this->middleware('permission:role-edit', ['only' => ['update']]);
         $this->middleware('permission:role-delete', ['only' => ['destroy']]);
     }
 
+    /**
+     * Roles SPA workspace. The list, plus everything the create/edit/details
+     * drawers need (all permissions + permission meta), ships in one payload so
+     * drawers operate entirely from client state — no per-drawer requests.
+     */
     public function index(Request $request)
     {
         $roles = Role::query()
@@ -36,39 +39,23 @@ class RoleController extends Controller
                 ])->toArray(),
             ]);
 
+        $allPermissions = Permission::orderBy('name')->get()->map(fn ($p) => [
+            'id' => $p->id,
+            'name' => $p->name,
+        ])->values();
+
         return Inertia::render('roles/Index', [
             'roles' => $roles,
             'roleDescriptions' => config('permissions_meta.roles', []),
-        ]);
-    }
-
-    public function getData()
-    {
-        if (auth()->user()->hasRole('Super Admin'))
-            return response()->json(Role::all(), 200);
-        else
-            return response()->json(Role::where('name', '!=', 'Super Admin')->get(), 200);
-    }
-
-    public function create()
-    {
-        $permissions = Permission::orderBy('name')->get()->map(fn ($p) => [
-            'id' => $p->id,
-            'name' => $p->name,
-        ])->toArray();
-
-        return Inertia::render('roles/Create', [
-            'permissions' => $permissions,
+            'permissions' => $allPermissions,
             'permissionMeta' => config('permissions_meta'),
         ]);
     }
-
 
     public function store(Request $request)
     {
         $this->validate($request, [
             'name' => 'required|unique:roles,name',
-//            'permissions' => 'required',
         ]);
 
         $role = Role::firstOrCreate(['name' => $request->input('name')]);
@@ -82,47 +69,6 @@ class RoleController extends Controller
 
         return redirect()->back()
             ->with('success', 'Role created successfully');
-    }
-
-    public function show($id)
-    {
-        $role = Role::with('permissions')->findOrFail($id);
-
-        return Inertia::render('roles/Show', [
-            'role' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'guard_name' => $role->guard_name,
-                'permissions' => $role->permissions->map(fn ($p) => [
-                    'id' => $p->id,
-                    'name' => $p->name,
-                ])->toArray(),
-            ],
-            'permissionMeta' => config('permissions_meta'),
-        ]);
-    }
-
-    public function edit($id)
-    {
-        $role = Role::with('permissions')->findOrFail($id);
-        $allPermissions = Permission::orderBy('name')->get()->map(fn ($p) => [
-            'id' => $p->id,
-            'name' => $p->name,
-        ])->toArray();
-
-        return Inertia::render('roles/Edit', [
-            'role' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'guard_name' => $role->guard_name,
-                'permissions' => $role->permissions->map(fn ($p) => [
-                    'id' => $p->id,
-                    'name' => $p->name,
-                ])->toArray(),
-            ],
-            'allPermissions' => $allPermissions,
-            'permissionMeta' => config('permissions_meta'),
-        ]);
     }
 
     public function update(Request $request, $id)
