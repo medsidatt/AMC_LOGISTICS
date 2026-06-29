@@ -7,6 +7,7 @@ use App\Exports\TransportTrackingExport;
 use App\Imports\TransportTrackingImport;
 use App\Models\Document;
 use App\Models\Driver;
+use App\Models\ExpectedTransportTicket;
 use App\Models\Provider;
 use App\Models\Transporter;
 use App\Models\TransportTracking;
@@ -15,6 +16,7 @@ use App\Support\FleetIdentifier;
 use App\Services\SharePointStorageService;
 use App\Services\TripSegmentBuilderService;
 use App\Services\WeightGapDetector;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
@@ -52,7 +54,7 @@ class TransportTrackingController extends Controller
         $transportTrackings = TransportTracking::query();
 
         // Support both nested filters (legacy) and top-level params (Inertia)
-        $filters = $request->filters ?? $request->only(['truck_id', 'driver_id', 'provider_id', 'transporter_id', 'product', 'start_date', 'end_date']);
+        $filters = $request->filters ?? $request->only(['truck_id', 'driver_id', 'provider_id', 'transporter_id', 'product', 'start_date', 'end_date', 'status']);
         $sortBy = $request->input('sort_by', 'client_date');
         $sortDir = $request->input('sort_dir', 'desc');
 
@@ -89,6 +91,14 @@ class TransportTrackingController extends Controller
             $transportTrackings->whereDate('client_date', '<=', $filters['end_date']);
         }
 
+        // Operational status filter (Phase 5.3A — visibility only; reuses existing
+        // definitions: the MissingTransportTrackingExport null-set, the weight-gap
+        // threshold, and Document sync states. No new business rules.)
+        $threshold = TransportTracking::weightGapThreshold();
+        if (!empty($filters['status'])) {
+            $this->applyOperationalStatusFilter($transportTrackings, (string) $filters['status'], $threshold);
+        }
+
         // Keep AJAX branch for mobile API (not Inertia)
         if ($request->ajax() && !$request->header('X-Inertia')) {
             return datatables()
@@ -108,10 +118,10 @@ class TransportTrackingController extends Controller
         $sortDirection = $sortDir === 'asc' ? 'asc' : 'desc';
 
         $trackings = $transportTrackings
-            ->with(['truck', 'driver', 'provider', 'documents'])
+            ->with(['truck', 'driver', 'provider', 'documents', 'expectedTicket'])
             ->orderBy($sortColumn, $sortDirection)
             ->paginate(15)
-            ->through(fn (TransportTracking $t) => [
+            ->through(fn (TransportTracking $t) => array_merge([
                 'id' => $t->id,
                 'reference' => $t->reference,
                 'product' => $t->product,
@@ -121,17 +131,38 @@ class TransportTrackingController extends Controller
                 'provider_net_weight' => $t->provider_net_weight,
                 'client_net_weight' => $t->client_net_weight,
                 'gap' => $t->gap,
-                'has_files' => $t->documents->whereIn('mime_type', ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'])->isNotEmpty(),
                 'documents' => $t->documents->map(fn ($d) => [
                     'id' => $d->id,
                     'original_name' => $d->original_name,
                     'mime_type' => $d->mime_type,
                     'type' => $d->type,
+                    'sync_status' => $d->sync_status,
                     'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
                 ]),
                 'truck' => $t->truck ? ['id' => $t->truck->id, 'matricule' => $t->truck->matricule] : null,
                 'driver' => $t->driver ? ['id' => $t->driver->id, 'name' => $t->driver->name] : null,
                 'provider' => $t->provider ? ['id' => $t->provider->id, 'name' => $t->provider->name] : null,
+            ], $this->operationalFlags($t, $threshold)));
+
+        // GPS loads observed at the quarry with no ticket yet — reuses the existing
+        // reconciliation data (ExpectedTransportTicket open = expected|missing,
+        // unlinked) and surfaces it where operators work, not only in Réconciliation.
+        $missingQuery = ExpectedTransportTicket::query()->open()->whereNull('transport_tracking_id');
+        $missingTicketsCount = (clone $missingQuery)->count();
+        $missingTickets = $missingQuery
+            ->with(['truck:id,matricule', 'provider:id,name'])
+            ->orderByDesc('loaded_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (ExpectedTransportTicket $e) => [
+                'id' => $e->id,
+                'truck' => $e->truck?->matricule,
+                'truck_id' => $e->truck_id,
+                'provider' => $e->provider?->name,
+                'provider_id' => $e->provider_id,
+                'loaded_at' => $e->loaded_at?->format('d/m/Y'),
+                'provider_date' => $e->loaded_at?->format('Y-m-d'),
+                'status' => $e->status,
             ]);
 
         return Inertia::render('transport-trackings/Index', [
@@ -154,7 +185,80 @@ class TransportTrackingController extends Controller
                 ['id' => '8/16', 'name' => '8/16'],
             ],
             'formRefs' => $this->transportFormRefs(),
+            'missingTickets' => $missingTickets,
+            'missingTicketsCount' => $missingTicketsCount,
         ]);
+    }
+
+    /**
+     * Operational status flags for a ticket row (Phase 5.3A — visibility only).
+     * Every flag reuses an existing definition; no new business rules:
+     *  - incomplete / missing weights / missing dates → the MissingTransportTrackingExport null-set
+     *  - weight_anomaly → abs(gap) over TransportTracking::weightGapThreshold()
+     *  - docs_unsynced → Document::SYNC_* (not yet on SharePoint)
+     *  - reconciliation → the linked ExpectedTransportTicket status
+     */
+    private function operationalFlags(TransportTracking $t, float $threshold): array
+    {
+        $missingProviderWeights = $t->provider_gross_weight === null || $t->provider_tare_weight === null || $t->provider_net_weight === null;
+        $missingClientWeights = $t->client_gross_weight === null || $t->client_tare_weight === null || $t->client_net_weight === null;
+        $missingDates = $t->provider_date === null || $t->client_date === null;
+        $noAttachment = $t->documents->isEmpty();
+        $docsUnsynced = $t->documents->contains(
+            fn (Document $d) => in_array($d->sync_status, [Document::SYNC_PENDING, Document::SYNC_SYNCING, Document::SYNC_FAILED], true)
+        );
+        $weightAnomaly = $t->provider_net_weight !== null && $t->client_net_weight !== null
+            && abs((float) $t->client_net_weight - (float) $t->provider_net_weight) > $threshold;
+        $incomplete = $missingProviderWeights || $missingClientWeights || $missingDates
+            || $t->provider_id === null || $t->product === null || empty($t->reference);
+
+        return [
+            'flags' => [
+                'incomplete' => $incomplete,
+                'missing_provider_weights' => $missingProviderWeights,
+                'missing_client_weights' => $missingClientWeights,
+                'missing_dates' => $missingDates,
+                'no_attachment' => $noAttachment,
+                'docs_unsynced' => $docsUnsynced,
+                'weight_anomaly' => $weightAnomaly,
+            ],
+            'reconciliation' => $t->expectedTicket?->status,
+        ];
+    }
+
+    /**
+     * Apply an operational status filter to the listing (Phase 5.3A — visibility
+     * only). Mirrors operationalFlags() at the query level; reuses existing
+     * definitions, no new business rules.
+     */
+    private function applyOperationalStatusFilter(Builder $q, string $status, float $threshold): void
+    {
+        switch ($status) {
+            case 'incomplete':
+                $q->where(function (Builder $w) {
+                    $w->whereNull('provider_date')->orWhereNull('client_date')
+                        ->orWhereNull('provider_gross_weight')->orWhereNull('provider_tare_weight')->orWhereNull('provider_net_weight')
+                        ->orWhereNull('client_gross_weight')->orWhereNull('client_tare_weight')->orWhereNull('client_net_weight')
+                        ->orWhereNull('provider_id')->orWhereNull('product')->orWhereNull('reference')->orWhere('reference', '');
+                });
+                break;
+            case 'missing_provider_weights':
+                $q->where(fn (Builder $w) => $w->whereNull('provider_gross_weight')->orWhereNull('provider_tare_weight')->orWhereNull('provider_net_weight'));
+                break;
+            case 'missing_client_weights':
+                $q->where(fn (Builder $w) => $w->whereNull('client_gross_weight')->orWhereNull('client_tare_weight')->orWhereNull('client_net_weight'));
+                break;
+            case 'no_attachment':
+                $q->whereDoesntHave('documents');
+                break;
+            case 'unsynced':
+                $q->whereHas('documents', fn (Builder $w) => $w->whereIn('sync_status', [Document::SYNC_PENDING, Document::SYNC_SYNCING, Document::SYNC_FAILED]));
+                break;
+            case 'anomaly':
+                $q->whereNotNull('provider_net_weight')->whereNotNull('client_net_weight')
+                    ->whereRaw('ABS(client_net_weight - provider_net_weight) > ?', [$threshold]);
+                break;
+        }
     }
 
     /**
