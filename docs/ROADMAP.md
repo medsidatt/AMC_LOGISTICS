@@ -12,8 +12,10 @@
 ## Current Focus
 **Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp)** — on `main`, **Waiting for Production Validation**. **Step 2 (SharePoint upload)** — **implemented + locally verified** on `feature/production-phase2-sharepoint` (local-first + `sync_status` lifecycle); awaiting `merge → develop`. Deployment to `main` gated on Step 1 approval.
 
+**Step 3 (SharePoint pattern extension)** — **implemented + locally verified** on `feature/production-phase3-sharepoint-extension` (branched off Step 2). Driver + Maintenance `Document` devis uploads now reuse the local-first pattern via `Document::storeLocalAndQueueSync()`. Audit finding: Inspection attachment + Maintenance *facture* store on the parent model (not a `Document`) → out of clean-reuse scope (need a schema change; see backlog).
+
 ## Next Phase
-Open Step 1's production gate → then deploy Step 2. Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
+Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
 
 ## Standard integration pattern (platform rule)
 Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
@@ -80,7 +82,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 ---
 
 ## Technical Debt
-- **Extend local-first SharePoint pattern** to the other inline uploaders — `DriverController`, `MaintenanceController`, `LogisticsInspectionController` (still upload to SharePoint synchronously). Reuse `SyncDocumentToSharePoint` + `Document.sync_status`. *(future Phase 1 step / measured per bottleneck)*
+- **Parent-model attachments → Documents** (so they can reuse the local-first sync). `LogisticsInspectionController` inspection attachment and `MaintenanceController` *facture* store `attachment_path/url` **on the parent model**, not a `Document` — backgrounding them needs a `Document` FK migration (e.g. `inspection_checklist_id`, `maintenance_id`) + UI repoint, then reuse `SyncDocumentToSharePoint`. *(Step 3 covered the `Document`-based Driver + Maintenance devis uploads; these parent-model ones are deferred.)*
 - **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
 - **Orphaned `TransportDashboard`** (`/transport_tracking/dashboard`) — no live link; overlaps Réalisation's achievement KPIs. Per the workflow split (KPIs → Réalisation), fold its unique charts (monthly tonnage, timeline gantt) into Réalisation/Analytics, then remove the page + route + `dashboard()` method. *[found Operations nav audit]*
 - **Legacy Blade nav** (`main.blade.php` / `welcome.blade.php` / `navigation/sidebar.blade.php`) is dead (Inertia renders via `app.blade.php` + `Sidebar.tsx`) — housekeeping removal. *[found Operations nav audit]*
