@@ -108,6 +108,7 @@ const mainSections: NavSection[] = [
             {label: 'Transports', href: '/transport_tracking', match: '/transport_tracking', icon: <Package size={18}/>, permission: 'transport-tracking-list'},
             {label: 'Réalisation', href: '/realisation', match: '/realisation', icon: <Activity size={18}/>, permission: 'daily-dispatch-list'},
             {label: 'Réconciliation', href: '/reconciliation', match: '/reconciliation', icon: <FileWarning size={18}/>, permission: 'live-fleet-view', badge: 'missing'},
+            {label: 'Carburant', href: '/fuel', match: '/fuel', icon: <Fuel size={18}/>, permission: 'fuel-import'},
         ],
     },
     {
