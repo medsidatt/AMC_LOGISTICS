@@ -10,9 +10,9 @@ class ProviderController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('permission:provider-list', ['only' => ['index', 'show']]);
-        $this->middleware('permission:provider-create', ['only' => ['create', 'store']]);
-        $this->middleware('permission:provider-edit', ['only' => ['edit', 'update']]);
+        $this->middleware('permission:provider-list', ['only' => ['index']]);
+        $this->middleware('permission:provider-create', ['only' => ['store']]);
+        $this->middleware('permission:provider-edit', ['only' => ['update']]);
         $this->middleware('permission:provider-delete', ['only' => ['destroy']]);
     }
 

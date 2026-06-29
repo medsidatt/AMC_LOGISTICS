@@ -39,6 +39,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | Analytics · Real `suspiciousDrivers` metric (de-fabricated) | ✅ | `39730420` |
 | Opérations · **Transports** sidebar entry (ticket system of record) + canonical-link fix (`/transport_trackings/*` 404s) | ✅ | *(nav branch)* |
 | **GPS Infrastructure Decoupling · Phase 1A** — remove GPS *presentation* (Live Tracking, Fleet Map, Theft pages, Trip Replay, Idle report); GPS kept as silent feed for Maintenance/Fuel/Réconciliation (split `FleetiSyncService`, kept stop→place→ExpectedTicket chain) | ✅ | `feature/gps-infra-decoupling` |
+| **Providers SPA workspace** (Administration — Phase 4.3, standardization only) — Modals → Drawers via shared `useWorkspaceDrawer`; `ProviderFormDrawer` (create+edit) + `ProviderDetailsDrawer` (`DetailPanel`); `PageHeader`; removed 3 dead routes (`providers.show/create/edit` — no controller methods) + dead `resources/views/pages/providers/` Blade dir + unused `router` import; controller middleware trimmed to existing methods; **zero business-logic/validation/permission/schema changes** | ✅ | `develop` |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 
