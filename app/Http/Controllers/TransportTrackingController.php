@@ -39,8 +39,8 @@ class TransportTrackingController extends Controller
     public function __construct()
     {
         $this->middleware('permission:transport-tracking-list', ['only' => ['index', 'show', 'showPage', 'dashboard']]);
-        $this->middleware('permission:transport-tracking-create', ['only' => ['create', 'createPage', 'store', 'import']]);
-        $this->middleware('permission:transport-tracking-edit', ['only' => ['edit', 'editPage', 'update']]);
+        $this->middleware('permission:transport-tracking-create', ['only' => ['store', 'import']]);
+        $this->middleware('permission:transport-tracking-edit', ['only' => ['editPage', 'update', 'uploadDocuments']]);
         $this->middleware('permission:transport-tracking-delete', ['only' => ['destroy']]);
     }
 
@@ -153,22 +153,16 @@ class TransportTrackingController extends Controller
                 ['id' => '3/8', 'name' => '3/8'],
                 ['id' => '8/16', 'name' => '8/16'],
             ],
+            'formRefs' => $this->transportFormRefs(),
         ]);
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Shared create/edit reference data (dropdowns) for the workspace drawers.
+     * Reused by index() so the create drawer opens with no extra round-trip.
      */
-    public function create()
+    private function transportFormRefs(): array
     {
-        return $this->createPage();
-    }
-
-    public function createPage()
-    {
-        $transporters = Transporter::all();
-        // Assigned driver per truck — direct indexed FK (replaces the old scan
-        // over transport_trackings for the last driver per truck).
         $driverByTruck = Driver::query()
             ->where('is_active', true)
             ->whereNotNull('current_truck_id')
@@ -176,36 +170,21 @@ class TransportTrackingController extends Controller
             ->pluck('id', 'current_truck_id');
 
         $trucks = Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule', 'transporter_id'])
-            ->map(function ($truck) use ($driverByTruck) {
-                return [
-                    'id' => $truck->id,
-                    'matricule' => $truck->matricule,
-                    'last_driver_id' => $driverByTruck[$truck->id] ?? null,
-                    'transporter_id' => $truck?->transporter_id,
-                ];
-            });
-        $drivers = Driver::where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        $providers = Provider::all();
-        $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
-            return [
-                'id' => $product,
-                'name' => $product
-            ];
-        });
-        $bases = collect([
-            ['id' => 'mr', 'name' => 'Mauritanie'],
-            ['id' => 'sn', 'name' => 'Sénégal'],
-            ['id' => 'none', 'name' => 'Non definie'],
-        ]);
+            ->map(fn ($truck) => [
+                'id' => $truck->id,
+                'matricule' => $truck->matricule,
+                'last_driver_id' => $driverByTruck[$truck->id] ?? null,
+                'transporter_id' => $truck->transporter_id,
+            ]);
 
-        return Inertia::render('transport-trackings/Create', [
-            'transporters' => $transporters->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
+        return [
+            'transporters' => Transporter::orderBy('name')->get()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
             'trucks' => $trucks->toArray(),
-            'drivers' => $drivers->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
-            'providers' => $providers->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
-            'products' => $products->toArray(),
-            'bases' => $bases->toArray(),
-        ]);
+            'drivers' => Driver::where('is_active', true)->orderBy('name')->get(['id', 'name'])->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
+            'providers' => Provider::orderBy('name')->get()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
+            'products' => [['id' => '0/3', 'name' => '0/3'], ['id' => '3/8', 'name' => '3/8'], ['id' => '8/16', 'name' => '8/16']],
+            'bases' => [['id' => 'mr', 'name' => 'Mauritanie'], ['id' => 'sn', 'name' => 'Sénégal'], ['id' => 'none', 'name' => 'Non définie']],
+        ];
     }
 
     /**
@@ -447,93 +426,66 @@ class TransportTrackingController extends Controller
 
     public function showPage(TransportTracking $transportTracking)
     {
-        $transportTracking->load(['documents', 'truck', 'driver', 'provider']);
+        $transportTracking->load(['documents', 'truck.transporter', 'driver', 'provider']);
 
-        return Inertia::render('transport-trackings/Show', [
-            'tracking' => [
-                'id' => $transportTracking->id,
-                'reference' => $transportTracking->reference,
-                'truck' => $transportTracking->truck?->matricule,
-                'driver' => $transportTracking->driver?->name,
-                'provider' => $transportTracking->provider?->name,
-                'transporter' => $transportTracking->truck?->transporter?->name ?? null,
-                'product' => $transportTracking->product,
-                'base' => $transportTracking->base,
-                'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
-                'client_date' => $transportTracking->client_date?->format('d/m/Y'),
-                'commune_date' => $transportTracking->commune_date,
-                'provider_gross_weight' => $transportTracking->provider_gross_weight,
-                'provider_tare_weight' => $transportTracking->provider_tare_weight,
-                'provider_net_weight' => $transportTracking->provider_net_weight,
-                'client_gross_weight' => $transportTracking->client_gross_weight,
-                'client_tare_weight' => $transportTracking->client_tare_weight,
-                'client_net_weight' => $transportTracking->client_net_weight,
-                'commune_weight' => $transportTracking->commune_weight,
-                'gap' => $transportTracking->gap,
-                'documents' => $transportTracking->documents->map(fn ($d) => [
-                    'id' => $d->id,
-                    'original_name' => $d->original_name,
-                    'mime_type' => $d->mime_type,
-                    'type' => $d->type,
-                    'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
-                ]),
-            ],
-        ]);
+        $tracking = [
+            'id' => $transportTracking->id,
+            'reference' => $transportTracking->reference,
+            'truck' => $transportTracking->truck?->matricule,
+            'driver' => $transportTracking->driver?->name,
+            'provider' => $transportTracking->provider?->name,
+            'transporter' => $transportTracking->truck?->transporter?->name ?? null,
+            'product' => $transportTracking->product,
+            'base' => $transportTracking->base,
+            'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
+            'client_date' => $transportTracking->client_date?->format('d/m/Y'),
+            'commune_date' => $transportTracking->commune_date,
+            'provider_gross_weight' => $transportTracking->provider_gross_weight,
+            'provider_tare_weight' => $transportTracking->provider_tare_weight,
+            'provider_net_weight' => $transportTracking->provider_net_weight,
+            'client_gross_weight' => $transportTracking->client_gross_weight,
+            'client_tare_weight' => $transportTracking->client_tare_weight,
+            'client_net_weight' => $transportTracking->client_net_weight,
+            'commune_weight' => $transportTracking->commune_weight,
+            'gap' => $transportTracking->gap,
+            'documents' => $transportTracking->documents->map(fn ($d) => [
+                'id' => $d->id,
+                'original_name' => $d->original_name,
+                'mime_type' => $d->mime_type,
+                'type' => $d->type,
+                'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
+            ])->values(),
+        ];
+
+        // The details drawer fetches this payload as JSON; external deep-links
+        // (Réconciliation, Reports) land on the workspace with the drawer open.
+        if (request()->wantsJson()) {
+            return response()->json(['tracking' => $tracking]);
+        }
+
+        return redirect('/transport_tracking?view=' . $transportTracking->id);
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Edit-drawer data endpoint (JSON) — the record's editable fields. Dropdown
+     * reference data comes from index()'s formRefs, so it's not duplicated here.
      */
-    public function edit(TransportTracking $transportTracking)
-    {
-        return $this->editPage($transportTracking);
-    }
-
     public function editPage(TransportTracking $transportTracking)
     {
-        $transportTracking->load('documents');
+        $transportTracking->load(['documents', 'truck']);
 
-        $transporters = Transporter::withTrashed()->orderBy('name')->get();
-        // Assigned driver per truck — direct indexed FK (replaces the old scan
-        // over transport_trackings for the last driver per truck).
-        $driverByTruck = Driver::query()
-            ->where('is_active', true)
-            ->whereNotNull('current_truck_id')
-            ->orderBy('name')
-            ->pluck('id', 'current_truck_id');
-
-        $trucks = Truck::withTrashed()->orderBy('matricule')->get(['id', 'matricule', 'transporter_id', 'deleted_at'])
-            ->map(fn ($truck) => [
-                'id' => $truck->id,
-                'matricule' => $truck->matricule,
-                'last_driver_id' => $driverByTruck[$truck->id] ?? null,
-                'transporter_id' => $truck->transporter_id,
-            ]);
-        $drivers = Driver::withTrashed()->orderBy('name')->get(['id', 'name']);
-        $providers = Provider::withTrashed()->orderBy('name')->get();
-        $products = collect(['0/3', '3/8', '8/16'])->map(function ($product) {
-            return [
-                'id' => $product,
-                'name' => $product
-            ];
-        });
-        $bases = collect([
-            ['id' => 'mr', 'name' => 'Mauritanie'],
-            ['id' => 'sn', 'name' => 'Sénégal'],
-            ['id' => 'none', 'name' => 'Non definie'],
-        ]);
-
-        return Inertia::render('transport-trackings/Edit', [
+        return response()->json([
             'transportTracking' => [
                 'id' => $transportTracking->id,
                 'reference' => $transportTracking->reference,
                 'truck_id' => $transportTracking->truck_id,
                 'driver_id' => $transportTracking->driver_id,
+                'transporter_id' => $transportTracking->truck?->transporter_id,
                 'provider_id' => $transportTracking->provider_id,
                 'product' => $transportTracking->product,
                 'base' => $transportTracking->base,
-                'provider_date' => $transportTracking->provider_date,
-                'client_date' => $transportTracking->client_date,
+                'provider_date' => $transportTracking->provider_date?->format('Y-m-d'),
+                'client_date' => $transportTracking->client_date?->format('Y-m-d'),
                 'commune_date' => $transportTracking->commune_date,
                 'commune_weight' => $transportTracking->commune_weight,
                 'provider_gross_weight' => $transportTracking->provider_gross_weight,
@@ -548,14 +500,8 @@ class TransportTrackingController extends Controller
                     'mime_type' => $d->mime_type,
                     'type' => $d->type,
                     'file_url' => $d->sharepoint_url ?: asset('storage/' . $d->file_path),
-                ])->toArray(),
+                ])->values(),
             ],
-            'transporters' => $transporters->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray(),
-            'trucks' => $trucks->toArray(),
-            'drivers' => $drivers->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->toArray(),
-            'providers' => $providers->map(fn ($p) => ['id' => $p->id, 'name' => $p->name])->toArray(),
-            'products' => $products->toArray(),
-            'bases' => $bases->toArray(),
         ]);
     }
 
@@ -650,7 +596,57 @@ class TransportTrackingController extends Controller
         // Delete document record
         $document->delete();
 
+        if (request()->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
         return redirect()->back()->with('success', 'Document supprimé avec succès.');
+    }
+
+    /** Upload one or more documents to an existing transport (in-workspace, JSON). */
+    public function uploadDocuments(Request $request, TransportTracking $transportTracking)
+    {
+        $request->validate([
+            'files' => 'required|array',
+            'files.*' => 'file|mimes:pdf,jpg,jpeg,png|max:4096',
+        ]);
+
+        foreach ($request->file('files', []) as $file) {
+            $this->storeDocument($transportTracking, $file);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect()->back();
+    }
+
+    /** Persist one uploaded file as a Document with filename-based type detection. */
+    private function storeDocument(TransportTracking $transportTracking, \Illuminate\Http\UploadedFile $file): void
+    {
+        $upload = $this->uploadFile($file);
+
+        $originalName = strtolower($file->getClientOriginalName());
+        $type = 'other';
+        if (strpos($originalName, 'provider') !== false || strpos($originalName, 'fournisseur') !== false) {
+            $type = 'provider';
+        } elseif (strpos($originalName, 'client') !== false) {
+            $type = 'client';
+        } elseif (strpos($originalName, 'commune') !== false) {
+            $type = 'commune';
+        }
+
+        Document::create([
+            'transport_tracking_id' => $transportTracking->id,
+            'file_path' => $upload['path'],
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getMimeType(),
+            'size' => $file->getSize(),
+            'type' => $type,
+            'sharepoint_id' => $upload['sharepoint_id'] ?? null,
+            'sharepoint_url' => $upload['url'] ?? null,
+        ]);
     }
 
     /**
@@ -664,12 +660,6 @@ class TransportTrackingController extends Controller
         $transportTracking->delete();
 
         return redirect()->route('transport_tracking.index')->with('success', 'Transport supprimé avec succès.');
-    }
-
-    // askAI
-    public function askAI()
-    {
-        return view('pages.transport_trackings.ask-ai');
     }
 
     //analyze
@@ -964,39 +954,6 @@ EOT;
         }
 
         return asset('storage/' . $doc->file_path);
-    }
-
-    /**
-     * Trip replay Inertia page — rendered as a shell; the heavy payload
-     * (snapshots, stops, incidents) is fetched client-side from
-     * /api/trip-replay/{tt} so large trails don't bloat the HTML response.
-     */
-    public function replayPage(TransportTracking $transportTracking)
-    {
-        $transportTracking->load(['truck:id,matricule', 'provider:id,name']);
-
-        return Inertia::render('transport-trackings/Replay', [
-            'transport' => [
-                'id' => $transportTracking->id,
-                'reference' => $transportTracking->reference,
-                'provider_date' => $transportTracking->provider_date?->format('d/m/Y'),
-                'client_date' => $transportTracking->client_date?->format('d/m/Y'),
-                'provider_net_weight' => $transportTracking->provider_net_weight,
-                'client_net_weight' => $transportTracking->client_net_weight,
-                'gap' => $transportTracking->gap,
-                'start_km' => $transportTracking->start_km,
-                'end_km' => $transportTracking->end_km,
-                'truck' => $transportTracking->truck ? [
-                    'id' => $transportTracking->truck->id,
-                    'matricule' => $transportTracking->truck->matricule,
-                ] : null,
-                'provider' => $transportTracking->provider ? [
-                    'id' => $transportTracking->provider->id,
-                    'name' => $transportTracking->provider->name,
-                ] : null,
-            ],
-            'dataUrl' => url("/api/trip-replay/{$transportTracking->id}"),
-        ]);
     }
 
     /**

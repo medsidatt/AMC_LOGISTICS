@@ -24,7 +24,6 @@ class FleetiSyncService
         private readonly FuelEventDetectorService $fuelEventDetector,
         private readonly StopDetectorService $stopDetectorService,
         private readonly PlaceClassifierService $placeClassifierService,
-        private readonly UnauthorizedStopDetector $unauthorizedStopDetector,
         private readonly ?DailyDispatchEventDeriver $eventDeriver = null,
         private readonly ?DispatchStatusResolver $statusResolver = null,
         private readonly ?DispatchEtaEstimator $etaEstimator = null
@@ -170,26 +169,20 @@ class FleetiSyncService
                     $summary['fuel_events_detected']++;
                 }
 
-                // 6. Theft-detection layer: extend/close stops, classify them,
-                //    and escalate any unknown-location stops to incidents.
+                // 6. Stop / place classification — maintains TruckStop state and
+                //    place anchoring used downstream by the reconciliation feed.
                 try {
                     $closedStops = $this->stopDetectorService->extendForTruck(
                         $truck->fresh(),
                         $snapshot
                     );
                     foreach ($closedStops as $stop) {
-                        $classified = $this->placeClassifierService->classify($stop);
+                        $this->placeClassifierService->classify($stop);
                         $summary['stops_closed']++;
-
-                        $incident = $this->unauthorizedStopDetector->inspect($classified);
-                        if ($incident) {
-                            $summary['theft_incidents_opened']++;
-                        }
                     }
                 } catch (\Throwable $e) {
-                    // Never block a sync on the theft-detection layer — it's
-                    // best-effort and we log so ops can investigate.
-                    Log::warning('Theft-detection layer failed during sync.', [
+                    // Never block a sync on the stop/place layer — best-effort.
+                    Log::warning('Stop/place classification failed during sync.', [
                         'truck_id' => $truck->id,
                         'snapshot_id' => $snapshot->id ?? null,
                         'error' => $e->getMessage(),
@@ -237,113 +230,6 @@ class FleetiSyncService
             'errors' => [],
             'note' => $note,
         ];
-    }
-
-    /**
-     * Fleet-wide light position pass used by fleeti:sync-fleet-positions.
-     *
-     * Issues ONE bulk /v1/Asset/Search call (no per-asset detail), updates
-     * truck live cache + writes a lossless snapshot for every active truck,
-     * and runs the (cheap) stop/place classification. Skips fuel sensor
-     * reading, fuel events, odometer & engine-hours — those need the heavy
-     * detail call and are covered by syncKilometers (30 min) and syncLive
-     * (1-5 min, dispatched trucks only).
-     *
-     * Trucks on today's dispatch are skipped here to avoid duplicating work
-     * with syncLive; they get a deeper poll there.
-     */
-    public function syncFleetPositions(?string $customerReference, Collection $allActiveTrucks, Collection $dispatchedTruckIds): array
-    {
-        if ($allActiveTrucks->isEmpty()) {
-            return $this->emptyLiveSummary('No active trucks for fleet-wide light sync.');
-        }
-
-        // ONE bulk call to Fleeti. No assetIds filter — pulls every Fleeti asset
-        // for this customer in a single (paginated) Search call.
-        $assets = $this->fleetiService->fetchAssets($customerReference);
-
-        $summary = [
-            'assets_received' => $assets->count(),
-            'trucks_matched' => 0,
-            'snapshots_created' => 0,
-            'stops_closed' => 0,
-            'assets_skipped' => 0,
-            'dispatched_skipped' => 0,
-            'errors' => [],
-        ];
-
-        foreach ($assets as $asset) {
-            $assetId = data_get($asset, 'id');
-
-            $truck = $this->resolveTruck($asset, $allActiveTrucks);
-            if (! $truck) {
-                $summary['assets_skipped']++;
-                continue;
-            }
-
-            // syncLive owns these trucks at higher cadence + depth.
-            if ($dispatchedTruckIds->contains($truck->id)) {
-                $summary['dispatched_skipped']++;
-                continue;
-            }
-
-            $lock = Cache::lock("fleeti:positions:truck:{$truck->id}", 30);
-            if (! $lock->get()) {
-                $summary['assets_skipped']++;
-                continue;
-            }
-
-            try {
-                $telemetry = $this->fleetiService->extractTelemetry($asset);
-                $summary['trucks_matched']++;
-
-                $truckUpdates = array_filter([
-                    'fleeti_asset_id' => $assetId ?: $truck->fleeti_asset_id,
-                ], fn ($v) => ! is_null($v));
-                if (! empty($truckUpdates)) {
-                    $truck->update($truckUpdates);
-                }
-
-                // Light snapshot — refreshes fleeti_last_* cache columns,
-                // which is what /logistics/fleet-map reads.
-                $snapshot = $this->telemetrySnapshotService->record(
-                    $truck->fresh(),
-                    $telemetry,
-                    $asset,
-                    'fleeti'
-                );
-                $summary['snapshots_created']++;
-
-                // Stops + place classification are cheap and useful for the map.
-                try {
-                    $closedStops = $this->stopDetectorService->extendForTruck($truck->fresh(), $snapshot);
-                    foreach ($closedStops as $stop) {
-                        $this->placeClassifierService->classify($stop);
-                        $summary['stops_closed']++;
-                    }
-                } catch (\Throwable $e) {
-                    Log::warning('Stop/place layer failed (fleet-positions).', [
-                        'truck_id' => $truck->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                Log::error('Fleet-position sync failed for truck.', [
-                    'truck_id' => $truck->id,
-                    'asset_id' => $assetId,
-                    'error' => $e->getMessage(),
-                ]);
-                $summary['errors'][] = [
-                    'truck_id' => $truck->id,
-                    'asset_id' => $assetId,
-                    'message' => $e->getMessage(),
-                ];
-            } finally {
-                optional($lock)->release();
-            }
-        }
-
-        return $summary;
     }
 
     /**
@@ -468,11 +354,6 @@ class FleetiSyncService
                 $classified = $this->placeClassifierService->classify($stop);
                 $classifiedStops[] = $classified;
                 $summary['stops_closed']++;
-
-                $incident = $this->unauthorizedStopDetector->inspect($classified);
-                if ($incident) {
-                    $summary['theft_incidents_opened'] = ($summary['theft_incidents_opened'] ?? 0) + 1;
-                }
             }
         } catch (\Throwable $e) {
             Log::warning('Stop/place layer failed (live).', [

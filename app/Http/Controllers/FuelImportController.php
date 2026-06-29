@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Driver;
 use App\Models\EdkFuelTransaction;
 use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
 use App\Models\FuelTracking;
+use App\Models\Truck;
 use App\Services\Fuel\EdkFuelParser;
 use App\Services\Fuel\FleetiFuelParser;
 use Carbon\Carbon;
@@ -26,16 +28,14 @@ class FuelImportController extends Controller
         $this->middleware('permission:fuel-import');
     }
 
-    public function showPage()
+    /** Fuel workspace — server-paginated EDK or Fleeti records (tabbed). */
+    public function index(Request $request)
     {
-        $setting = FleetSetting::current();
+        $tab = $request->query('tab') === 'fleeti' ? 'fleeti' : 'edk';
+        $filters = array_filter($request->only(['truck_id', 'driver_id', 'start_date', 'end_date']));
 
-        $recentEdk = EdkFuelTransaction::query()
-            ->with(['truck:id,matricule', 'driver:id,name'])
-            ->latest('occurred_at')
-            ->take(15)
-            ->get()
-            ->map(fn (EdkFuelTransaction $r) => [
+        $records = $tab === 'edk'
+            ? $this->edkQuery($filters)->latest('occurred_at')->paginate(15)->through(fn (EdkFuelTransaction $r) => [
                 'id' => $r->id,
                 'date' => $r->occurred_at?->format('d/m/Y H:i'),
                 'truck' => $r->truck?->matricule,
@@ -43,37 +43,155 @@ class FuelImportController extends Controller
                 'amount' => (float) $r->amount_fcfa,
                 'litres' => round((float) $r->litres, 1),
                 'transaction_id' => $r->transaction_id,
-            ]);
-
-        $recentFleeti = FleetiDailyRecord::query()
-            ->with('truck:id,matricule')
-            ->latest('record_date')
-            ->take(15)
-            ->get()
-            ->map(fn (FleetiDailyRecord $r) => [
+            ])->appends($request->query())
+            : $this->fleetiQuery($filters)->latest('record_date')->paginate(15)->through(fn (FleetiDailyRecord $r) => [
                 'id' => $r->id,
                 'date' => $r->record_date?->format('d/m/Y'),
                 'truck' => $r->truck?->matricule,
                 'kilometers' => (float) $r->kilometers,
                 'consumed' => round((float) $r->consumed, 1),
+                'consumed_per_100km' => $r->consumed_per_100km !== null ? round((float) $r->consumed_per_100km, 1) : null,
                 'refills_volume' => round((float) $r->refills_volume, 1),
                 'refills_count' => (int) $r->refills_count,
-            ]);
+            ])->appends($request->query());
 
-        $totals = [
-            'edk_transactions' => EdkFuelTransaction::count(),
-            'edk_litres' => round((float) EdkFuelTransaction::sum('litres'), 0),
-            'edk_fcfa' => (float) EdkFuelTransaction::sum('amount_fcfa'),
-            'fleeti_days' => FleetiDailyRecord::count(),
-            'fleeti_litres' => round((float) FleetiDailyRecord::sum('consumed'), 0),
-        ];
-
-        return Inertia::render('fuel/Import', [
-            'pricePerLitre' => (float) $setting->price_per_litre,
-            'recentEdk' => $recentEdk,
-            'recentFleeti' => $recentFleeti,
-            'totals' => $totals,
+        return Inertia::render('fuel/Index', [
+            'tab' => $tab,
+            'records' => $records,
+            'filters' => $filters,
+            'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule'])->map(fn ($t) => ['id' => $t->id, 'name' => $t->matricule])->all(),
+            'drivers' => Driver::where('is_active', true)->orderBy('name')->get(['id', 'name'])->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->all(),
+            'totals' => [
+                'edk_transactions' => EdkFuelTransaction::count(),
+                'edk_litres' => round((float) EdkFuelTransaction::sum('litres'), 0),
+                'edk_fcfa' => (float) EdkFuelTransaction::sum('amount_fcfa'),
+                'fleeti_days' => FleetiDailyRecord::count(),
+                'fleeti_litres' => round((float) FleetiDailyRecord::sum('consumed'), 0),
+            ],
+            'pricePerLitre' => (float) FleetSetting::current()->price_per_litre,
         ]);
+    }
+
+    private function edkQuery(array $filters)
+    {
+        return EdkFuelTransaction::query()
+            ->with(['truck:id,matricule', 'driver:id,name'])
+            ->when($filters['truck_id'] ?? null, fn ($q, $v) => $q->where('truck_id', $v))
+            ->when($filters['driver_id'] ?? null, fn ($q, $v) => $q->where('driver_id', $v))
+            ->when($filters['start_date'] ?? null, fn ($q, $v) => $q->whereDate('occurred_at', '>=', $v))
+            ->when($filters['end_date'] ?? null, fn ($q, $v) => $q->whereDate('occurred_at', '<=', $v));
+    }
+
+    private function fleetiQuery(array $filters)
+    {
+        return FleetiDailyRecord::query()
+            ->with('truck:id,matricule')
+            ->when($filters['truck_id'] ?? null, fn ($q, $v) => $q->where('truck_id', $v))
+            ->when($filters['start_date'] ?? null, fn ($q, $v) => $q->whereDate('record_date', '>=', $v))
+            ->when($filters['end_date'] ?? null, fn ($q, $v) => $q->whereDate('record_date', '<=', $v));
+    }
+
+    /** EDK transaction details + matching Fleeti consumption (validation) + truck history. */
+    public function showEdk(EdkFuelTransaction $transaction)
+    {
+        $transaction->load(['truck:id,matricule', 'driver:id,name', 'importedBy:id,name']);
+        $date = $transaction->occurred_at?->toDateString();
+
+        $fleeti = ($transaction->truck_id && $date)
+            ? FleetiDailyRecord::where('truck_id', $transaction->truck_id)->whereDate('record_date', $date)->first()
+            : null;
+
+        return response()->json([
+            'record' => [
+                'id' => $transaction->id,
+                'date' => $transaction->occurred_at?->format('d/m/Y H:i'),
+                'truck' => $transaction->truck?->matricule,
+                'driver' => $transaction->driver?->name,
+                'amount' => (float) $transaction->amount_fcfa,
+                'litres' => round((float) $transaction->litres, 1),
+                'price_per_litre' => (float) $transaction->price_per_litre,
+                'transaction_id' => $transaction->transaction_id,
+                'imported_by' => $transaction->importedBy?->name,
+                'imported_at' => $transaction->created_at?->format('d/m/Y H:i'),
+            ],
+            'validation' => $fleeti ? [
+                'date' => $fleeti->record_date?->format('d/m/Y'),
+                'kilometers' => (float) $fleeti->kilometers,
+                'consumed' => round((float) $fleeti->consumed, 1),
+                'consumed_per_100km' => $fleeti->consumed_per_100km !== null ? round((float) $fleeti->consumed_per_100km, 1) : null,
+                'refills_volume' => round((float) $fleeti->refills_volume, 1),
+            ] : null,
+            'history' => EdkFuelTransaction::where('truck_id', $transaction->truck_id)->where('id', '!=', $transaction->id)
+                ->latest('occurred_at')->take(8)->get()
+                ->map(fn ($r) => ['id' => $r->id, 'date' => $r->occurred_at?->format('d/m/Y'), 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->litres, 1)])->all(),
+        ]);
+    }
+
+    /** Fleeti daily record details + matching EDK purchases (validation) + truck history. */
+    public function showFleeti(FleetiDailyRecord $record)
+    {
+        $record->load(['truck:id,matricule', 'importedBy:id,name']);
+        $date = $record->record_date?->toDateString();
+
+        $edk = ($record->truck_id && $date)
+            ? EdkFuelTransaction::with('driver:id,name')->where('truck_id', $record->truck_id)->whereDate('occurred_at', $date)->get()
+            : collect();
+
+        return response()->json([
+            'record' => [
+                'id' => $record->id,
+                'date' => $record->record_date?->format('d/m/Y'),
+                'truck' => $record->truck?->matricule,
+                'kilometers' => (float) $record->kilometers,
+                'volume_initial' => round((float) $record->volume_initial, 1),
+                'volume_final' => round((float) $record->volume_final, 1),
+                'consumed' => round((float) $record->consumed, 1),
+                'consumed_per_100km' => $record->consumed_per_100km !== null ? round((float) $record->consumed_per_100km, 1) : null,
+                'refills_volume' => round((float) $record->refills_volume, 1),
+                'refills_count' => (int) $record->refills_count,
+                'drains_volume' => round((float) $record->drains_volume, 1),
+                'drains_count' => (int) $record->drains_count,
+                'imported_by' => $record->importedBy?->name,
+                'imported_at' => $record->created_at?->format('d/m/Y H:i'),
+            ],
+            'validation' => $edk->isNotEmpty() ? [
+                'count' => $edk->count(),
+                'litres' => round((float) $edk->sum('litres'), 1),
+                'amount' => (float) $edk->sum('amount_fcfa'),
+                'transactions' => $edk->map(fn ($r) => ['id' => $r->id, 'driver' => $r->driver?->name, 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->litres, 1)])->all(),
+            ] : null,
+            'history' => FleetiDailyRecord::where('truck_id', $record->truck_id)->where('id', '!=', $record->id)
+                ->latest('record_date')->take(8)->get()
+                ->map(fn ($r) => ['id' => $r->id, 'date' => $r->record_date?->format('d/m/Y'), 'consumed' => round((float) $r->consumed, 1), 'kilometers' => (float) $r->kilometers])->all(),
+        ]);
+    }
+
+    /** Export the current tab's filtered records to CSV. */
+    public function export(Request $request)
+    {
+        $tab = $request->query('tab') === 'fleeti' ? 'fleeti' : 'edk';
+        $filters = array_filter($request->only(['truck_id', 'driver_id', 'start_date', 'end_date']));
+        $name = 'carburant-' . $tab . '-' . now()->format('Y-m-d') . '.csv';
+
+        return response()->streamDownload(function () use ($tab, $filters) {
+            $out = fopen('php://output', 'w');
+            if ($tab === 'edk') {
+                fputcsv($out, ['Date', 'Camion', 'Chauffeur', 'Montant FCFA', 'Litres', 'Transaction']);
+                $this->edkQuery($filters)->latest('occurred_at')->chunk(500, function ($rows) use ($out) {
+                    foreach ($rows as $r) {
+                        fputcsv($out, [$r->occurred_at?->format('Y-m-d H:i'), $r->truck?->matricule, $r->driver?->name, $r->amount_fcfa, $r->litres, $r->transaction_id]);
+                    }
+                });
+            } else {
+                fputcsv($out, ['Date', 'Camion', 'Km', 'Consomme L', 'L/100km', 'Remplis L', 'Remplissages']);
+                $this->fleetiQuery($filters)->latest('record_date')->chunk(500, function ($rows) use ($out) {
+                    foreach ($rows as $r) {
+                        fputcsv($out, [$r->record_date?->format('Y-m-d'), $r->truck?->matricule, $r->kilometers, $r->consumed, $r->consumed_per_100km, $r->refills_volume, $r->refills_count]);
+                    }
+                });
+            }
+            fclose($out);
+        }, $name, ['Content-Type' => 'text/csv']);
     }
 
     public function previewEdk(Request $request)

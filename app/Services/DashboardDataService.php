@@ -9,7 +9,6 @@ use App\Models\InspectionChecklist;
 use App\Models\InspectionChecklistIssue;
 use App\Models\LogisticsAlert;
 use App\Models\Maintenance;
-use App\Models\TheftIncident;
 use App\Models\TransportTracking;
 use App\Models\Truck;
 use App\Services\FleetCapacityService;
@@ -391,16 +390,11 @@ class DashboardDataService
         $activeTrucks = Truck::query()->where('is_active', true)->get();
         $maintenanceOverdueCount = $activeTrucks->filter(fn (Truck $t) => $t->isMaintenanceDueByType())->count();
 
-        $securityIncidentsOpen = TheftIncident::query()
-            ->where('status', TheftIncident::STATUS_PENDING)
-            ->count();
-
         $kpis = [
             'inspections_this_week' => $inspectionsThisWeek,
             'inspections_this_month' => $inspectionsThisMonth,
             'trucks_overdue_inspection' => $trucksOverdueInspectionCount,
             'maintenance_overdue' => $maintenanceOverdueCount,
-            'security_incidents_open' => $securityIncidentsOpen,
             'active_trucks' => $activeTruckIds->count(),
         ];
 
@@ -449,29 +443,11 @@ class DashboardDataService
             ])
             ->values();
 
-        // ---------- Recent security incidents (pending or confirmed) ----------
-        $securityIncidents = TheftIncident::query()
-            ->with(['truck:id,matricule'])
-            ->whereIn('status', [TheftIncident::STATUS_PENDING, TheftIncident::STATUS_CONFIRMED])
-            ->orderByDesc('detected_at')
-            ->limit(8)
-            ->get()
-            ->map(fn (TheftIncident $inc) => [
-                'id' => $inc->id,
-                'truck' => $inc->truck?->matricule,
-                'type' => $inc->type,
-                'severity' => $inc->severity,
-                'status' => $inc->status,
-                'detected_at' => $inc->detected_at?->format('d/m/Y H:i'),
-            ])
-            ->values();
-
         return [
             'kpis' => $kpis,
             'recentInspections' => $recent,
             'trucksNeedingInspection' => $trucksNeedingInspection,
             'maintenanceOverdue' => $maintenanceOverdue,
-            'securityIncidents' => $securityIncidents,
         ];
     }
 

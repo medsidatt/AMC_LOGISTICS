@@ -48,12 +48,19 @@ Route::get('/admin/audit-logs/export', [App\Http\Controllers\AuditLogController:
     ->middleware(['auth'])
     ->name('admin.audit-logs.export');
 
-Route::group(['middleware' => ['auth'], 'prefix' => 'fuel/import'], function () {
-    Route::get('', [App\Http\Controllers\FuelImportController::class, 'showPage'])->name('fuel.import');
-    Route::post('edk/preview', [App\Http\Controllers\FuelImportController::class, 'previewEdk'])->name('fuel.import.edk.preview');
-    Route::post('edk/commit', [App\Http\Controllers\FuelImportController::class, 'commitEdk'])->name('fuel.import.edk.commit');
-    Route::post('fleeti/preview', [App\Http\Controllers\FuelImportController::class, 'previewFleeti'])->name('fuel.import.fleeti.preview');
-    Route::post('fleeti/commit', [App\Http\Controllers\FuelImportController::class, 'commitFleeti'])->name('fuel.import.fleeti.commit');
+Route::group(['middleware' => ['auth'], 'prefix' => 'fuel'], function () {
+    Route::get('', [App\Http\Controllers\FuelImportController::class, 'index'])->name('fuel.index');
+    Route::get('export', [App\Http\Controllers\FuelImportController::class, 'export'])->name('fuel.export');
+    Route::get('edk/{transaction}', [App\Http\Controllers\FuelImportController::class, 'showEdk'])->name('fuel.edk.show');
+    Route::get('fleeti/{record}', [App\Http\Controllers\FuelImportController::class, 'showFleeti'])->name('fuel.fleeti.show');
+
+    Route::prefix('import')->group(function () {
+        Route::get('', fn () => redirect()->route('fuel.index'))->name('fuel.import'); // legacy entry → workspace
+        Route::post('edk/preview', [App\Http\Controllers\FuelImportController::class, 'previewEdk'])->name('fuel.import.edk.preview');
+        Route::post('edk/commit', [App\Http\Controllers\FuelImportController::class, 'commitEdk'])->name('fuel.import.edk.commit');
+        Route::post('fleeti/preview', [App\Http\Controllers\FuelImportController::class, 'previewFleeti'])->name('fuel.import.fleeti.preview');
+        Route::post('fleeti/commit', [App\Http\Controllers\FuelImportController::class, 'commitFleeti'])->name('fuel.import.fleeti.commit');
+    });
 });
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'drivers'], function () {

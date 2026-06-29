@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 
 class LogisticsInspectionController extends Controller
 {
@@ -32,7 +31,8 @@ class LogisticsInspectionController extends Controller
         [$truckDrivers, $driverTrucks] = $this->buildTruckDriverMaps();
         $projects = Project::query()->orderBy('name')->get(['id', 'name', 'code']);
 
-        return Inertia::render('inspections/Create', [
+        // JSON form refs for the create drawer (no standalone page).
+        return response()->json([
             'trucks' => Truck::query()->where('is_active', true)->orderBy('matricule')->get(['id', 'matricule']),
             'drivers' => Driver::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'projects' => $projects,
@@ -119,7 +119,8 @@ class LogisticsInspectionController extends Controller
         $inspection->load('issues');
         [$truckDrivers, $driverTrucks] = $this->buildTruckDriverMaps();
 
-        return Inertia::render('inspections/Edit', [
+        // JSON form data for the edit drawer (no standalone page).
+        return response()->json([
             'inspection' => $this->serialize($inspection),
             'trucks' => Truck::query()->where('is_active', true)->orderBy('matricule')->get(['id', 'matricule']),
             'drivers' => Driver::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),

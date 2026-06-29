@@ -66,7 +66,6 @@ return [
     // Previously gated by hardcoded role checks — now real, assignable permissions.
     'fleet-settings-edit',
     'fuel-import',
-    'fleet-map-view',
     'driver-discipline-view',
     'driver-discipline-manage',
 

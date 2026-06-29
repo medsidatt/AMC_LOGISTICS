@@ -1,0 +1,1 @@
+function a(){const e=document.cookie.split("; ").find(t=>t.startsWith("XSRF-TOKEN="));return e?decodeURIComponent(e.split("=")[1]):""}async function o(e,t={}){const n=t.body instanceof FormData;return fetch(e,{credentials:"same-origin",...t,headers:{Accept:"application/json","X-XSRF-TOKEN":a(),...n?{}:{"Content-Type":"application/json"},...t.headers||{}}})}export{o as a};

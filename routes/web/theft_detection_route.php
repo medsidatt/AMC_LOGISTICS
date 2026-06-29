@@ -1,52 +1,25 @@
 <?php
 
 use App\Http\Controllers\PlaceController;
-use App\Http\Controllers\TheftIncidentController;
-use App\Http\Controllers\TransportTrackingController;
-use App\Http\Controllers\TripReplayController;
-use App\Http\Controllers\TruckController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Theft-detection platform routes
+| Geofence (Place) routes
 |--------------------------------------------------------------------------
 |
-| Reads are open to anyone with `logistics-dashboard` permission (HSE Agent,
-| Logistics Responsible, Admin, Super Admin). Writes remain restricted to
-| Admin / Super Admin only.
+| Places are operational reference geofences (base / provider / client /
+| border) consumed silently by the GPS reconciliation pipeline to classify
+| truck stops. They are NOT a user-facing GPS surface. Reads are open to
+| `logistics-dashboard`; writes remain Admin / Super Admin only.
 |
 */
 
-// ---------- Read-only routes (HSE, Logistics Resp, Admin, Super Admin) ----------
 Route::middleware(['auth', 'permission:logistics-dashboard'])->group(function () {
-    Route::prefix('logistics/theft-incidents')->name('theft-incidents.')->group(function () {
-        Route::get('/', [TheftIncidentController::class, 'index'])->name('index');
-        Route::get('/{theftIncident}', [TheftIncidentController::class, 'show'])->name('show');
-    });
-
     Route::get('/logistics/places', [PlaceController::class, 'index'])->name('places.index');
 });
 
-// ---------- Fleet map (assignable permission) ----------
-Route::middleware(['auth', 'permission:fleet-map-view'])->group(function () {
-    Route::get('/logistics/fleet-map', [TruckController::class, 'mapPage'])
-        ->name('fleet-map');
-});
-
-// ---------- Live GPS / surveillance routes (Admin / Super Admin only) ----------
 Route::middleware(['auth', 'role:Admin|Super Admin'])->group(function () {
-    Route::get('/transport_tracking/{transportTracking}/replay', [TransportTrackingController::class, 'replayPage'])
-        ->name('transport-tracking.replay');
-    Route::get('/api/trip-replay/{transportTracking}', [TripReplayController::class, 'data'])
-        ->name('trip-replay.data');
-
-    Route::post('/logistics/theft-incidents/{theftIncident}/status', [TheftIncidentController::class, 'update'])
-        ->name('theft-incidents.update');
-
-    Route::post('/logistics/theft-incidents/{theftIncident}/create-ticket', [TheftIncidentController::class, 'createTicket'])
-        ->name('theft-incidents.create-ticket');
-
     Route::prefix('logistics/places')->name('places.')->group(function () {
         Route::get('/create', [PlaceController::class, 'create'])->name('create');
         Route::post('/', [PlaceController::class, 'store'])->name('store');

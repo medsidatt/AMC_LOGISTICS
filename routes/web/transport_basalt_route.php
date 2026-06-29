@@ -47,9 +47,8 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
     Route::get('/', [DriverController::class, 'index'])->name('index');
     Route::get('/{driver}/show-page', [DriverController::class, 'showPage'])->name('show-page');
     Route::get('/{driver}/show', [DriverController::class, 'show'])->name('show');
-    Route::get('/create', [DriverController::class, 'create'])->name('create');
     Route::post('/store', [DriverController::class, 'store'])->name('store');
-    Route::get('/{driver}/edit', [DriverController::class, 'edit'])->name('edit');
+    Route::get('/{driver}/edit-data', [DriverController::class, 'edit'])->name('edit-data');
     Route::put('/{driver}/update', [DriverController::class, 'update'])->name('update');
     Route::post('/{driver}/toggle-active', [DriverController::class, 'toggleActive'])->name('toggle-active');
     Route::delete('/{driver}/destroy', [DriverController::class, 'destroy'])->name('destroy');
@@ -58,13 +57,9 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
 // ----- Trucks Routes -----/
 Route::group(['prefix' => 'trucks', 'as' => 'trucks.', 'middleware' => ['auth']], function () {
     Route::get('/', [TruckController::class, 'index'])->name('index');
-    Route::get('/create-page', [TruckController::class, 'createPage'])->name('create-page');
     Route::get('/{truck}/show-page', [TruckController::class, 'showPage'])->name('show-page');
     Route::get('/{truck}/show', [TruckController::class, 'show'])->name('show');
-    Route::get('/create', [TruckController::class, 'create'])->name('create');
-    Route::get('/{truck}/edit-page', [TruckController::class, 'editPage'])->name('edit-page');
     Route::post('/store', [TruckController::class, 'store'])->name('store');
-    Route::get('/{truck}/edit', [TruckController::class, 'edit'])->name('edit');
     Route::put('/{truck}/update', [TruckController::class, 'update'])->name('update');
     Route::delete('/{truck}/destroy', [TruckController::class, 'destroy'])->name('destroy');
 
@@ -92,18 +87,17 @@ Route::group(['prefix' => 'trucks', 'as' => 'trucks.', 'middleware' => ['auth']]
 // ----- Transport_tracking Routes -----/
 Route::group(['prefix' => 'transport_tracking', 'as' => 'transport_tracking.', 'middleware' => ['auth']], function () {
     Route::get('/', [TransportTrackingController::class, 'index'])->name('index');
-    Route::get('/create-page', [TransportTrackingController::class, 'createPage'])->name('create-page');
+    // show-page: JSON for the details drawer; HTML hits redirect to the workspace (?view=ID).
     Route::get('/{transport_tracking}/show-page', [TransportTrackingController::class, 'showPage'])->name('show-page');
-    Route::get('/create', [TransportTrackingController::class, 'create'])->name('create');
+    Route::get('/{transport_tracking}/edit-data', [TransportTrackingController::class, 'editPage'])->name('edit-data');
     Route::get('/import', [TransportTrackingController::class, 'import'])->name('import');
     Route::post('/import', [TransportTrackingController::class, 'import'])->name('import');
     Route::post('/store', [TransportTrackingController::class, 'store'])->name('store');
     Route::get('/show/{transport_tracking}', [TransportTrackingController::class, 'show'])->name('show');
 
+    Route::post('/{transport_tracking}/documents', [TransportTrackingController::class, 'uploadDocuments'])->name('documents.store');
     Route::delete('/{id}/document/{documentId}', [TransportTrackingController::class, 'deleteDocument'])->name('document.delete');
 
-    Route::get('/{transport_tracking}/edit-page', [TransportTrackingController::class, 'editPage'])->name('edit-page');
-    Route::get('/{transport_tracking}/edit', [TransportTrackingController::class, 'edit'])->name('edit');
     Route::put('/{transport_tracking}/update', [TransportTrackingController::class, 'update'])->name('update');
     Route::delete('/{transport_tracking}/destroy', [TransportTrackingController::class, 'destroy'])->name('destroy');
 
@@ -111,7 +105,6 @@ Route::group(['prefix' => 'transport_tracking', 'as' => 'transport_tracking.', '
     Route::get('/file-page/{id}', [TransportTrackingController::class, 'filePage'])->name('file-page');
     Route::get('/preview-files/{id}', [TransportTrackingController::class, 'previewFiles'])->name('preview-files');
 
-    Route::get('/ask-ai', [TransportTrackingController::class, 'askAI'])->name('ask-ai.get');
     Route::post('/ask-ai', [TransportTrackingController::class, 'analyze'])->name('ask-ai');
     Route::post('/analyze-all', [TransportTrackingController::class, 'analyzeAll'])->name('analyze-all');
 
@@ -134,7 +127,6 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
     Route::get('/rules', [MaintenanceController::class, 'rules'])->name('rules');
     Route::post('/rules', [MaintenanceController::class, 'storeRule'])->name('rules.store');
     Route::post('/rules/{profile}/deactivate', [MaintenanceController::class, 'deactivateRule'])->name('rules.deactivate');
-    Route::get('/{truck}/record', [MaintenanceController::class, 'recordForm'])->name('record-form');
     Route::post('/{truck}/record', [MaintenanceController::class, 'recordMaintenance'])->name('record');
     Route::post('/{maintenance}/update', [MaintenanceController::class, 'updateMaintenance'])->name('update');
     Route::post('/issues/{issue}/cost', [MaintenanceController::class, 'updateIssueCost'])->name('issues.cost');
@@ -143,6 +135,7 @@ Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.', 'middleware' =>
     Route::get('/{maintenance}/pdf', [MaintenanceController::class, 'exportRecordPdf'])->name('record-pdf');
 });
 
+// ── Analytics (transport KPI dashboards — Phase 2 consolidation into Réalisation) ──
 Route::middleware('auth')->get('/dashboard/trackings', [TrackingDashboardController::class, 'index'])->name('dashboard.trackings');
 Route::middleware('auth')->get('/dashboard/fleeti', [TrackingDashboardController::class, 'fleeti'])->name('dashboard.fleeti');
 Route::middleware('auth')->get('/dashboard/rotations', [TrackingDashboardController::class, 'rotations'])->name('dashboard.rotations');
@@ -154,8 +147,4 @@ Route::group(['prefix' => 'reports', 'as' => 'reports.', 'middleware' => ['auth'
     Route::get('/fleet/excel', [\App\Http\Controllers\ReportController::class, 'exportFleetExcel'])->name('fleet.excel');
     Route::get('/maintenance/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceExcel'])->name('maintenance.excel');
     Route::get('/maintenance-due/excel', [\App\Http\Controllers\ReportController::class, 'exportMaintenanceDueExcel'])->name('maintenance-due.excel');
-
-    Route::get('/idle-hourly', [\App\Http\Controllers\ReportController::class, 'idleHourly'])->name('idle-hourly');
-    Route::get('/idle-hourly/data', [\App\Http\Controllers\ReportController::class, 'idleHourlyData'])->name('idle-hourly.data');
-    Route::get('/idle-hourly/excel', [\App\Http\Controllers\ReportController::class, 'exportIdleHourlyExcel'])->name('idle-hourly.excel');
 });

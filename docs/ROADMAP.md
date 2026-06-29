@@ -5,17 +5,17 @@
 > mark phases done, record the completing commit hash, add/remove technical
 > debt, and refresh *Current Focus* / *Next Phase*. Keep it concise.
 
-**Last updated:** 2026-06-25
+**Last updated:** 2026-06-29
 
 ---
 
 ## Current Focus
-**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp)** — on `main`, **Waiting for Production Validation**. **Step 2 (SharePoint upload)** — **implemented + locally verified** on `feature/production-phase2-sharepoint` (local-first + `sync_status` lifecycle); awaiting `merge → develop`. Deployment to `main` gated on Step 1 approval.
+**`develop` integration complete (2026-06-29).** All SPA workspaces — Trucks, Transport Tracking, Drivers, Fuel, Maintenance, Inspections (Fleet) + Roles & Users (Administration) on the shared `useWorkspaceDrawer` URL-driven standard — plus **GPS Infrastructure Decoupling** and **SharePoint Step 2/3** (local-first background upload) are now consolidated on `develop`.
 
-**Step 3 (SharePoint pattern extension)** — **implemented + locally verified** on `feature/production-phase3-sharepoint-extension` (branched off Step 2). Driver + Maintenance `Document` devis uploads now reuse the local-first pattern via `Document::storeLocalAndQueueSync()`. Audit finding: Inspection attachment + Maintenance *facture* store on the parent model (not a `Document`) → out of clean-reuse scope (need a schema change; see backlog).
+**Production Phase 1** — **Step 1 (WhatsApp dispatch)** on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2/3 (SharePoint upload)** — implemented + locally verified (local-first + `sync_status` lifecycle; Driver/Maintenance `Document` devis via `Document::storeLocalAndQueueSync()`); on `develop`, deployment to `main` gated on Step 1 approval.
 
 ## Next Phase
-Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
+Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). Administration SPA continues: Providers → Transporters → Entities → Projects. (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
 
 ## Standard integration pattern (platform rule)
 Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
@@ -38,6 +38,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | Réconciliation · Missing-ticket worklist + nightly reconcile | ✅ | (existing) |
 | Analytics · Real `suspiciousDrivers` metric (de-fabricated) | ✅ | `39730420` |
 | Opérations · **Transports** sidebar entry (ticket system of record) + canonical-link fix (`/transport_trackings/*` 404s) | ✅ | *(nav branch)* |
+| **GPS Infrastructure Decoupling · Phase 1A** — remove GPS *presentation* (Live Tracking, Fleet Map, Theft pages, Trip Replay, Idle report); GPS kept as silent feed for Maintenance/Fuel/Réconciliation (split `FleetiSyncService`, kept stop→place→ExpectedTicket chain) | ✅ | `feature/gps-infra-decoupling` |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 
@@ -53,7 +54,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | Config · Safe `.env.example` + `DEPLOYMENT.md` | ✅ | `2ad1a259` |
 | Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | `2c499bea` |
 | Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ code · ⏳ prod-validation | `2c499bea` |
-| Queues · Step 2 **SharePoint Background Upload** — local-first + `sync_status`, `SyncDocumentToSharePoint` job | ✅ code · ⏳ prod-deploy (gated on Step 1) | *(feature branch)* |
+| Queues · Step 2 **SharePoint Background Upload** (active bottleneck) | 🟠 architecture review | — |
 | Queues · ~~Excel import~~ | ❌ dropped — orphaned legacy (→ housekeeping removal) | — |
 | Queues · Step 3 — re-audit next bottleneck (not reserved) | ⚪ later | — |
 | Scheduler · cron entry on server (`schedule:run`) | 🟠 pending (server) | — |
@@ -82,7 +83,9 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 ---
 
 ## Technical Debt
-- **Parent-model attachments → Documents** (so they can reuse the local-first sync). `LogisticsInspectionController` inspection attachment and `MaintenanceController` *facture* store `attachment_path/url` **on the parent model**, not a `Document` — backgrounding them needs a `Document` FK migration (e.g. `inspection_checklist_id`, `maintenance_id`) + UI repoint, then reuse `SyncDocumentToSharePoint`. *(Step 3 covered the `Document`-based Driver + Maintenance devis uploads; these parent-model ones are deferred.)*
+- **GPS Decoupling · Phase 1B — backend theft decommission** (deferred follow-up to 1A). After 1A the theft layer is invisible (no pages, no dashboard widgets, no escalation in `FleetiSyncService`) but the writers still exist. Remove now-orphaned `UnauthorizedStopDetector`, `OffHoursMovementDetector`, `UntrackedTripDetector`, `RouteDeviationDetector`, `WeightGapDetector`, `TheftIncidentService`; **split** `FuelEventDetectorService` (keep fuel events, drop theft write) and `TripSegmentBuilderService` (drop `routeDeviationDetector`); strip the `runTheftDetectionHooks` WeightGap call in `TransportTrackingController`; drop the `theft_incidents` table + the theft commands. Reference-check each first — `FreightLoopService`/`TripSegmentBuilderService` are shared with Réalisation/Réconciliation.
+- **Analytics consolidation (Phase 2)** — `TrackingDashboardController` (`/dashboard/{trackings,fleeti,rotations}`) backs the live Analytics tabs (`AnalyticsTabs`, `analytics/Rotations`, `transport-trackings/Reports`); it is *not* orphaned. Fold into Réalisation per the dashboard-consolidation plan, then remove. (Corrected an earlier audit false-positive.)
+- Vestigial `fleet-map-view` permission row remains in the DB from migration `2026_06_16_140000` (removed from the catalog; no route checks it). Optional cleanup migration to drop it.
 - **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
 - **Orphaned `TransportDashboard`** (`/transport_tracking/dashboard`) — no live link; overlaps Réalisation's achievement KPIs. Per the workflow split (KPIs → Réalisation), fold its unique charts (monthly tonnage, timeline gantt) into Réalisation/Analytics, then remove the page + route + `dashboard()` method. *[found Operations nav audit]*
 - **Legacy Blade nav** (`main.blade.php` / `welcome.blade.php` / `navigation/sidebar.blade.php`) is dead (Inertia renders via `app.blade.php` + `Sidebar.tsx`) — housekeeping removal. *[found Operations nav audit]*

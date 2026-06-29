@@ -40,7 +40,7 @@ export default function DriversShow({ driver, kpi, filter }: Props) {
             <Head title={driver.name} />
 
             <div className="mb-4 flex items-center justify-between">
-                <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>
+                <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => router.visit('/drivers')}>
                     Retour
                 </Button>
                 <div className="flex items-center gap-2">

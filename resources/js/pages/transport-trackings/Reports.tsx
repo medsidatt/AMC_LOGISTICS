@@ -310,7 +310,7 @@ export default function Reports(props: Props) {
                             <tbody className="divide-y divide-[var(--color-border)]">
                                 {anomalies.map((a) => (
                                     <tr key={a.id} className="hover:bg-[var(--color-surface-hover)]">
-                                        <td className="px-3 py-2"><a href={`/transport_tracking/${a.id}/show-page`} className="text-[var(--color-primary)] hover:underline font-medium">{a.reference}</a></td>
+                                        <td className="px-3 py-2"><button onClick={() => router.visit(`/transport_tracking?view=${a.id}`)} className="text-[var(--color-primary)] hover:underline font-medium">{a.reference}</button></td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{a.provider_date}</td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{a.truck?.matricule ?? '-'}</td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{a.driver?.name ?? '-'}</td>
@@ -348,7 +348,7 @@ export default function Reports(props: Props) {
                                     <tr><td colSpan={8} className="px-3 py-8 text-center text-[var(--color-text-muted)]">Aucune rotation</td></tr>
                                 ) : trips.data.map((t) => (
                                     <tr key={t.id} className="hover:bg-[var(--color-surface-hover)]">
-                                        <td className="px-3 py-2"><a href={`/transport_tracking/${t.id}/show-page`} className="text-[var(--color-primary)] hover:underline font-medium">{t.reference}</a></td>
+                                        <td className="px-3 py-2"><button onClick={() => router.visit(`/transport_tracking?view=${t.id}`)} className="text-[var(--color-primary)] hover:underline font-medium">{t.reference}</button></td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{t.client_date ?? t.provider_date}</td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{t.truck?.matricule ?? '-'}</td>
                                         <td className="px-3 py-2 text-[var(--color-text)]">{t.driver?.name ?? '-'}</td>

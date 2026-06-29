@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Auth\User;
 use App\Models\InspectionChecklist;
-use App\Models\Maintenance;
 use App\Notifications\InspectionValidatedNotification;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -31,73 +30,29 @@ class HseController extends Controller
             ->where('inspection_date', '>=', $cutoff)
             ->orderByDesc('inspection_date')
             ->orderByDesc('id')
-            ->get();
-
-        $serializeInspection = fn (InspectionChecklist $i) => [
-            'id' => $i->id,
-            'inspection_date' => $i->inspection_date?->format('d/m/Y'),
-            'truck' => $i->truck ? ['id' => $i->truck->id, 'matricule' => $i->truck->matricule] : null,
-            'inspector' => $i->inspector?->name,
-            'category' => $i->category,
-            'status' => $i->status,
-            'issues_count' => $i->issues_count,
-            'validator' => $i->validator?->name,
-            'validated_at' => $i->validated_at?->format('d/m/Y H:i'),
-            'vehicle_photo_url' => $i->vehicle_photo_path
-                ? Storage::disk('public')->url($i->vehicle_photo_path)
-                : null,
-        ];
-
-        $inspectionsByCategory = collect(array_keys(InspectionChecklist::CATEGORY_OPTIONS))
-            ->mapWithKeys(fn ($cat) => [$cat => []])
-            ->merge(
-                $inspections->groupBy('category')
-                    ->map(fn ($g) => $g->map($serializeInspection)->values()->toArray())
-            )
-            ->toArray();
-
-        $maintenance = Maintenance::query()
-            ->with(['truck:id,matricule'])
-            ->where('maintenance_date', '>=', $cutoff)
-            ->orderByDesc('maintenance_date')
-            ->orderByDesc('id')
             ->get()
-            ->map(fn (Maintenance $m) => [
-                'id' => $m->id,
-                'maintenance_date' => $m->maintenance_date?->format('d/m/Y'),
-                'truck' => $m->truck ? ['id' => $m->truck->id, 'matricule' => $m->truck->matricule] : null,
-                'kilometers_at_maintenance' => $m->kilometers_at_maintenance !== null ? (float) $m->kilometers_at_maintenance : null,
-                'oil_type' => $m->oil_type,
-                'oil_change_km' => $m->oil_change_km !== null ? (float) $m->oil_change_km : null,
-                'next_oil_change_km' => $m->next_oil_change_km !== null ? (float) $m->next_oil_change_km : null,
-                'oil_quantity_liters' => $m->oil_quantity_liters !== null ? (float) $m->oil_quantity_liters : null,
-                'hydraulic_status' => $m->hydraulic_status,
-                'gearbox_status' => $m->gearbox_status,
-                'differential_status' => $m->differential_status,
-                'greasing_status' => $m->greasing_status,
-                'brake_status' => $m->brake_status,
-                'coolant_status' => $m->coolant_status,
-                'battery_status' => $m->battery_status,
-                'filter_oil_changed' => (bool) $m->filter_oil_changed,
-                'filter_hydraulic_changed' => (bool) $m->filter_hydraulic_changed,
-                'filter_air_changed' => (bool) $m->filter_air_changed,
-                'filter_fuel_changed' => (bool) $m->filter_fuel_changed,
-                'notes' => $m->notes,
-                'status' => $m->status ?? 'pending',
-                'signed_by' => $m->electronic_signature_name,
-                'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
+            ->map(fn (InspectionChecklist $i) => [
+                'id' => $i->id,
+                'inspection_date' => $i->inspection_date?->format('d/m/Y'),
+                'truck' => $i->truck ? ['id' => $i->truck->id, 'matricule' => $i->truck->matricule] : null,
+                'inspector' => $i->inspector?->name,
+                'category' => $i->category,
+                'status' => $i->status,
+                'issues_count' => $i->issues_count,
+                'validator' => $i->validator?->name,
+                'validated_at' => $i->validated_at?->format('d/m/Y H:i'),
+                'vehicle_photo_url' => $i->vehicle_photo_path
+                    ? Storage::disk('public')->url($i->vehicle_photo_path)
+                    : null,
             ])
-            ->values()
-            ->toArray();
+            ->values();
 
+        // Maintenance is its own SPA workspace (/maintenance) — no longer embedded here.
         return Inertia::render('inspections/Index', [
-            'inspectionsByCategory' => $inspectionsByCategory,
-            'maintenance' => $maintenance,
+            'inspections' => $inspections,
             'cutoff' => $cutoff->format('d/m/Y'),
             'options' => [
                 'categories' => InspectionChecklist::CATEGORY_OPTIONS,
-                'conditions' => InspectionChecklist::CONDITION_OPTIONS,
-                'oilTypes' => Maintenance::OIL_TYPES,
             ],
         ]);
     }
@@ -108,7 +63,7 @@ class HseController extends Controller
 
         $user = auth()->user();
 
-        return Inertia::render('inspections/Show', [
+        $payload = [
             'inspection' => $this->serialize($inspection),
             'options' => [
                 'categories' => InspectionChecklist::CATEGORY_OPTIONS,
@@ -118,7 +73,15 @@ class HseController extends Controller
             ],
             'canSign' => $user?->can('inspection-validate') ?? false,
             'currentUserName' => $user?->name ?? '',
-        ]);
+        ];
+
+        // The details drawer fetches this as JSON; external deep-links land on the
+        // workspace with the drawer open.
+        if (request()->wantsJson()) {
+            return response()->json($payload);
+        }
+
+        return redirect('/hse/inspections?view=' . $inspection->id);
     }
 
     /**

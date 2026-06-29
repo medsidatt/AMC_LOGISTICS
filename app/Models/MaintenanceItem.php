@@ -34,4 +34,9 @@ class MaintenanceItem extends Model
     {
         return $this->belongsTo(Maintenance::class);
     }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
 }

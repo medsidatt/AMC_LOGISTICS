@@ -33,8 +33,8 @@ class TruckController extends Controller
         private readonly FleetCapacityService $fleetCapacity,
     ) {
         $this->middleware('permission:truck-list', ['only' => ['index', 'show', 'showPage']]);
-        $this->middleware('permission:truck-create', ['only' => ['create', 'createPage', 'store']]);
-        $this->middleware('permission:truck-edit', ['only' => ['edit', 'editPage', 'update']]);
+        $this->middleware('permission:truck-create', ['only' => ['store']]);
+        $this->middleware('permission:truck-edit', ['only' => ['update']]);
         $this->middleware('permission:truck-delete', ['only' => ['destroy']]);
         $this->middleware('permission:maintenance-create', ['only' => ['createMaintenance', 'storeMaintenance', 'bulkStoreMaintenance']]);
     }
@@ -55,163 +55,17 @@ class TruckController extends Controller
             ->orderBy('matricule')
             ->get();
 
-        // Get active trucks with maintenance due (dynamically calculated)
-        $maintenanceDueTrucks = $trucks->filter(fn($truck) => $truck->is_active && $truck->isMaintenanceDueByType());
-
-        if ($request->ajax() && !$request->header('X-Inertia')) {
-            // Add a sort_order column to preserve the ordering
-            $trucks = $trucks->values()->map(function ($truck, $index) {
-                $truck->sort_order = $index;
-                return $truck;
-            });
-
-            return datatables()
-                ->of($trucks)
-                ->editColumn('transporter_id', function ($truck) {
-                    return $truck->transporter->name ?? '';
-                })
-                ->addColumn('current_counter', function ($truck) {
-                    if ($truck->usesKilometerMaintenance()) {
-                        return number_format((float) $truck->total_kilometers, 0).' km';
-                    }
-
-                    return $truck->rotations_since_maintenance.' rotations';
-                })
-                ->addColumn('last_maintenance_counter', function ($truck) {
-                    if ($truck->usesKilometerMaintenance()) {
-                        return number_format($truck->lastMaintenanceKm(), 0).' km';
-                    }
-
-                    return '—';
-                })
-                ->addColumn('next_maintenance_counter', function ($truck) {
-                    if ($truck->usesKilometerMaintenance()) {
-                        return number_format($truck->nextMaintenanceAtKm(), 0).' km';
-                    }
-
-                    return Truck::MAX_ROTATIONS_BEFORE_MAINTENANCE.' rotations';
-                })
-                ->editColumn('maintenance_due', function ($truck) {
-                    $remaining = $truck->maintenanceRemainingByType();
-                    $level = $truck->maintenanceLevelByType();
-                    $unit = $truck->maintenanceUnitByType();
-
-                    $color = match ($level) {
-                        'red' => 'danger',
-                        'yellow' => 'warning',
-                        default => 'success',
-                    };
-
-                    if ($level === 'red') {
-                        $statusText = "<span class='badge bg-{$color}'>Maintenance Due</span>
-                       <button class='btn btn-sm btn-primary ms-2'
-                               data-id='{$truck->id}'
-                                 onclick='showModal({
-                                     title: \"Mark Maintenance for Truck . {$truck->matricule}\",
-                                     route: \"".route('trucks.maintenances.create', $truck->id)."\",
-                                     size: \"md\"
-                                 })'
-                               >
-                           <i class='fa fa-wrench'></i>
-                       </button>";
-                    } else {
-                        $statusText = "<span class='badge bg-{$color}'>{$remaining} {$unit} restantes</span>";
-                    }
-
-                    return $statusText;
-                })
-                ->addColumn('is_active', function ($truck) {
-                    $isActive = $truck->is_active ?? true;
-                    $badgeClass = $isActive ? 'bg-success' : 'bg-secondary';
-                    $badgeText = $isActive ? 'Actif' : 'Inactif';
-                    $buttonClass = $isActive ? 'btn-outline-danger' : 'btn-outline-success';
-                    $buttonText = $isActive ? 'Désactiver' : 'Activer';
-                    $buttonIcon = $isActive ? 'fa-ban' : 'fa-check';
-
-                    return "
-                        <span class='badge {$badgeClass}'>{$badgeText}</span>
-                        <button class='btn btn-sm {$buttonClass} ms-2'
-                                onclick='toggleTruckStatus({$truck->id})'>
-                            <i class='fa {$buttonIcon}'></i> {$buttonText}
-                        </button>
-                    ";
-                })
-                ->addColumn('actions', function ($truck) {
-                    $actions = [
-                        [
-                            'label' => 'Voir Détails',
-                            'href' => route('trucks.show-page', $truck->id),
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Modifier',
-                            'href' => route('trucks.edit-page', $truck->id),
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Checklist Rotation',
-                            'onclick' => 'showModal({
-                                title: "Checklist Maintenance - ' . $truck->matricule . '",
-                                route: "' . route('trucks.maintenances.create', $truck->id) . '",
-                                size: "md"
-                            })',
-                            'permission' => true
-                        ],
-                        [
-                            'label' => 'Supprimer',
-                            'onclick' => 'confirmDelete("' . route('trucks.destroy', $truck->id) . '")',
-                            'permission' => true
-                        ]
-                    ];
-                    return view('components.buttons.action', compact('actions'));
-                })
-                ->rawColumns(['actions', 'transporter_id', 'maintenance_due', 'is_active'])
-                ->make(true);
-        }
-
-        $actions = [
-            [
-                'label' => 'Ajouter Camion',
-                'url' => route('trucks.create-page'),
-                'permission' => true
-            ],
-            [
-                'label' => 'Changer Type Maintenance (Global)',
-                'onclick' => 'return bulkUpdateMaintenanceType(event)',
-                'permission' => true
-            ],
-            [
-                'label' => 'Changer Intervalle KM (Global)',
-                'onclick' => 'return bulkUpdateKmInterval(event)',
-                'permission' => true
-            ],
-            [
-                'label' => 'Exporter Maintenance (Excel)',
-                'url' => route('trucks.maintenance.export-excel'),
-                'permission' => true
-            ],
-            [
-                'label' => 'Exporter Maintenance (PDF)',
-                'url' => route('trucks.maintenance.export-pdf'),
-                'permission' => true
-            ],
-            [
-                'label' => 'Exporter Tous (Excel)',
-                'url' => route('trucks.maintenance.export-excel', ['only_due' => false]),
-                'permission' => true
-            ],
-            [
-                'label' => 'Exporter Tous (PDF)',
-                'url' => route('trucks.maintenance.export-pdf', ['only_due' => false]),
-                'permission' => true
-            ],
-        ];
+        $maintenanceDueTrucks = $trucks->filter(fn ($truck) => $truck->is_active && $truck->isMaintenanceDueByType());
 
         return \Inertia\Inertia::render('trucks/Index', [
             'trucks' => $trucks->map(fn ($t) => [
                 'id' => $t->id,
                 'matricule' => $t->matricule,
                 'transporter' => $t->transporter?->name,
+                'transporter_id' => $t->transporter_id,
+                'maintenance_type' => $t->maintenance_type,
+                'km_maintenance_interval' => $t->km_maintenance_interval !== null ? (float) $t->km_maintenance_interval : null,
+                'target_rotations_per_week' => $t->target_rotations_per_week,
                 'is_active' => (bool) $t->is_active,
                 'is_available' => (bool) $t->is_available,
                 'total_kilometers' => (float) $t->total_kilometers,
@@ -221,24 +75,9 @@ class TruckController extends Controller
                 'unit' => $t->maintenanceUnitByType(),
             ])->values(),
             'maintenanceDueCount' => $maintenanceDueTrucks->count(),
-        ]);
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        return $this->createPage();
-    }
-
-    public function createPage()
-    {
-        $transporters = Transporter::all()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]);
-        return \Inertia\Inertia::render('trucks/Create', [
-            'transporters' => $transporters,
-            'defaultTargetRotationsPerWeek' => app(\App\Services\FleetCapacityService::class)->defaultTargetRotationsPerWeek(),
-            'defaultCapacityTonnage' => app(\App\Services\FleetCapacityService::class)->defaultCapacityTonnage(),
+            'transporters' => Transporter::orderBy('name')->get()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name])->values(),
+            'defaultTargetRotationsPerWeek' => $this->fleetCapacity->defaultTargetRotationsPerWeek(),
+            'defaultCapacityTonnage' => $this->fleetCapacity->defaultCapacityTonnage(),
         ]);
     }
 
@@ -382,34 +221,6 @@ class TruckController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Truck $truck)
-    {
-        return $this->editPage($truck);
-    }
-
-    public function editPage(Truck $truck)
-    {
-        $transporters = Transporter::all()->map(fn ($t) => ['value' => $t->id, 'label' => $t->name]);
-        return \Inertia\Inertia::render('trucks/Edit', [
-            'truck' => [
-                'id' => $truck->id,
-                'matricule' => $truck->matricule,
-                'transporter_id' => $truck->transporter_id,
-                'maintenance_type' => $truck->maintenance_type,
-                'km_maintenance_interval' => $truck->km_maintenance_interval,
-                'capacity_tonnage' => $truck->capacity_tonnage,
-                'target_rotations_per_week' => $truck->target_rotations_per_week,
-                'is_active' => $truck->is_active,
-                'is_available' => (bool) $truck->is_available,
-            ],
-            'transporters' => $transporters,
-            'defaultTargetRotationsPerWeek' => $this->fleetCapacity->defaultTargetRotationsPerWeek(),
-            'defaultCapacityTonnage' => $this->fleetCapacity->defaultCapacityTonnage(),
-        ]);
-    }
 
     /**
      * Update the specified resource in storage.
@@ -578,45 +389,4 @@ class TruckController extends Controller
         return app(MaintenanceController::class)->updateProfileInterval($request, $truck);
     }
 
-    /**
-     * Live fleet map page — lists every active truck with its last known
-     * telemetry cache (no extra joins, everything is on the trucks table).
-     */
-    public function mapPage()
-    {
-        $trucks = Truck::query()
-            ->where('is_active', true)
-            ->orderBy('matricule')
-            ->get([
-                'id',
-                'matricule',
-                'fleeti_last_latitude',
-                'fleeti_last_longitude',
-                'fleeti_last_heading_deg',
-                'fleeti_last_speed_kmh',
-                'fleeti_last_movement_status',
-                'fleeti_last_ignition_on',
-                'fleeti_last_fuel_level',
-                'fleeti_last_synced_at',
-            ])
-            ->map(fn (Truck $t) => [
-                'id' => $t->id,
-                'matricule' => $t->matricule,
-                'latitude' => $t->fleeti_last_latitude !== null ? (float) $t->fleeti_last_latitude : null,
-                'longitude' => $t->fleeti_last_longitude !== null ? (float) $t->fleeti_last_longitude : null,
-                'heading' => $t->fleeti_last_heading_deg !== null ? (float) $t->fleeti_last_heading_deg : null,
-                'speed' => $t->fleeti_last_speed_kmh !== null ? (float) $t->fleeti_last_speed_kmh : null,
-                'movement_status' => $t->fleeti_last_movement_status,
-                'ignition_on' => $t->fleeti_last_ignition_on,
-                'fuel_level' => $t->fleeti_last_fuel_level !== null ? (float) $t->fleeti_last_fuel_level : null,
-                'last_sync' => $t->fleeti_last_synced_at?->format('d/m/Y H:i'),
-            ])
-            ->filter(fn ($t) => $t['latitude'] !== null && $t['longitude'] !== null)
-            ->values()
-            ->all();
-
-        return \Inertia\Inertia::render('logistics/FleetMap', [
-            'trucks' => $trucks,
-        ]);
-    }
 }

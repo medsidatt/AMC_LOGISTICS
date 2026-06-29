@@ -91,7 +91,7 @@ function NotificationStatusLine({ driver, isPast, canEdit }: { driver: DriverRow
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium">
                     <PhoneOff size={10} /> Pas de téléphone
                 </span>
-                <Link href={`/drivers/${driver.id}/edit`} className="text-[var(--color-primary)] hover:underline">
+                <Link href={`/drivers?edit=${driver.id}`} className="text-[var(--color-primary)] hover:underline">
                     Modifier
                 </Link>
             </div>
@@ -104,7 +104,7 @@ function NotificationStatusLine({ driver, isPast, canEdit }: { driver: DriverRow
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 font-medium">
                     <ShieldOff size={10} /> Sans consentement
                 </span>
-                <Link href={`/drivers/${driver.id}/edit`} className="text-[var(--color-primary)] hover:underline">
+                <Link href={`/drivers?edit=${driver.id}`} className="text-[var(--color-primary)] hover:underline">
                     Modifier
                 </Link>
             </div>

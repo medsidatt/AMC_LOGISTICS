@@ -32,7 +32,6 @@ class CronController extends Controller
         '* 6-7 * * *'        => [['fleeti:sync-live-dispatch', ['--cadence' => 1]]],
         '*/2 5,8-22 * * *'   => [['fleeti:sync-live-dispatch', ['--cadence' => 2]]],
         '*/5 0-4,23 * * *'   => [['fleeti:sync-live-dispatch', ['--cadence' => 5]]],
-        '*/2 5-22 * * *'     => [['fleeti:sync-fleet-positions', []]],
         '0 23 * * *'         => [['logistics:reconcile-expected-tickets', []]],
     ];
 
@@ -43,7 +42,6 @@ class CronController extends Controller
     private const JOBS = [
         'fleeti-sync' => 'fleeti:sync-kilometers',
         'fleeti-sync-live' => 'fleeti:sync-live-dispatch',
-        'fleeti-sync-fleet-positions' => 'fleeti:sync-fleet-positions',
         'notify-due-engine-maintenance' => 'logistics:notify-due-engine-maintenance',
         'notify-missing-weekly-checklists' => 'logistics:notify-missing-weekly-checklists',
         'telemetry-compact' => 'telemetry:compact',
