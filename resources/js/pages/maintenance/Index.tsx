@@ -1,353 +1,299 @@
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import FormInput from '@/components/ui/FormInput';
-import Modal from '@/components/ui/Modal';
+import Badge from '@/components/ui/Badge';
+import PageHeader from '@/components/ui/PageHeader';
+import Tabs from '@/components/ui/Tabs';
+import Pagination from '@/components/ui/Pagination';
+import EmptyState from '@/components/ui/EmptyState';
+import FormSelect from '@/components/ui/FormSelect';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
-import { Wrench, AlertTriangle, CheckCircle2, Search, ShieldCheck, Receipt, FileText } from 'lucide-react';
-import MaintenanceTabs from '@/components/maintenance/MaintenanceTabs';
-import { usePermission } from '@/hooks/usePermission';
+import MaintenanceRecordDrawer from './components/MaintenanceRecordDrawer';
+import MaintenanceDetailsDrawer from './components/MaintenanceDetailsDrawer';
+import TruckMaintenanceDrawer from './components/TruckMaintenanceDrawer';
+import RuleDrawer from './components/RuleDrawer';
 import { clsx } from 'clsx';
+import { Wrench, AlertTriangle, CheckCircle2, Search, Eye, FileText, ShieldAlert, Plus, Ban, History as HistoryIcon } from 'lucide-react';
+import { usePermission } from '@/hooks/usePermission';
+import type { BoardTruck, MaintenanceRecord, RuleProfile, MaintenanceRefs, MaintenanceTypeOpt } from './types';
 
-interface Profile {
-    type: string;
-    interval_km: number;
-    next_km: number;
-    remaining: number;
-    status: string;
-}
-
-interface InspectionIssue {
-    id: number;
-    category: string;
-    severity: string;
-    issue_notes: string | null;
-    inspection_date: string | null;
-    parts_cost: string | null;
-    labor_cost: string | null;
-    total_cost: string | null;
-    devis_url: string | null;
-    devis_name: string | null;
-}
-
-interface TruckRow {
-    id: number;
-    matricule: string;
-    total_kilometers: number;
-    maintenance_type: string;
-    profiles: Profile[];
-    overall_status: string;
-    open_issues: number;
-    open_inspection_issues: number;
-    inspection_issues: InspectionIssue[];
-}
-
-interface MaintenanceType {
-    value: string;
-    label: string;
-}
+type Paginator<T> = { data: T[]; current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null };
 
 interface Props {
-    trucks: TruckRow[];
-    counts: { overdue: number; warning: number; ok: number };
-    maintenanceTypes: MaintenanceType[];
+    tab: 'board' | 'history' | 'rules';
     oilTypes: Record<string, string>;
     oilIntervals: Record<string, number>;
     componentStatuses: Record<string, string>;
     itemCategories: Record<string, string>;
     itemUnits: Record<string, string>;
+    controlChecks: Record<string, string>;
+    maintenanceTypes: MaintenanceTypeOpt[];
+    trucks: any[]; // board: BoardTruck[]; history/rules: {id,matricule}[]
+    counts?: { overdue: number; warning: number; ok: number };
+    maintenances?: Paginator<MaintenanceRecord>;
+    filters?: Record<string, string>;
+    canApprove?: boolean;
+    canEdit?: boolean;
+    currentUserName?: string;
+    profiles?: Paginator<RuleProfile>;
 }
 
-const SEVERITY_VARIANT: Record<string, 'default' | 'warning' | 'danger'> = {
-    minor: 'default',
-    major: 'warning',
-    critical: 'danger',
-};
+const TAB_URL: Record<string, string> = { board: '/maintenance', history: '/maintenance/history', rules: '/maintenance/rules' };
 
-export default function MaintenanceIndex({ trucks, counts }: Props) {
-    const [filter, setFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
-    const [search, setSearch] = useState('');
-    const [issuesTruck, setIssuesTruck] = useState<TruckRow | null>(null);
-    const [costIssue, setCostIssue] = useState<InspectionIssue | null>(null);
+export default function MaintenanceWorkspace(props: Props) {
+    const { tab, maintenanceTypes, trucks, counts, maintenances, filters = {}, canApprove = false, canEdit = false, currentUserName = '', profiles } = props;
+    const refs: MaintenanceRefs = { oilTypes: props.oilTypes, oilIntervals: props.oilIntervals, componentStatuses: props.componentStatuses, itemCategories: props.itemCategories, itemUnits: props.itemUnits, controlChecks: props.controlChecks };
     const { can } = usePermission();
     const canRecord = can('maintenance-create');
+    const canRule = can('maintenance-create');
 
-    const costForm = useForm<Record<string, any>>({
-        parts_cost: '',
-        labor_cost: '',
-        devis: null as File | null,
-    });
+    // board state
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'red' | 'yellow' | 'green'>('all');
+    const [detailsTruck, setDetailsTruck] = useState<BoardTruck | null>(null);
+    // history state
+    const [detailsRecord, setDetailsRecord] = useState<MaintenanceRecord | null>(null);
+    // shared record drawer
+    const [recordState, setRecordState] = useState<{ mode: 'create'; truck: BoardTruck } | { mode: 'edit'; record: MaintenanceRecord } | null>(null);
+    // rules state
+    const [ruleOpen, setRuleOpen] = useState(false);
+    const [deactivateId, setDeactivateId] = useState<number | null>(null);
 
-    const fcfa = (v: string | null) =>
-        v == null || v === '' ? null : `${Number(v).toLocaleString('fr-FR')} FCFA`;
+    const goTab = (key: string) => router.get(TAB_URL[key], key === 'history' ? filters : {}, { preserveScroll: true });
 
-    const openCost = (issue: InspectionIssue) => {
-        setCostIssue(issue);
-        costForm.setData({
-            parts_cost: issue.parts_cost ?? '',
-            labor_cost: issue.labor_cost ?? '',
-            devis: null,
-        });
-        costForm.clearErrors();
-    };
-
-    const costTotal = () => {
-        const p = Number(costForm.data.parts_cost) || 0;
-        const l = Number(costForm.data.labor_cost) || 0;
-        return p + l;
-    };
-
-    const submitCost = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!costIssue) return;
-        costForm.post(`/maintenance/issues/${costIssue.id}/cost`, {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => {
-                setCostIssue(null);
-                setIssuesTruck(null);
-            },
-        });
-    };
-
-    const filtered = trucks.filter((t) => {
-        if (filter !== 'all' && t.overall_status !== filter) return false;
-        if (search && !t.matricule.toLowerCase().includes(search.toLowerCase())) return false;
-        return true;
-    });
-
-    const openRecord = (truck: TruckRow) => router.visit(`/maintenance/${truck.id}/record`);
-
-    const statusBadge = (status: string) => {
+    const statusBadge = (status?: string) => {
         const v = status === 'red' ? 'danger' : status === 'yellow' ? 'warning' : 'success';
         const l = status === 'red' ? 'Urgent' : status === 'yellow' ? 'Bientôt' : 'OK';
         return <Badge variant={v}>{l}</Badge>;
     };
 
+    const applyHistoryFilter = (key: string, value: string | number | null) => {
+        const next = { ...filters, [key]: value ? String(value) : '' };
+        Object.keys(next).forEach((k) => { if (!next[k]) delete next[k]; });
+        router.get('/maintenance/history', next, { preserveState: true, preserveScroll: true });
+    };
+
+    const headerActions = tab === 'rules' && canRule
+        ? <Button icon={<Plus size={16} />} onClick={() => setRuleOpen(true)}>Nouvelle règle</Button>
+        : undefined;
+
     return (
         <AuthenticatedLayout title="Maintenance">
             <Head title="Maintenance" />
 
-            <MaintenanceTabs />
+            <PageHeader icon={<Wrench size={22} className="text-[var(--color-primary)]" />} title="Maintenance" actions={headerActions} />
 
-            <KpiGrid>
-                <KpiCard label="Urgent" value={counts.overdue} icon={<AlertTriangle size={22} />} color="var(--color-danger)" />
-                <KpiCard label="A prévoir" value={counts.warning} icon={<Wrench size={22} />} color="var(--color-warning)" />
-                <KpiCard label="OK" value={counts.ok} icon={<CheckCircle2 size={22} />} color="var(--color-success)" />
-            </KpiGrid>
+            <Tabs
+                active={tab}
+                onChange={goTab}
+                className="mb-4"
+                tabs={[
+                    { key: 'board', label: 'État du parc', icon: <Wrench size={15} /> },
+                    { key: 'history', label: 'Historique', icon: <HistoryIcon size={15} /> },
+                    { key: 'rules', label: 'Règles', icon: <ShieldAlert size={15} /> },
+                ]}
+            />
 
-            <Card className="mt-6" padding={false}>
-                <div className="p-5">
-                    <div className="flex flex-wrap items-center gap-3 mb-4">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-                            <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher par matricule..."
-                                className="w-full pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition" />
-                        </div>
-                        <div className="flex gap-1">
-                            {(['all', 'red', 'yellow', 'green'] as const).map((f) => (
-                                <button key={f} onClick={() => setFilter(f)}
-                                    className={clsx('px-3 py-2 rounded-lg text-xs font-medium transition', filter === f ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]')}>
-                                    {f === 'all' ? `Tous (${trucks.length})` : f === 'red' ? `Urgent (${counts.overdue})` : f === 'yellow' ? `A prévoir (${counts.warning})` : `OK (${counts.ok})`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+            {/* ───────── BOARD ───────── */}
+            {tab === 'board' && (() => {
+                const rows = (trucks as BoardTruck[]).filter((t) => {
+                    if (statusFilter !== 'all' && t.overall_status !== statusFilter) return false;
+                    if (search && !t.matricule.toLowerCase().includes(search.toLowerCase())) return false;
+                    return true;
+                });
+                return (
+                    <>
+                        <KpiGrid>
+                            <KpiCard label="Urgent" value={counts?.overdue ?? 0} icon={<AlertTriangle size={22} />} color="var(--color-danger)" />
+                            <KpiCard label="À prévoir" value={counts?.warning ?? 0} icon={<Wrench size={22} />} color="var(--color-warning)" />
+                            <KpiCard label="OK" value={counts?.ok ?? 0} icon={<CheckCircle2 size={22} />} color="var(--color-success)" />
+                        </KpiGrid>
 
-                    <div className="hidden md:block overflow-x-auto rounded-lg border border-[var(--color-border)]">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-[var(--color-surface-hover)]">
-                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Compteur</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">État</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Km restant</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Checklist</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Inspection</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[var(--color-border)]">
-                                {filtered.length === 0 ? (
-                                    <tr><td colSpan={7} className="px-4 py-12 text-center text-[var(--color-text-muted)]">
-                                        <Wrench size={32} className="mx-auto mb-2 opacity-30" />
-                                        Aucun camion trouvé
-                                    </td></tr>
-                                ) : filtered.map((truck) => {
-                                    const general = truck.profiles.find((p) => p.type === 'general');
-                                    return (
-                                        <tr key={truck.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
-                                            <td className="px-4 py-3">
-                                                <a href={`/trucks/${truck.id}/show-page`} className="text-[var(--color-primary)] hover:underline font-medium">{truck.matricule}</a>
-                                            </td>
-                                            <td className="px-4 py-3 text-right font-mono text-[var(--color-text)]">{truck.total_kilometers?.toLocaleString('fr-FR')} km</td>
-                                            <td className="px-4 py-3 text-center">
-                                                {general ? statusBadge(general.status) : <Badge variant="muted">N/A</Badge>}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-[var(--color-text)]">
-                                                {general ? (
-                                                    <span className={clsx('font-mono', general.status === 'red' ? 'text-red-600 font-bold' : general.status === 'yellow' ? 'text-amber-600' : '')}>
-                                                        {general.remaining?.toLocaleString('fr-FR')} km
-                                                    </span>
-                                                ) : '-'}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {truck.open_issues > 0 ? <Badge variant="warning">{truck.open_issues}</Badge> : <span className="text-[var(--color-text-muted)]">0</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {truck.open_inspection_issues > 0 ? (
-                                                    <button type="button" onClick={() => setIssuesTruck(truck)} title="Coûts / devis des findings">
-                                                        <Badge variant="danger">{truck.open_inspection_issues}</Badge>
-                                                    </button>
-                                                ) : <span className="text-[var(--color-text-muted)]">0</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {canRecord ? (
-                                                    <Button size="sm" onClick={() => openRecord(truck)}>
-                                                        <Wrench size={14} className="mr-1" /> Maintenance
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-[var(--color-text-muted)]">—</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div className="md:hidden space-y-3">
-                        {filtered.length === 0 ? (
-                            <div className="text-center py-12 text-[var(--color-text-muted)]">
-                                <Wrench size={32} className="mx-auto mb-2 opacity-30" />
-                                Aucun camion trouvé
-                            </div>
-                        ) : filtered.map((truck) => {
-                            const general = truck.profiles.find((p) => p.type === 'general');
-                            return (
-                                <div key={truck.id} className="rounded-xl border border-[var(--color-border)] p-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <a href={`/trucks/${truck.id}/show-page`} className="text-[var(--color-primary)] font-semibold">{truck.matricule}</a>
-                                        {general ? statusBadge(general.status) : <Badge variant="muted">N/A</Badge>}
+                        <Card className="mt-6" padding={false}>
+                            <div className="p-5">
+                                <div className="flex flex-wrap items-center gap-3 mb-4">
+                                    <div className="relative flex-1 min-w-[200px]">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                                        <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher par matricule..."
+                                            className="w-full pl-9 pr-4 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition" />
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                                        <div>
-                                            <span className="text-xs text-[var(--color-text-muted)]">Compteur</span>
-                                            <p className="font-mono text-[var(--color-text)]">{truck.total_kilometers?.toLocaleString('fr-FR')} km</p>
-                                        </div>
-                                        <div>
-                                            <span className="text-xs text-[var(--color-text-muted)]">Restant</span>
-                                            <p className="font-mono text-[var(--color-text)]">{general ? `${general.remaining?.toLocaleString('fr-FR')} km` : '-'}</p>
-                                        </div>
-                                        {truck.open_inspection_issues > 0 && (
-                                            <button type="button" onClick={() => setIssuesTruck(truck)} className="col-span-2 flex items-center gap-2 text-left">
-                                                <ShieldCheck size={14} className="text-red-500" />
-                                                <span className="text-xs"><Badge variant="danger">{truck.open_inspection_issues}</Badge> findings d'inspection — coûts / devis</span>
+                                    <div className="flex gap-1">
+                                        {(['all', 'red', 'yellow', 'green'] as const).map((f) => (
+                                            <button key={f} onClick={() => setStatusFilter(f)} className={clsx('px-3 py-2 rounded-lg text-xs font-medium transition', statusFilter === f ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]')}>
+                                                {f === 'all' ? `Tous (${(trucks as BoardTruck[]).length})` : f === 'red' ? `Urgent (${counts?.overdue ?? 0})` : f === 'yellow' ? `À prévoir (${counts?.warning ?? 0})` : `OK (${counts?.ok ?? 0})`}
                                             </button>
-                                        )}
+                                        ))}
                                     </div>
-                                    {canRecord && (
-                                        <Button size="sm" className="w-full" onClick={() => openRecord(truck)}>
-                                            <Wrench size={14} className="mr-1" /> Enregistrer maintenance
-                                        </Button>
-                                    )}
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </Card>
 
-            <Modal open={!!issuesTruck} onClose={() => setIssuesTruck(null)} title={`Findings d'inspection — ${issuesTruck?.matricule ?? ''}`}>
-                <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                    {issuesTruck?.inspection_issues.length ? issuesTruck.inspection_issues.map((issue) => (
-                        <div key={issue.id} className="rounded-lg border border-[var(--color-border)] p-3">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                    <span className="font-medium">{issue.category}</span>
-                                    {' '}<Badge variant={SEVERITY_VARIANT[issue.severity] ?? 'default'}>{issue.severity}</Badge>
-                                    {issue.issue_notes && <span className="block text-xs text-[var(--color-text-muted)]">{issue.issue_notes}</span>}
-                                    <span className="block text-xs text-[var(--color-text-muted)]">Inspection du {issue.inspection_date}</span>
-                                    <div className="mt-1 flex flex-wrap items-center gap-3 text-xs">
-                                        {fcfa(issue.total_cost) ? (
-                                            <span className="font-semibold text-[var(--color-text)]">Coût : {fcfa(issue.total_cost)}</span>
-                                        ) : (
-                                            <span className="text-[var(--color-text-muted)]">Aucun coût enregistré</span>
-                                        )}
-                                        {issue.devis_url && (
-                                            <a href={issue.devis_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:underline">
-                                                <FileText size={12} /> Devis
-                                            </a>
-                                        )}
+                                {rows.length === 0 ? (
+                                    <EmptyState icon={<Wrench size={28} />} title="Aucun camion trouvé" />
+                                ) : (
+                                    <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                                        <table className="w-full text-sm">
+                                            <thead><tr className="bg-[var(--color-surface-hover)]">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
+                                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Compteur</th>
+                                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">État</th>
+                                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Km restant</th>
+                                                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Inspection</th>
+                                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
+                                            </tr></thead>
+                                            <tbody className="divide-y divide-[var(--color-border)]">
+                                                {rows.map((truck) => {
+                                                    const general = truck.profiles.find((p) => p.type === 'general');
+                                                    return (
+                                                        <tr key={truck.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                                            <td className="px-4 py-3 font-medium">{truck.matricule}</td>
+                                                            <td className="px-4 py-3 text-right font-mono">{truck.total_kilometers?.toLocaleString('fr-FR')} km</td>
+                                                            <td className="px-4 py-3 text-center">{general ? statusBadge(general.status) : <Badge variant="muted">N/A</Badge>}</td>
+                                                            <td className="px-4 py-3 text-right">{general ? <span className={clsx('font-mono', general.status === 'red' ? 'text-red-600 font-bold' : general.status === 'yellow' ? 'text-amber-600' : '')}>{general.remaining?.toLocaleString('fr-FR')} km</span> : '-'}</td>
+                                                            <td className="px-4 py-3 text-center">{truck.open_inspection_issues > 0 ? <Badge variant="danger">{truck.open_inspection_issues}</Badge> : <span className="text-[var(--color-text-muted)]">0</span>}</td>
+                                                            <td className="px-4 py-3 text-right">
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    <Button size="sm" variant="secondary" icon={<Eye size={14} />} onClick={() => setDetailsTruck(truck)}>Détails</Button>
+                                                                    {canRecord && <Button size="sm" icon={<Wrench size={14} />} onClick={() => setRecordState({ mode: 'create', truck })}>Maintenance</Button>}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                </div>
-                                {canRecord && (
-                                    <Button size="sm" variant="secondary" type="button" onClick={() => openCost(issue)}>
-                                        <Receipt size={14} className="mr-1" /> Coût / Devis
-                                    </Button>
                                 )}
                             </div>
+                        </Card>
+                    </>
+                );
+            })()}
+
+            {/* ───────── HISTORY ───────── */}
+            {tab === 'history' && maintenances && (
+                <>
+                    <Card className="mb-4">
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            <FormSelect label="Camion" placeholder="Tous" options={(trucks as { id: number; matricule: string }[]).map((t) => ({ value: t.id, label: t.matricule }))} value={filters.truck_id ?? null} onChange={(v) => applyHistoryFilter('truck_id', v)} wrapperClass="mb-0" />
+                            <FormSelect label="Type" placeholder="Tous" options={maintenanceTypes} value={filters.maintenance_type ?? null} onChange={(v) => applyHistoryFilter('maintenance_type', v)} wrapperClass="mb-0" />
                         </div>
-                    )) : (
-                        <p className="text-center py-8 text-[var(--color-text-muted)]">Aucun finding ouvert.</p>
-                    )}
-                </div>
-            </Modal>
+                    </Card>
+                    <Card padding={false}>
+                        <div className="p-5">
+                            {maintenances.data.length === 0 ? (
+                                <EmptyState icon={<HistoryIcon size={28} />} title="Aucune maintenance enregistrée" />
+                            ) : (
+                                <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                                    <table className="w-full text-sm">
+                                        <thead><tr className="bg-[var(--color-surface-hover)]">
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Date</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Statut</th>
+                                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Signée par</th>
+                                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
+                                        </tr></thead>
+                                        <tbody className="divide-y divide-[var(--color-border)]">
+                                            {maintenances.data.map((m) => (
+                                                <tr key={m.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                                    <td className="px-4 py-3 whitespace-nowrap">{m.maintenance_date}</td>
+                                                    <td className="px-4 py-3 font-medium">{m.truck} <span className="text-xs text-[var(--color-text-muted)] font-mono">· {Number(m.kilometers_at_maintenance).toLocaleString('fr-FR')} km</span></td>
+                                                    <td className="px-4 py-3">{m.status === 'approved' ? <Badge variant="success">Signée</Badge> : <Badge variant="warning">En attente</Badge>}</td>
+                                                    <td className="px-4 py-3">{m.signed_by ?? <span className="text-[var(--color-text-muted)]">—</span>}</td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Button size="sm" variant="secondary" icon={<Eye size={14} />} onClick={() => setDetailsRecord(m)}>Voir</Button>
+                                                            <a href={`/maintenance/${m.id}/pdf`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-text-secondary)]"><FileText size={14} /> PDF</a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-5 pb-5"><Pagination meta={maintenances} /></div>
+                    </Card>
+                </>
+            )}
 
-            <Modal open={!!costIssue} onClose={() => setCostIssue(null)} title={`Coût du finding — ${costIssue?.category ?? ''}`}>
-                <form onSubmit={submitCost} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <FormInput
-                            label="Pièces (FCFA)"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={costForm.data.parts_cost}
-                            onChange={(e) => costForm.setData('parts_cost', e.target.value)}
-                            error={costForm.errors.parts_cost}
-                        />
-                        <FormInput
-                            label="Main d'œuvre (FCFA)"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={costForm.data.labor_cost}
-                            onChange={(e) => costForm.setData('labor_cost', e.target.value)}
-                            error={costForm.errors.labor_cost}
-                        />
-                    </div>
-
-                    <div className="text-sm font-semibold text-[var(--color-text)]">
-                        Total : {costTotal().toLocaleString('fr-FR')} FCFA
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1">Devis (PDF ou image, optionnel)</label>
-                        <input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp"
-                            onChange={(e) => costForm.setData('devis', e.target.files?.[0] ?? null)}
-                            className="block w-full text-sm text-[var(--color-text)] file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-[var(--color-surface-hover)] file:text-[var(--color-text-secondary)]"
-                        />
-                        {costForm.errors.devis && <p className="mt-1 text-xs text-red-600">{costForm.errors.devis}</p>}
-                        {costIssue?.devis_url && !costForm.data.devis && (
-                            <a href={costIssue.devis_url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline">
-                                <FileText size={12} /> Devis actuel{costIssue.devis_name ? ` — ${costIssue.devis_name}` : ''}
-                            </a>
+            {/* ───────── RULES ───────── */}
+            {tab === 'rules' && profiles && (
+                <Card padding={false}>
+                    <div className="p-5">
+                        {profiles.data.length === 0 ? (
+                            <EmptyState icon={<ShieldAlert size={28} />} title="Aucune règle" description="Créez une règle d'intervalle de maintenance." />
+                        ) : (
+                            <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+                                <table className="w-full text-sm">
+                                    <thead><tr className="bg-[var(--color-surface-hover)]">
+                                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Camion</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Type</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Intervalle</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Seuil</th>
+                                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Active</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-[var(--color-text-secondary)]">Actions</th>
+                                    </tr></thead>
+                                    <tbody className="divide-y divide-[var(--color-border)]">
+                                        {profiles.data.map((p) => (
+                                            <tr key={p.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
+                                                <td className="px-4 py-3 font-medium">{p.truck ?? '—'}</td>
+                                                <td className="px-4 py-3 capitalize">{p.maintenance_type}</td>
+                                                <td className="px-4 py-3 text-right font-mono">{p.interval_km?.toLocaleString('fr-FR')} km</td>
+                                                <td className="px-4 py-3 text-right font-mono">{p.warning_threshold_km != null ? `${p.warning_threshold_km.toLocaleString('fr-FR')} km` : '—'}</td>
+                                                <td className="px-4 py-3 text-center">{p.is_active ? <Badge variant="success">Oui</Badge> : <Badge variant="muted">Non</Badge>}</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    {p.is_active && canRule && <Button size="sm" variant="ghost" icon={<Ban size={14} />} onClick={() => setDeactivateId(p.id)}>Désactiver</Button>}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
+                    <div className="px-5 pb-5"><Pagination meta={profiles} /></div>
+                </Card>
+            )}
 
-                    <div className="flex justify-end gap-2 mt-4">
-                        <Button variant="secondary" type="button" onClick={() => setCostIssue(null)}>Annuler</Button>
-                        <Button type="submit" loading={costForm.processing}>Enregistrer</Button>
-                    </div>
-                </form>
-            </Modal>
+            {/* ───────── DRAWERS ───────── */}
+            {detailsTruck && (
+                <TruckMaintenanceDrawer truck={detailsTruck} canRecord={canRecord} onRecord={() => { const t = detailsTruck; setDetailsTruck(null); setRecordState({ mode: 'create', truck: t }); }} onClose={() => setDetailsTruck(null)} />
+            )}
+
+            {detailsRecord && (
+                <MaintenanceDetailsDrawer
+                    record={detailsRecord} refs={refs} canEdit={canEdit} canApprove={canApprove} currentUserName={currentUserName}
+                    onEdit={() => { const r = detailsRecord; setDetailsRecord(null); setRecordState({ mode: 'edit', record: r }); }}
+                    onClose={() => setDetailsRecord(null)}
+                />
+            )}
+
+            {recordState && (
+                <MaintenanceRecordDrawer
+                    key={recordState.mode === 'edit' ? `edit-${recordState.record.id}` : `create-${recordState.truck.id}`}
+                    mode={recordState.mode} refs={refs}
+                    truck={recordState.mode === 'create' ? recordState.truck : null}
+                    record={recordState.mode === 'edit' ? recordState.record : null}
+                    onClose={() => setRecordState(null)}
+                />
+            )}
+
+            {ruleOpen && (
+                <RuleDrawer trucks={(trucks as { id: number; matricule: string }[])} maintenanceTypes={maintenanceTypes} onClose={() => setRuleOpen(false)} />
+            )}
+
+            <ConfirmDialog
+                open={deactivateId !== null}
+                onClose={() => setDeactivateId(null)}
+                title="Désactiver la règle ?"
+                message="Cette règle d'intervalle ne sera plus utilisée pour calculer les échéances."
+                confirmLabel="Désactiver"
+                onConfirm={() => { if (deactivateId) router.post(`/maintenance/rules/${deactivateId}/deactivate`, {}, { preserveScroll: true, onFinish: () => setDeactivateId(null) }); }}
+            />
         </AuthenticatedLayout>
     );
 }

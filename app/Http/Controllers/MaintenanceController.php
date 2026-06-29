@@ -40,7 +40,7 @@ class MaintenanceController extends Controller
         // Write endpoints (single + bulk)
         $this->middleware('permission:maintenance-create', [
             'only' => [
-                'create', 'store', 'recordForm', 'recordMaintenance', 'bulkStore',
+                'create', 'store', 'recordMaintenance', 'bulkStore',
                 'updateType', 'bulkUpdateType', 'bulkUpdateKmInterval', 'updateProfileInterval',
                 'updateIssueCost',
             ],
@@ -390,6 +390,7 @@ class MaintenanceController extends Controller
         ])->values();
 
         return Inertia::render('maintenance/Index', [
+            'tab' => 'board',
             'trucks' => $trucks,
             'counts' => $counts,
             'maintenanceTypes' => $maintenanceTypes,
@@ -398,6 +399,7 @@ class MaintenanceController extends Controller
             'componentStatuses' => Maintenance::COMPONENT_STATUSES,
             'itemCategories' => MaintenanceItem::CATEGORIES,
             'itemUnits' => MaintenanceItem::UNITS,
+            'controlChecks' => Maintenance::CONTROL_CHECKS,
         ]);
     }
 
@@ -426,10 +428,17 @@ class MaintenanceController extends Controller
             'label' => $cfg['label'] ?? $key,
         ])->values();
 
-        return Inertia::render('maintenance/Rules', [
+        return Inertia::render('maintenance/Index', [
+            'tab' => 'rules',
             'profiles' => $profiles,
             'trucks' => $trucks,
             'maintenanceTypes' => $maintenanceTypes,
+            'oilTypes' => Maintenance::OIL_TYPES,
+            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
+            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
+            'itemCategories' => MaintenanceItem::CATEGORIES,
+            'itemUnits' => MaintenanceItem::UNITS,
+            'controlChecks' => Maintenance::CONTROL_CHECKS,
         ]);
     }
 
@@ -574,52 +583,6 @@ class MaintenanceController extends Controller
      * Full-page maintenance record form for a single truck (replaces the
      * cramped modal). Submits to recordMaintenance (POST same URI).
      */
-    public function recordForm(Truck $truck)
-    {
-        $truck->load(['maintenanceProfiles' => fn ($q) => $q->active()]);
-
-        $inspectionIssues = InspectionChecklistIssue::query()
-            ->where('flagged', true)
-            ->whereNull('resolved_at')
-            ->join('inspection_checklists', 'inspection_checklists.id', '=', 'inspection_checklist_issues.inspection_checklist_id')
-            ->where('inspection_checklists.truck_id', $truck->id)
-            ->orderByDesc('inspection_checklists.inspection_date')
-            ->get([
-                'inspection_checklist_issues.id',
-                'inspection_checklist_issues.category',
-                'inspection_checklist_issues.severity',
-                'inspection_checklist_issues.issue_notes',
-                'inspection_checklists.inspection_date',
-            ])
-            ->map(fn ($i) => [
-                'id' => $i->id,
-                'category' => $i->category,
-                'severity' => $i->severity,
-                'issue_notes' => $i->issue_notes,
-                'inspection_date' => $i->inspection_date,
-            ])
-            ->values();
-
-        return Inertia::render('maintenance/Record', [
-            'truck' => [
-                'id' => $truck->id,
-                'matricule' => $truck->matricule,
-                'total_kilometers' => $truck->total_kilometers,
-                'profiles' => $truck->maintenanceProfiles->map(fn ($p) => [
-                    'type' => $p->maintenance_type,
-                    'interval_km' => $p->interval_km,
-                ])->values(),
-                'inspection_issues' => $inspectionIssues,
-            ],
-            'oilTypes' => Maintenance::OIL_TYPES,
-            'oilIntervals' => Maintenance::OIL_INTERVAL_KM,
-            'componentStatuses' => Maintenance::COMPONENT_STATUSES,
-            'itemCategories' => MaintenanceItem::CATEGORIES,
-            'itemUnits' => MaintenanceItem::UNITS,
-            'controlChecks' => Maintenance::CONTROL_CHECKS,
-        ]);
-    }
-
     public function recordMaintenance(Request $request, Truck $truck)
     {
         $data = $request->validate($this->maintenanceFieldRules());
@@ -951,7 +914,8 @@ class MaintenanceController extends Controller
         $canApprove = $user?->can('maintenance-approve') ?? false;
         $canEdit = $user?->can('maintenance-edit') ?? false;
 
-        return Inertia::render('maintenance/History', [
+        return Inertia::render('maintenance/Index', [
+            'tab' => 'history',
             'maintenances' => $maintenances,
             'trucks' => $trucks,
             'maintenanceTypes' => $maintenanceTypes,
