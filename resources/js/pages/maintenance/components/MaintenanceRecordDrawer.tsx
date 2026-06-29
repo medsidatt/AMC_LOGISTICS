@@ -63,7 +63,7 @@ export default function MaintenanceRecordDrawer({ mode, refs, truck, record, onC
                 dashboard_photo: null as File | null,
                 facture: null as File | null,
                 items: (record.items ?? []).map((it): LineItem => ({
-                    designation: it.designation, reference: it.reference ?? '', category: it.category ?? 'piece',
+                    designation: it.designation, product_id: it.product_id ?? null, reference: it.reference ?? '', category: it.category ?? 'piece',
                     unit: it.unit ?? 'piece', quantity: it.quantity != null ? String(it.quantity) : '', unit_price: it.unit_price != null ? String(it.unit_price) : '',
                 })),
                 control_checks: { ...(record.control_checks ?? {}) },

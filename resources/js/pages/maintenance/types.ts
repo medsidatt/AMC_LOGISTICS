@@ -33,6 +33,7 @@ export interface BoardTruck {
 
 export interface MaintenanceLineItem {
     designation: string;
+    product_id?: number | null;
     reference: string | null;
     category: string;
     unit: string;

@@ -1,8 +1,10 @@
 import { Plus, Trash2, Paperclip, FileText } from 'lucide-react';
 import SectionTitle from '@/components/ui/SectionTitle';
+import ProductSelector from '@/components/products/ProductSelector';
 
 export interface LineItem {
     designation: string;
+    product_id: number | null;
     reference: string;
     category: string;
     quantity: string;
@@ -11,7 +13,7 @@ export interface LineItem {
 }
 
 export function blankLineItem(): LineItem {
-    return { designation: '', reference: '', category: 'piece', quantity: '1', unit: 'piece', unit_price: '' };
+    return { designation: '', product_id: null, reference: '', category: 'piece', quantity: '1', unit: 'piece', unit_price: '' };
 }
 
 /** Sensible default unit for a category (oil is billed in litres). */
@@ -87,17 +89,15 @@ export default function MaintenanceItemsField({
                             className="grid grid-cols-2 md:grid-cols-[1.7fr_1.1fr_0.7fr_0.9fr_1fr_1fr_auto] gap-2 items-center rounded-lg border border-[var(--color-border)] md:border-0 p-2 md:p-0"
                         >
                             <div className="col-span-2 md:col-span-1">
-                                <input
-                                    type="text"
-                                    className={inputCls}
-                                    placeholder="Désignation"
-                                    value={it.designation}
-                                    disabled={disabled}
-                                    onChange={(e) => update(idx, { designation: e.target.value })}
+                                <ProductSelector
+                                    value={it.product_id}
+                                    displayName={it.designation}
+                                    onChange={(id, p) => update(idx, { product_id: id, designation: p?.name ?? (id == null ? '' : it.designation) })}
+                                    categories={catKeys.map((k) => ({ value: k, label: categories[k] }))}
+                                    units={unitKeys.map((k) => ({ value: k, label: units[k] }))}
+                                    placeholder="Produit…"
+                                    error={errors?.[`items.${idx}.designation`]}
                                 />
-                                {errors?.[`items.${idx}.designation`] && (
-                                    <p className="mt-0.5 text-xs text-red-600">{errors[`items.${idx}.designation`]}</p>
-                                )}
                             </div>
 
                             <select

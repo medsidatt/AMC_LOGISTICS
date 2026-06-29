@@ -10,15 +10,10 @@
 ---
 
 ## Current Focus
-**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp)** — on `main`, **Waiting for Production Validation**. **Step 2 (SharePoint upload)** — **implemented + locally verified** on `feature/production-phase2-sharepoint` (local-first + `sync_status` lifecycle); awaiting `merge → develop`. Deployment to `main` gated on Step 1 approval.
-
-**Step 3 (SharePoint pattern extension)** — **implemented + locally verified** on `feature/production-phase3-sharepoint-extension` (branched off Step 2). Driver + Maintenance `Document` devis uploads now reuse the local-first pattern via `Document::storeLocalAndQueueSync()`. Audit finding: Inspection attachment + Maintenance *facture* store on the parent model (not a `Document`) → out of clean-reuse scope (need a schema change; see backlog).
+**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch)** — code on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2 — SharePoint Background Upload** — Architecture Review (development may continue; deployment gated on Step 1 approval).
 
 ## Next Phase
-Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
-
-## Standard integration pattern (platform rule)
-Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
+Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return immediately → queue the SharePoint sync). Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI analysis deferred → P1.5.)
 
 ---
 
@@ -43,6 +38,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | **Drivers SPA workspace** — legacy create/edit modals → shared `DriverFormDrawer`; quick `DriverDetailsDrawer` (DetailPanel + toggle/discipline/profil); `PageHeader`; `?view`/`?edit` deep-links (Dispatch board edit links SPA-fied via JSON `edit-data` fallback); KPI profile page kept; dead `create()`/`edit()` Blade removed | ✅ | `feature/spa-drivers-workspace` |
 | **Fuel SPA workspace** (Operations) — `/fuel` workspace: tabs EDK / Fleeti, each server-paginated + shared `FilterBar`; `FuelImportDrawer` (Tabs, reuses import endpoints); `FuelDetailsDrawer` (Détails/Validation/Historique, EDK↔Fleeti cross-ref); read-only (Import/Export/Refresh, no CRUD); **Carburant** sidebar entry added; standalone import page removed | ✅ | `feature/spa-fuel-workspace` |
 | **Maintenance SPA workspace** (Fleet) — single `/maintenance` page, shared `Tabs` (État du parc / Historique / Règles) replacing `<a>`-nav `MaintenanceTabs`; `MaintenanceRecordDrawer` (create+edit, reuses ComponentStatusList/ControlChecklist/MaintenanceItemsField/CameraCapture) replaces Record page + Edit modal; `MaintenanceDetailsDrawer` (record view + in-drawer Sign/Approve/PDF); `TruckMaintenanceDrawer` (Échéances/Problèmes + inline cost/devis); `RuleDrawer`; deleted Record/History/Rules pages + `MaintenanceTabs`; 0 `window.location` | ✅ | `feature/spa-maintenance-workspace` |
+| **Product Catalog** (master data) — single `products` table (no hardcoded product names, permanent rule); shared `ProductSelector` (searchable, active-only, ordered) + `ProductDrawer` (inline create, parent stays open); Maintenance is first consumer (`maintenance_items.product_id`); idempotent backfill migrated historical free-text designations → Products (8 products, 26/26 items linked, original text preserved) | ✅ | `feature/spa-maintenance-workspace` |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 
@@ -58,7 +54,7 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | Config · Safe `.env.example` + `DEPLOYMENT.md` | ✅ | `2ad1a259` |
 | Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | `2c499bea` |
 | Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ code · ⏳ prod-validation | `2c499bea` |
-| Queues · Step 2 **SharePoint Background Upload** — local-first + `sync_status`, `SyncDocumentToSharePoint` job | ✅ code · ⏳ prod-deploy (gated on Step 1) | *(feature branch)* |
+| Queues · Step 2 **SharePoint Background Upload** (active bottleneck) | 🟠 architecture review | — |
 | Queues · ~~Excel import~~ | ❌ dropped — orphaned legacy (→ housekeeping removal) | — |
 | Queues · Step 3 — re-audit next bottleneck (not reserved) | ⚪ later | — |
 | Scheduler · cron entry on server (`schedule:run`) | 🟠 pending (server) | — |
@@ -87,7 +83,8 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 ---
 
 ## Technical Debt
-- **Parent-model attachments → Documents** (so they can reuse the local-first sync). `LogisticsInspectionController` inspection attachment and `MaintenanceController` *facture* store `attachment_path/url` **on the parent model**, not a `Document` — backgrounding them needs a `Document` FK migration (e.g. `inspection_checklist_id`, `maintenance_id`) + UI repoint, then reuse `SyncDocumentToSharePoint`. *(Step 3 covered the `Document`-based Driver + Maintenance devis uploads; these parent-model ones are deferred.)*
+- **Material Grade Catalog** (future master-data module, separate from Product Catalog) — the transported basalt grades `0/3, 3/8, 8/16` are still hardcoded (`ClientDemandPlan::PRODUCTS`, `in:0/3,3/8,8/16` validations in TransportTracking/ClientDemand/TheftIncident controllers, and dropdown arrays in TransportTracking/Tracking/Reports/`analytics/Rotations.tsx`). Per the product-catalog rule these are NOT products — give them their own `material_grades` table + shared selector. Never mix with `products`.
+- Product Catalog · future consumers (Fuel/Purchase/Procurement/Inventory/Stock/Workshop) must reuse `ProductSelector`/`ProductDrawer` — no new product tables. `products.store` is auth-only (no dedicated `product-manage` permission yet).
 - **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
 - **Orphaned `TransportDashboard`** (`/transport_tracking/dashboard`) — no live link; overlaps Réalisation's achievement KPIs. Per the workflow split (KPIs → Réalisation), fold its unique charts (monthly tonnage, timeline gantt) into Réalisation/Analytics, then remove the page + route + `dashboard()` method. *[found Operations nav audit]*
 - **Legacy Blade nav** (`main.blade.php` / `welcome.blade.php` / `navigation/sidebar.blade.php`) is dead (Inertia renders via `app.blade.php` + `Sidebar.tsx`) — housekeeping removal. *[found Operations nav audit]*

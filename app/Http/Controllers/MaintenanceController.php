@@ -513,6 +513,7 @@ class MaintenanceController extends Controller
 
             // Custom facture line items (BON AMC TRAVAUX): désignation / réf / qté / prix u.
             'items' => 'nullable|array',
+            'items.*.product_id' => 'nullable|integer|exists:products,id',
             'items.*.designation' => 'required_with:items|string|max:255',
             'items.*.reference' => 'nullable|string|max:120',
             'items.*.category' => 'nullable|string|in:' . implode(',', array_keys(MaintenanceItem::CATEGORIES)),
@@ -552,8 +553,18 @@ class MaintenanceController extends Controller
             $quantity = (float) ($item['quantity'] ?? 0);
             $unitPrice = (float) ($item['unit_price'] ?? 0);
 
+            // Product Catalog is the source of truth: resolve the selected product,
+            // or create one from the name (idempotent). designation = canonical name.
+            $product = !empty($item['product_id'])
+                ? \App\Models\Product::find($item['product_id'])
+                : null;
+            if (!$product) {
+                $product = \App\Models\Product::resolveByName($designation, ['category' => $category, 'unit' => $unit]);
+            }
+
             $rows[] = [
-                'designation' => $designation,
+                'product_id' => $product->id,
+                'designation' => $product->name,
                 'reference' => ($item['reference'] ?? null) ?: null,
                 'category' => $category,
                 'unit' => $unit,
@@ -893,6 +904,7 @@ class MaintenanceController extends Controller
                 ?? $m->profile?->interval_km,
             'approved_at' => $m->approved_at?->format('d/m/Y H:i'),
             'items' => $m->items->map(fn (MaintenanceItem $i) => [
+                'product_id' => $i->product_id,
                 'designation' => $i->designation,
                 'reference' => $i->reference,
                 'category' => $i->category,
