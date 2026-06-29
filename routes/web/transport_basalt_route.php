@@ -58,13 +58,9 @@ Route::group(['prefix' => 'drivers', 'as' => 'drivers.', 'middleware' => ['auth'
 // ----- Trucks Routes -----/
 Route::group(['prefix' => 'trucks', 'as' => 'trucks.', 'middleware' => ['auth']], function () {
     Route::get('/', [TruckController::class, 'index'])->name('index');
-    Route::get('/create-page', [TruckController::class, 'createPage'])->name('create-page');
     Route::get('/{truck}/show-page', [TruckController::class, 'showPage'])->name('show-page');
     Route::get('/{truck}/show', [TruckController::class, 'show'])->name('show');
-    Route::get('/create', [TruckController::class, 'create'])->name('create');
-    Route::get('/{truck}/edit-page', [TruckController::class, 'editPage'])->name('edit-page');
     Route::post('/store', [TruckController::class, 'store'])->name('store');
-    Route::get('/{truck}/edit', [TruckController::class, 'edit'])->name('edit');
     Route::put('/{truck}/update', [TruckController::class, 'update'])->name('update');
     Route::delete('/{truck}/destroy', [TruckController::class, 'destroy'])->name('destroy');
 

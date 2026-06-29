@@ -1,11 +1,12 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import Button from '@/components/ui/Button';
+import Drawer from '@/components/ui/Drawer';
+import FormActions from '@/components/ui/FormActions';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import FormInput from '@/components/ui/FormInput';
 import FormTextarea from '@/components/ui/FormTextarea';
 import type { PlanningMode } from '@/types/achievement';
-import { X, Target } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const TYPE_LABEL: Record<PlanningMode, string> = { WEEK: 'Semaine', MONTH: 'Mois', YEAR: 'Année', CUSTOM: 'Personnalisé' };
@@ -43,7 +44,7 @@ interface Props {
  * Side drawer to create / modify an objective without leaving Planning. Posts to
  * the single objective save path (/logistics/objectives → redirects to /planning,
  * which closes the drawer and refreshes). Period is locked when editing (the
- * upsert is keyed on the period).
+ * upsert is keyed on the period). Built on the shared <Drawer> primitive.
  */
 export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing }: Props) {
     const [type, setType] = useState<PlanningMode>(initial.type);
@@ -96,100 +97,96 @@ export default function ObjectiveDrawer({ onClose, periodTypes, initial, editing
 
     return (
         <>
-            <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
-            <aside className="fixed top-0 right-0 h-full w-full max-w-md bg-[var(--color-surface)] z-50 shadow-xl flex flex-col">
-                <header className="flex items-center justify-between px-5 h-16 border-b border-[var(--color-border)]">
-                    <div className="flex items-center gap-2">
-                        <Target size={18} className="text-[var(--color-primary)]" />
-                        <h2 className="font-semibold">{editing ? "Modifier l'objectif" : 'Nouvel objectif'}</h2>
+            <Drawer
+                open
+                onClose={onClose}
+                icon={<Target size={18} className="text-[var(--color-primary)]" />}
+                title={editing ? "Modifier l'objectif" : 'Nouvel objectif'}
+                footer={
+                    <FormActions
+                        onCancel={onClose}
+                        onSubmit={() => save()}
+                        submitLabel={editing ? 'Enregistrer' : "Créer l'objectif"}
+                        loading={saving}
+                        disabled={targetNum <= 0}
+                    />
+                }
+            >
+                <div>
+                    <span className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Type de période</span>
+                    <div className="flex flex-wrap gap-2">
+                        {periodTypes.map((m) => (
+                            <button
+                                key={m}
+                                type="button"
+                                disabled={editing}
+                                aria-pressed={type === m}
+                                onClick={() => setType(m)}
+                                className={clsx(
+                                    'px-3 h-11 text-sm font-medium rounded-lg border transition-colors',
+                                    editing && 'opacity-50 cursor-not-allowed',
+                                    type === m
+                                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                                        : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer',
+                                )}
+                            >
+                                {TYPE_LABEL[m]}
+                            </button>
+                        ))}
                     </div>
-                    <button onClick={onClose} aria-label="Fermer" className="p-1.5 rounded-lg hover:bg-[var(--color-surface-hover)]"><X size={18} /></button>
-                </header>
-
-                <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                    <div>
-                        <span className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Type de période</span>
-                        <div className="flex flex-wrap gap-2">
-                            {periodTypes.map((m) => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    disabled={editing}
-                                    aria-pressed={type === m}
-                                    onClick={() => setType(m)}
-                                    className={clsx(
-                                        'px-3 h-11 text-sm font-medium rounded-lg border transition-colors',
-                                        editing && 'opacity-50 cursor-not-allowed',
-                                        type === m
-                                            ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
-                                            : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] cursor-pointer',
-                                    )}
-                                >
-                                    {TYPE_LABEL[m]}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormInput
-                            label={type === 'CUSTOM' ? 'Date de début' : 'Date de référence'}
-                            type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)}
-                            disabled={editing} className="h-11" wrapperClass="mb-0"
-                        />
-                        {type === 'CUSTOM' ? (
-                            <FormInput label="Date de fin" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} disabled={editing} className="h-11" wrapperClass="mb-0" />
-                        ) : (
-                            <div>
-                                <span className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Période</span>
-                                <div className="h-11 flex items-center px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-sm">{start} → {end}</div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <label htmlFor="drawer_target" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Tonnage à transporter</label>
-                        <div className="relative">
-                            <input
-                                id="drawer_target" type="number" step="0.1" min="0" inputMode="decimal" autoFocus
-                                value={target} onChange={(e) => setTarget(e.target.value)} placeholder="0"
-                                className="w-full h-12 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] pl-4 pr-10 text-2xl font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)]"
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-[var(--color-text-muted)]">t</span>
-                        </div>
-                    </div>
-
-                    {/* Parent-allocation context (validation/visibility only — never blocks) */}
-                    {parent && (
-                        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3 text-sm space-y-1">
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-[var(--color-text-secondary)]">{parent.parent_label}</span>
-                                <span className="font-mono font-semibold">{fmt(parent.parent_target)} t</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-[var(--color-text-secondary)]">Déjà alloué</span>
-                                <span className="font-mono">{fmt(parent.allocated)} t</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-[var(--color-text-secondary)]">Restant</span>
-                                <span className="font-mono font-semibold">{fmt(parent.remaining)} t</span>
-                            </div>
-                            {overBy > 0 && (
-                                <p className="text-amber-600 dark:text-amber-400 pt-1">L'allocation dépasse l'objectif parent de {fmt(overBy)} t.</p>
-                            )}
-                        </div>
-                    )}
-
-                    <FormTextarea label="Note (optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={500} wrapperClass="mb-0" />
                 </div>
 
-                <footer className="flex items-center justify-end gap-2 px-5 h-16 border-t border-[var(--color-border)]">
-                    <Button variant="secondary" onClick={onClose}>Annuler</Button>
-                    <Button onClick={() => save()} loading={saving} disabled={targetNum <= 0}>
-                        {editing ? 'Enregistrer' : "Créer l'objectif"}
-                    </Button>
-                </footer>
-            </aside>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormInput
+                        label={type === 'CUSTOM' ? 'Date de début' : 'Date de référence'}
+                        type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)}
+                        disabled={editing} className="h-11" wrapperClass="mb-0"
+                    />
+                    {type === 'CUSTOM' ? (
+                        <FormInput label="Date de fin" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} disabled={editing} className="h-11" wrapperClass="mb-0" />
+                    ) : (
+                        <div>
+                            <span className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Période</span>
+                            <div className="h-11 flex items-center px-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] text-sm">{start} → {end}</div>
+                        </div>
+                    )}
+                </div>
+
+                <div>
+                    <label htmlFor="drawer_target" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Tonnage à transporter</label>
+                    <div className="relative">
+                        <input
+                            id="drawer_target" type="number" step="0.1" min="0" inputMode="decimal" autoFocus
+                            value={target} onChange={(e) => setTarget(e.target.value)} placeholder="0"
+                            className="w-full h-12 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] pl-4 pr-10 text-2xl font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)]"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-[var(--color-text-muted)]">t</span>
+                    </div>
+                </div>
+
+                {/* Parent-allocation context (validation/visibility only — never blocks) */}
+                {parent && (
+                    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3 text-sm space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[var(--color-text-secondary)]">{parent.parent_label}</span>
+                            <span className="font-mono font-semibold">{fmt(parent.parent_target)} t</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[var(--color-text-secondary)]">Déjà alloué</span>
+                            <span className="font-mono">{fmt(parent.allocated)} t</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[var(--color-text-secondary)]">Restant</span>
+                            <span className="font-mono font-semibold">{fmt(parent.remaining)} t</span>
+                        </div>
+                        {overBy > 0 && (
+                            <p className="text-amber-600 dark:text-amber-400 pt-1">L'allocation dépasse l'objectif parent de {fmt(overBy)} t.</p>
+                        )}
+                    </div>
+                )}
+
+                <FormTextarea label="Note (optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={500} wrapperClass="mb-0" />
+            </Drawer>
 
             <ConfirmDialog
                 open={!!conflict}

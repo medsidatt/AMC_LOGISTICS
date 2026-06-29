@@ -78,7 +78,7 @@ export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, 
             <Head title={truck.matricule} />
 
             <div className="flex items-center justify-between mb-4">
-                <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => window.history.back()}>
+                <Button variant="ghost" icon={<ArrowLeft size={16} />} onClick={() => router.visit('/trucks')}>
                     Retour
                 </Button>
                 <div className="flex gap-2">
@@ -96,7 +96,7 @@ export default function TrucksShow({ truck, recentTrackings, maintenances, kpi, 
                     >
                         {truck.is_available ? 'Marquer indisponible' : 'Marquer disponible'}
                     </Button>
-                    <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => window.location.href = `/trucks/${truck.id}/edit-page`}>
+                    <Button variant="secondary" icon={<Pencil size={16} />} onClick={() => router.visit(`/trucks?edit=${truck.id}`)}>
                         Modifier
                     </Button>
                 </div>
