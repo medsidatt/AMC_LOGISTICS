@@ -70,11 +70,16 @@ class SyncDocumentToSharePoint implements ShouldQueue
         $document->update(['sync_status' => Document::SYNC_SYNCING]);
 
         try {
+            // SharePoint folder mirrors the local folder, so any module
+            // (transport_trackings / issue-devis / inspection-devis / …) syncs
+            // to the matching remote folder without per-module branching.
+            $folder = dirname($relativePath);
+
             $result = $sharepoint->uploadContent(
                 Storage::disk(self::DISK)->get($relativePath),
                 (string) pathinfo($relativePath, PATHINFO_EXTENSION),
                 (string) ($document->mime_type ?? ''),
-                'transport_trackings',
+                $folder !== '.' ? $folder : 'documents',
             );
         } catch (Throwable $e) {
             $this->markFailed($document, $e->getMessage());
