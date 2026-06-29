@@ -89,6 +89,16 @@ class SyncDocumentToSharePoint implements ShouldQueue
         if (! ($result['success'] ?? false)) {
             $message = $result['message'] ?? 'Unknown SharePoint error';
             $this->markFailed($document, $message);
+
+            // Permanent failures (invalid/expired secret, wrong tenant/client,
+            // invalid scope/grant) will never succeed on retry — fail immediately
+            // instead of hammering Azure 3× with the same bad credentials.
+            if ($result['permanent'] ?? false) {
+                $this->fail(new \RuntimeException('SharePoint sync permanently failed for document ' . $document->id . ': ' . $message));
+                return;
+            }
+
+            // Transient (timeout / 429 / 5xx / network) — let the queue retry with backoff.
             throw new \RuntimeException('SharePoint sync failed for document ' . $document->id . ': ' . $message);
         }
 
