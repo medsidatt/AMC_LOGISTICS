@@ -8,8 +8,8 @@ import Button from '@/components/ui/Button';
 import ActionButtons from '@/components/ui/ActionButtons';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Pagination from '@/components/ui/Pagination';
-import ProviderFormDrawer from './components/ProviderFormDrawer';
-import ProviderDetailsDrawer from './components/ProviderDetailsDrawer';
+import CounterpartyFormDrawer from '@/components/counterparty/CounterpartyFormDrawer';
+import CounterpartyDetailsDrawer from '@/components/counterparty/CounterpartyDetailsDrawer';
 import { Plus, Building2 } from 'lucide-react';
 import { usePermission } from '@/hooks/usePermission';
 import { useWorkspaceDrawer } from '@/hooks/useWorkspaceDrawer';
@@ -19,6 +19,8 @@ interface Props {
     providers: ProviderPaginator;
     filters: { search?: string };
 }
+
+const icon = <Building2 size={18} className="text-[var(--color-primary)]" />;
 
 export default function ProvidersWorkspace({ providers }: Props) {
     const { can } = usePermission();
@@ -75,15 +77,15 @@ export default function ProvidersWorkspace({ providers }: Props) {
                 </div>
             </Card>
 
-            {/* One drawer at a time, derived from the URL via the shared hook. */}
+            {/* One drawer at a time, derived from the URL via the shared hook + shared Counterparty drawers. */}
             {drawer.mode === 'create' && (
-                <ProviderFormDrawer mode="create" onClose={() => close()} onSaved={() => close({ replace: true })} />
+                <CounterpartyFormDrawer mode="create" basePath="/providers" entityLabel="fournisseur" icon={icon} onClose={() => close()} onSaved={() => close({ replace: true })} />
             )}
             {viewed && (
-                <ProviderDetailsDrawer provider={viewed} canEdit={canEdit} onEdit={() => openEdit(viewed.id)} onClose={() => close()} />
+                <CounterpartyDetailsDrawer entity={viewed} icon={icon} canEdit={canEdit} onEdit={() => openEdit(viewed.id)} onClose={() => close()} />
             )}
             {editing && (
-                <ProviderFormDrawer mode="edit" provider={editing} onClose={() => openView(editing.id)} onSaved={() => openView(editing.id, { replace: true })} />
+                <CounterpartyFormDrawer mode="edit" basePath="/providers" entityLabel="fournisseur" icon={icon} record={editing} onClose={() => openView(editing.id)} onSaved={() => openView(editing.id, { replace: true })} />
             )}
 
             <ConfirmDialog open={!!deleteUrl} onClose={() => setDeleteUrl(null)} deleteUrl={deleteUrl ?? undefined} />

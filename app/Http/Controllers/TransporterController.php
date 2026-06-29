@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Transporter;
+use App\Support\CounterpartyRules;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -10,9 +11,9 @@ class TransporterController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('permission:transporter-list', ['only' => ['index', 'show']]);
-        $this->middleware('permission:transporter-create', ['only' => ['create', 'store']]);
-        $this->middleware('permission:transporter-edit', ['only' => ['edit', 'update']]);
+        $this->middleware('permission:transporter-list', ['only' => ['index']]);
+        $this->middleware('permission:transporter-create', ['only' => ['store']]);
+        $this->middleware('permission:transporter-edit', ['only' => ['update']]);
         $this->middleware('permission:transporter-delete', ['only' => ['destroy']]);
     }
 
@@ -40,13 +41,7 @@ class TransporterController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'address' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'website' => 'nullable|max:255',
-        ]);
+        $request->validate(CounterpartyRules::base());
 
         Transporter::create($request->only('name', 'address', 'phone', 'email', 'website'));
 
@@ -55,13 +50,7 @@ class TransporterController extends Controller
 
     public function update(Request $request, Transporter $transporter)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'address' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255',
-            'website' => 'nullable|max:255',
-        ]);
+        $request->validate(CounterpartyRules::base());
 
         $transporter->update($request->only('name', 'address', 'phone', 'email', 'website'));
 
