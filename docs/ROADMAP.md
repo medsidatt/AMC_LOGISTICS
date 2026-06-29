@@ -10,10 +10,10 @@
 ---
 
 ## Current Focus
-**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch) done** — `database` queue + cron worker live.
+**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch)** — code on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2 — SharePoint Background Upload** — Architecture Review (development may continue; deployment gated on Step 1 approval).
 
 ## Next Phase
-Phase 1 · **Step 2 — Excel import** (store file → queue the import). Then Step 3 — SharePoint upload. (OpenAI analysis deferred → P1.5, see backlog.)
+Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return immediately → queue the SharePoint sync). Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI analysis deferred → P1.5.)
 
 ---
 
@@ -32,6 +32,7 @@ Phase 1 · **Step 2 — Excel import** (store file → queue the import). Then S
 | Réalisation · Hierarchical-mean reference estimation | ✅ | `04857584` |
 | Réconciliation · Missing-ticket worklist + nightly reconcile | ✅ | (existing) |
 | Analytics · Real `suspiciousDrivers` metric (de-fabricated) | ✅ | `39730420` |
+| Opérations · **Transports** sidebar entry (ticket system of record) + canonical-link fix (`/transport_trackings/*` 404s) | ✅ | *(nav branch)* |
 | Planning · PeriodSwitcher on the overview (historical periods) | 🟡 backlog | — |
 | Optimization · (rotation/route optimization) | ⚪ future | — |
 
@@ -45,9 +46,11 @@ Phase 1 · **Step 2 — Excel import** (store file → queue the import). Then S
 | Security · User suspension enforced server-side | ✅ | `98e6f30b` |
 | Security · Phantom truck/driver guard (data integrity) | ✅ | `7b4d54d7` |
 | Config · Safe `.env.example` + `DEPLOYMENT.md` | ✅ | `2ad1a259` |
-| Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | *(Step 1)* |
-| Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ | *(this commit)* |
-| Queues · Step 2 Excel import / Step 3 SharePoint upload | 🟠 next | — |
+| Queues · `database` driver + **cron-driven worker** (`queue:work` scheduled) | ✅ infra | `2c499bea` |
+| Queues · Step 1 WhatsApp dispatch async (timeout, logging, idempotent) | ✅ code · ⏳ prod-validation | `2c499bea` |
+| Queues · Step 2 **SharePoint Background Upload** (active bottleneck) | 🟠 architecture review | — |
+| Queues · ~~Excel import~~ | ❌ dropped — orphaned legacy (→ housekeeping removal) | — |
+| Queues · Step 3 — re-audit next bottleneck (not reserved) | ⚪ later | — |
 | Scheduler · cron entry on server (`schedule:run`) | 🟠 pending (server) | — |
 | Test infra · dedicated test DB + CI pipeline | 🟠 pending | — |
 | Security · rotate leaked mail password + `AJAX_TOKEN`; drop hardcoded fallback | 🟠 pending (server) | — |
@@ -74,6 +77,9 @@ Phase 1 · **Step 2 — Excel import** (store file → queue the import). Then S
 ---
 
 ## Technical Debt
+- **Housekeeping · Remove legacy transport-tracking Excel import** (orphaned; no React/nav/route consumer — depends on legacy `saveForm()` jQuery the Inertia app no longer loads). Remove: the 2 `transport_tracking/import` routes, `TransportTrackingController@import`, `resources/views/pages/transport_trackings/import.blade.php`, the `TransportTrackingImport` importer (only caller), and the now-unused legacy JS dependency. **Do NOT remove now** — a future housekeeping phase, after verifying no external/direct-URL consumers. *[found Phase 1 re-audit]*
+- **Orphaned `TransportDashboard`** (`/transport_tracking/dashboard`) — no live link; overlaps Réalisation's achievement KPIs. Per the workflow split (KPIs → Réalisation), fold its unique charts (monthly tonnage, timeline gantt) into Réalisation/Analytics, then remove the page + route + `dashboard()` method. *[found Operations nav audit]*
+- **Legacy Blade nav** (`main.blade.php` / `welcome.blade.php` / `navigation/sidebar.blade.php`) is dead (Inertia renders via `app.blade.php` + `Sidebar.tsx`) — housekeeping removal. *[found Operations nav audit]*
 - `config/app.php` ships a hardcoded `AJAX_TOKEN` fallback (`MySecretToken123`) — remove once prod sets a real token.
 - Tests run against the **live dev DB** via `DatabaseTransactions` (no separate test DB).
 - `operationsBadges` runs a count query per request for dispatch users — add caching.
