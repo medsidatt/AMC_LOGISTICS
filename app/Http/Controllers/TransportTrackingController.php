@@ -222,8 +222,12 @@ class TransportTrackingController extends Controller
         $driver = $this->resolveDriver($validated['driver_id']);
 
         /** ---------------- Prepare Data ---------------- */
+        // transporter_id is only used to resolve/create the truck above — it is NOT
+        // a transport_trackings column (it was moved to trucks), so it must be
+        // excluded from the row data or the insert fails with "Unknown column
+        // 'transporter_id'".
         $data = collect($validated)
-            ->except(['files', 'truck_id', 'driver_id'])
+            ->except(['files', 'truck_id', 'driver_id', 'transporter_id'])
             ->merge([
                 'truck_id' => $truck->id,
                 'driver_id' => $driver->id,
