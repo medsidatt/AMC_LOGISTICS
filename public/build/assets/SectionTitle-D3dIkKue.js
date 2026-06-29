@@ -1,0 +1,1 @@
+import{j as o}from"./app-BJe8WXDH.js";function e({children:r}){return o.jsx("h3",{className:"text-sm font-semibold text-[var(--color-text)] border-b border-[var(--color-border)] pb-1.5",children:r})}export{e as S};

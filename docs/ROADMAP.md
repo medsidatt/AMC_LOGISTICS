@@ -5,15 +5,20 @@
 > mark phases done, record the completing commit hash, add/remove technical
 > debt, and refresh *Current Focus* / *Next Phase*. Keep it concise.
 
-**Last updated:** 2026-06-28
+**Last updated:** 2026-06-29
 
 ---
 
 ## Current Focus
-**Production Phase 1 · Background processing** (incremental). **Step 1 (WhatsApp dispatch)** — code on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2 — SharePoint Background Upload** — Architecture Review (development may continue; deployment gated on Step 1 approval).
+**`develop` integration complete (2026-06-29).** All SPA workspaces — Trucks, Transport Tracking, Drivers, Fuel, Maintenance, Inspections (Fleet) + Roles & Users (Administration) on the shared `useWorkspaceDrawer` URL-driven standard — plus **GPS Infrastructure Decoupling** and **SharePoint Step 2/3** (local-first background upload) are now consolidated on `develop`.
+
+**Production Phase 1** — **Step 1 (WhatsApp dispatch)** on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2/3 (SharePoint upload)** — implemented + locally verified (local-first + `sync_status` lifecycle; Driver/Maintenance `Document` devis via `Document::storeLocalAndQueueSync()`); on `develop`, deployment to `main` gated on Step 1 approval.
 
 ## Next Phase
-Phase 1 · **Step 2 — SharePoint Background Upload** (store local → return immediately → queue the SharePoint sync). Step 3 **unreserved** — re-audit for the next measured bottleneck. (Excel import dropped — orphaned legacy; OpenAI analysis deferred → P1.5.)
+Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). Administration SPA continues: Providers → Transporters → Entities → Projects. (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
+
+## Standard integration pattern (platform rule)
+Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
 
 ---
 
