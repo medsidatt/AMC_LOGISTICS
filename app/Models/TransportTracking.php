@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Http\Traits\TracksActions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -177,12 +178,13 @@ class TransportTracking extends Model
     }
 
     /**
-     * Weight-gap anomaly threshold in tonnes (the theft-detection threshold,
-     * configurable in fleet settings). Single source for every dashboard.
+     * Weight-gap anomaly threshold in tonnes. Delegates to the single owner of the
+     * rule (WeightCalculator → OperationalParameter); kept as a thin static shim for
+     * existing callers until they are migrated to the calculator in a later increment.
      */
     public static function weightGapThreshold(): float
     {
-        return (float) (FleetSetting::current()->weight_gap_threshold ?: 0.5);
+        return app(WeightCalculatorInterface::class)->gapThreshold();
     }
 
     /**

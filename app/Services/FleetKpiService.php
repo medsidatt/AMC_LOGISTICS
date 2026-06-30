@@ -5,9 +5,10 @@ namespace App\Services;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
+use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\DriverDisciplineRecord;
 use App\Models\FleetiDailyRecord;
-use App\Models\FleetSetting;
 use App\Models\FuelTracking;
 use App\Models\FleetObjective;
 use App\Models\TransportTracking;
@@ -18,14 +19,16 @@ use Illuminate\Support\Facades\DB;
 
 class FleetKpiService
 {
-    public function __construct(private readonly ObjectiveTargetResolver $objectiveResolver) {}
+    public function __construct(
+        private readonly ObjectiveTargetResolver $objectiveResolver,
+        private readonly WeightCalculatorInterface $weightCalculator,
+        private readonly CapacityCalculatorInterface $capacityCalculator,
+    ) {}
 
     public function compute(Carbon $from, Carbon $to): array
     {
         $from = $from->copy()->startOfDay();
         $to = $to->copy()->endOfDay();
-
-        $settings = FleetSetting::current();
 
         $trucks = Truck::where('is_active', true)->get();
         $trucksTotal = $trucks->count();
@@ -106,7 +109,7 @@ class FleetKpiService
                 ],
             ],
             'topTrucks' => $this->topTrucks($from, $to, $trucks, $rotationsPerTruck),
-            'topDrivers' => $this->topDrivers($from, $to, $settings),
+            'topDrivers' => $this->topDrivers($from, $to),
         ];
     }
 
@@ -120,7 +123,7 @@ class FleetKpiService
             ->keyBy('truck_id');
 
         // Capacity is a single fleet-wide setting, identical for every truck.
-        $capacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
+        $capacity = max(0.01, $this->capacityCalculator->defaultCapacity());
 
         $rows = $trucks->map(function (Truck $truck) use ($rotationsPerTruck, $fuelPerTruck, $capacity) {
             $row = $rotationsPerTruck->get($truck->id);
@@ -164,7 +167,7 @@ class FleetKpiService
         return $scored->sortByDesc('score')->take(5)->values()->all();
     }
 
-    private function topDrivers(Carbon $from, Carbon $to, FleetSetting $settings): array
+    private function topDrivers(Carbon $from, Carbon $to): array
     {
         $drivers = Driver::where('is_active', true)->get();
 
@@ -176,7 +179,7 @@ class FleetKpiService
             ->get()
             ->keyBy('driver_id');
 
-        $gapThreshold = (float) ($settings->weight_gap_threshold ?? 0.5);
+        $gapThreshold = $this->weightCalculator->gapThreshold();
 
         $disciplinePerDriver = DriverDisciplineRecord::query()
             ->select('driver_id', DB::raw('SUM(points) as points'))
@@ -185,7 +188,7 @@ class FleetKpiService
             ->pluck('points', 'driver_id');
 
         // Capacity is a single fleet-wide setting, identical for every truck.
-        $capacity = max(0.01, (float) ($settings->default_capacity_tonnage ?? 0) ?: 25);
+        $capacity = max(0.01, $this->capacityCalculator->defaultCapacity());
 
         $rows = $drivers->map(function (Driver $driver) use ($from, $to, $rotationsPerDriver, $gapThreshold, $disciplinePerDriver, $capacity) {
             $row = $rotationsPerDriver->get($driver->id);

@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
+use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
 use App\Models\DriverDisciplineRecord;
-use App\Models\FleetSetting;
 use App\Models\FuelEvent;
 use App\Models\FleetObjective;
 use App\Models\TransportTracking;
@@ -21,15 +22,18 @@ class DriverKpiService
     private const WEIGHT_WEIGHT_GAP = 0.20;
     private const WEIGHT_DISCIPLINE = 0.20;
 
-    public function __construct(private readonly ObjectiveTargetResolver $objectiveResolver) {}
+    public function __construct(
+        private readonly ObjectiveTargetResolver $objectiveResolver,
+        private readonly WeightCalculatorInterface $weightCalculator,
+        private readonly CapacityCalculatorInterface $capacityCalculator,
+    ) {}
 
     public function compute(Driver $driver, Carbon $from, Carbon $to): array
     {
         $from = $from->copy()->startOfDay();
         $to = $to->copy()->endOfDay();
 
-        $settings = FleetSetting::current();
-        $gapThreshold = (float) ($settings->weight_gap_threshold ?? 0.5);
+        $gapThreshold = $this->weightCalculator->gapThreshold();
 
         $rotations = TransportTracking::query()
             ->where('driver_id', $driver->id)
@@ -43,7 +47,7 @@ class DriverKpiService
         // 1. Rotations — planned share for this driver
         $plannedTonnage = $this->objectiveResolver->resolve($from, $to, FleetObjective::PERIOD_CUSTOM)['fleet']['target_tons'];
         // Capacity is a single fleet-wide setting, identical for every truck.
-        $avgCapacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
+        $avgCapacity = max(0.01, $this->capacityCalculator->defaultCapacity());
         $activeDrivers = max(1, Driver::where('is_active', true)->count());
         $plannedRotations = ($plannedTonnage / $avgCapacity) / $activeDrivers;
 

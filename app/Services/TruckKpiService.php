@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
+use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\FleetiDailyRecord;
-use App\Models\FleetSetting;
 use App\Models\FuelEvent;
 use App\Models\FuelTracking;
 use App\Models\TransportTracking;
@@ -13,13 +14,17 @@ use Illuminate\Support\Facades\DB;
 
 class TruckKpiService
 {
+    public function __construct(
+        private readonly WeightCalculatorInterface $weightCalculator,
+        private readonly CapacityCalculatorInterface $capacityCalculator,
+    ) {}
+
     public function compute(Truck $truck, Carbon $from, Carbon $to): array
     {
         $from = $from->copy()->startOfDay();
         $to = $to->copy()->endOfDay();
 
-        $settings = FleetSetting::current();
-        $gapThreshold = (float) ($settings->weight_gap_threshold ?? 0.5);
+        $gapThreshold = $this->weightCalculator->gapThreshold();
 
         $rotations = TransportTracking::query()
             ->where('truck_id', $truck->id)
@@ -37,7 +42,7 @@ class TruckKpiService
         $avgCycleDays = $this->averageCycleDays($rotations);
 
         // Capacity is a single fleet-wide setting, identical for every truck.
-        $capacity = max(0.01, (float) (\App\Models\FleetSetting::current()->default_capacity_tonnage ?: 25));
+        $capacity = max(0.01, $this->capacityCalculator->defaultCapacity());
         $loadRate = $rotationsCount > 0
             ? $tonnageDelivered / ($capacity * $rotationsCount)
             : 0.0;
