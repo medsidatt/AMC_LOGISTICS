@@ -27,7 +27,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Operational Intelligence — Read Models (L0). Bind contracts to projections.
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\TransportTrackingReadModelInterface::class,
+            \App\Domain\Operations\ReadModels\TransportTrackingReadModel::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\FleetReadModelInterface::class,
+            \App\Domain\Operations\ReadModels\FleetReadModel::class,
+        );
     }
 
     /**
