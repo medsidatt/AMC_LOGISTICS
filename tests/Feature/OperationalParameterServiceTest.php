@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\OperationalParameterKey;
 use App\Enums\ParameterOwner;
 use App\Exceptions\MissingOperationalParameterException;
+use App\Models\FleetSetting;
 use App\Models\OperationalParameter;
 use App\Services\OperationalParameterService;
 use Database\Seeders\OperationalParameterSeeder;
@@ -41,11 +42,11 @@ class OperationalParameterServiceTest extends TestCase
     /** Characterization: seeded values == the values in use today. */
     public function test_seeded_values_match_current_production_values(): void
     {
+        // default_capacity_tonnage and monthly_target_tonnage now mirror live FleetSetting
+        // (R1.3 consolidation), so they are asserted separately below, not as fixed literals.
         $expected = [
-            'default_capacity_tonnage' => 45.0,
             'capacity_buffer_ratio' => 0.15,
             'target_rotations_per_week' => 3,
-            'monthly_target_tonnage' => 0.0,
             'cycle_time_hours' => 4.0,
             'weight_operational_threshold_t' => 0.5,
             'weight_fraud_threshold_kg' => 300.0,
@@ -68,6 +69,11 @@ class OperationalParameterServiceTest extends TestCase
                 $this->assertSame($value, $svc->float($key), "float {$key}");
             }
         }
+
+        // Consolidated parameters mirror the live operator settings.
+        $setting = FleetSetting::current();
+        $this->assertEqualsWithDelta((float) $setting->default_capacity_tonnage, $svc->float('default_capacity_tonnage'), 1e-9);
+        $this->assertEqualsWithDelta((float) $setting->monthly_target_tonnage, $svc->float('monthly_target_tonnage'), 1e-9);
     }
 
     /** Every enum key is seeded, and every row carries the required metadata. */
@@ -95,7 +101,11 @@ class OperationalParameterServiceTest extends TestCase
         $this->assertIsInt($svc->int(OperationalParameterKey::FISCAL_MONTH_START_DAY));
         $this->assertIsFloat($svc->float(OperationalParameterKey::WEIGHT_OPERATIONAL_THRESHOLD));
         $this->assertIsString($svc->string(OperationalParameterKey::DEFAULT_CAPACITY));
-        $this->assertSame(45.0, $svc->float(OperationalParameterKey::DEFAULT_CAPACITY));
+        $this->assertEqualsWithDelta(
+            (float) FleetSetting::current()->default_capacity_tonnage,
+            $svc->float(OperationalParameterKey::DEFAULT_CAPACITY),
+            1e-9,
+        );
     }
 
     public function test_enum_getter_resolves_backed_enum(): void
@@ -135,6 +145,7 @@ class OperationalParameterServiceTest extends TestCase
     /** Cache warm: a raw DB change (no model event) is NOT seen until flush. */
     public function test_cache_is_warm_until_flush(): void
     {
+        $this->svc()->set(OperationalParameterKey::DEFAULT_CAPACITY, 45); // explicit baseline
         $svc = $this->svc();
         $this->assertSame(45.0, $svc->float(OperationalParameterKey::DEFAULT_CAPACITY));
 
@@ -175,6 +186,7 @@ class OperationalParameterServiceTest extends TestCase
     /** Concurrent update: one instance writes; another (fresh request) sees it via the shared cache. */
     public function test_concurrent_update_is_visible_to_other_instances(): void
     {
+        $this->svc()->set(OperationalParameterKey::DEFAULT_CAPACITY, 45); // explicit baseline
         $reader = new OperationalParameterService();
         $this->assertSame(45.0, $reader->float(OperationalParameterKey::DEFAULT_CAPACITY)); // warms shared cache
 

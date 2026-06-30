@@ -583,6 +583,13 @@ Permanent decisions. Status values: Proposed · Accepted · Superseded.
 - **Ownership:** every parameter names one `owner` department (mirrors the KPI Catalog) and carries governance metadata (`editable`, `deprecated`, `introduced_by_adr`, `notes`).
 - **Evolution rules:** add a parameter = add an `OperationalParameterKey` case + a validated seeder row (unique key · known category/unit/owner · value matches type — the seeder fails fast otherwise). Never reuse a retired key. Changing a *meaning* requires a new key + an ADR. New band/rate parameters with no current value are introduced with their KPI's calculator, never invented early.
 
+### ADR-009 — FleetSetting is temporary compatibility storage
+- **Status:** Accepted.
+- **Context:** during R1.3 the seeded parameters were found to differ from live operator values (`default_capacity_tonnage` 41 vs seed 45; `monthly_target_tonnage` 3000 vs 0). The live source for these editable values was `FleetSetting`.
+- **Decision:** `OperationalParameter` is the single source of truth; `FleetSetting` remains **only as compatibility storage** until R1.8. `FleetSettingsController` **dual-writes** both stores from one validated payload (no duplicated validation/logic, via `FleetSettingParameterMap`); `operations:sync-parameters` (idempotent, `--dry-run`) back-fills parameters from live `FleetSetting`.
+- **Rules:** Domain Calculators read **parameters only, never `FleetSetting`**. R1.8 removes the remaining `FleetSetting` reads (KPI services, `TransportTracking::weightGapThreshold()`) one consumer at a time, each under characterization tests.
+- **Impact:** zero behaviour change (parameters now mirror live values; dual-write keeps them identical).
+
 ---
 
 ## 15. Final validation

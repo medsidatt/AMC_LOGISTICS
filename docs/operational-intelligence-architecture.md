@@ -61,6 +61,8 @@ app/Domain/Operations/
 - **Verification:** unit tests assert each seeded key == its current hardcoded value (no behaviour change).
 - **Rollback:** additive — drop migration.
 
+**Migration — `FleetSetting` → `OperationalParameter` (ADR-009):** `FleetSetting` is now **temporary compatibility storage**; `OperationalParameter` is the **future single source of truth**. The Fleet Settings UI saves through `FleetSettingsController`, which **dual-writes** the same validated values into both stores (`FleetSettingParameterMap`), and `operations:sync-parameters` (idempotent, `--dry-run`) back-fills the parameters from live `FleetSetting`. **Domain Calculators read parameters only — never `FleetSetting`.** R1.8 removes the remaining `FleetSetting` reads (the KPI services + `TransportTracking::weightGapThreshold()`) once each consumer is migrated under characterization tests.
+
 ### L2 · Domain Calculators (`Calculations/` + `Contracts/`)
 - **Responsibility:** **own the business rules.** One responsibility each, behind an **interface** (Contracts) and the `OperationsDomain` facade. Logic lives here; values come from Parameters; data comes from Read Models.
 - **Calculators ↔ interfaces:** Capacity/Weight/Rotation/**Dispatch**/Productivity/Fuel/Cycle/Maintenance/Inspection/Billing/Objective/Utilization, each with `…CalculatorInterface`. **Dispatch** is a distinct business capability (dispatch readiness · planned-vs-started · assignment completeness · unassigned trucks · dispatch delay · execution) and does not reuse Rotation/Capacity calculators — added inside this layer, no layer/boundary/rule change.

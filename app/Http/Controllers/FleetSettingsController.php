@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Operations\Parameters\FleetSettingParameterMap;
 use App\Models\FleetSetting;
 use App\Services\FleetObjectiveService;
 use App\Services\ObjectiveHistoryService;
+use App\Services\OperationalParameterService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -19,6 +21,7 @@ class FleetSettingsController extends Controller
     public function __construct(
         private readonly ObjectiveHistoryService $objectiveHistory,
         private readonly FleetObjectiveService $fleetObjectives,
+        private readonly OperationalParameterService $parameters,
     ) {
         $this->middleware('auth');
         $this->middleware('permission:fleet-settings-edit');
@@ -74,6 +77,15 @@ class FleetSettingsController extends Controller
         $oldValues = $setting->only(array_keys($tracked));
 
         $setting->update($data);
+
+        // Dual-write: mirror the same validated values into the operational_parameters
+        // store (the future single source of truth). FleetSetting stays only for legacy
+        // compatibility until R1.8. No duplicated validation — $data is already validated.
+        foreach (FleetSettingParameterMap::map() as $field => $key) {
+            if (array_key_exists($field, $data)) {
+                $this->parameters->set($key, $data[$field], $request->user()?->id);
+            }
+        }
 
         // The default capacity / target rotations are FALLBACKS for trucks without a
         // configured override — they do NOT overwrite per-truck values. Open objectives
