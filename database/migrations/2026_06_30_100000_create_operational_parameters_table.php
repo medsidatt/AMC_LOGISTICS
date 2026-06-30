@@ -19,12 +19,20 @@ return new class extends Migration
         Schema::create('operational_parameters', function (Blueprint $table) {
             $table->id();
             $table->string('key')->unique();
+            // `value` stays text + a `type` discriminator: this stores scalars AND
+            // json-encoded structures without a future migration per new type (ADR-008).
             $table->text('value');
             $table->string('type')->default('string'); // int|float|bool|string|json
             $table->string('unit')->nullable();
             $table->string('category')->index();
+            $table->string('owner')->index();
             $table->text('description')->nullable();
+            // Governance metadata (ADR-008)
             $table->boolean('is_active')->default(true);
+            $table->boolean('editable')->default(true);
+            $table->boolean('deprecated')->default(false);
+            $table->string('introduced_by_adr')->nullable();
+            $table->text('notes')->nullable();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
         });

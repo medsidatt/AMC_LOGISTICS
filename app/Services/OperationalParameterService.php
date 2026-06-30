@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Enums\OperationalParameterKey;
+use App\Exceptions\MissingOperationalParameterException;
 use App\Models\OperationalParameter;
+use BackedEnum;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -10,11 +13,13 @@ use Illuminate\Support\Facades\Cache;
  *
  * Responsibilities (and nothing else):
  *   - load every active parameter ONCE and cache it (never two queries for one key);
- *   - expose typed getters (float/int/bool/string/array);
- *   - one fallback only — the $default passed by the caller;
+ *   - expose typed getters (float/int/bool/string/enum);
+ *   - report existence via has(); a missing key is an ERROR, not a guessed default;
  *   - invalidate the cache when a parameter changes.
  *
- * No business calculation belongs here. See docs/operational-intelligence-architecture.md (L1).
+ * The service NEVER knows a business default (ADR-008). Defaults live in the seeder,
+ * the migration history, and the ADRs. No business calculation belongs here.
+ * See docs/operational-intelligence-architecture.md (L1).
  */
 class OperationalParameterService
 {
@@ -23,10 +28,7 @@ class OperationalParameterService
     /** Per-instance memo so repeated reads in one request never touch the cache store twice. */
     private ?array $resolved = null;
 
-    /**
-     * The full key => typed-value map of active parameters.
-     * Loaded once per process and cached across requests.
-     */
+    /** The full key => typed-value map of active parameters (loaded once, cached). */
     public function map(): array
     {
         if ($this->resolved !== null) {
@@ -39,59 +41,55 @@ class OperationalParameterService
         );
     }
 
-    /** Raw resolved value (already cast to its declared type), or the single fallback. */
-    public function get(string $key, mixed $default = null): mixed
+    public function has(OperationalParameterKey|string $key): bool
     {
-        $map = $this->map();
-
-        return array_key_exists($key, $map) ? $map[$key] : $default;
+        return array_key_exists($this->keyString($key), $this->map());
     }
 
-    public function float(string $key, float $default = 0.0): float
+    public function float(OperationalParameterKey|string $key): float
     {
-        $value = $this->get($key);
-
-        return $value === null ? $default : (float) $value;
+        return (float) $this->resolve($key);
     }
 
-    public function int(string $key, int $default = 0): int
+    public function int(OperationalParameterKey|string $key): int
     {
-        $value = $this->get($key);
-
-        return $value === null ? $default : (int) $value;
+        return (int) $this->resolve($key);
     }
 
-    public function bool(string $key, bool $default = false): bool
+    public function bool(OperationalParameterKey|string $key): bool
     {
-        $value = $this->get($key);
-
-        return $value === null ? $default : (bool) $value;
+        return (bool) $this->resolve($key);
     }
 
-    public function string(string $key, string $default = ''): string
+    public function string(OperationalParameterKey|string $key): string
     {
-        $value = $this->get($key);
-
-        return $value === null ? $default : (string) $value;
+        return (string) $this->resolve($key);
     }
 
-    public function array(string $key, array $default = []): array
+    /**
+     * Resolve a stored value into a backed enum case.
+     *
+     * @template T of BackedEnum
+     * @param  class-string<T>  $enumClass
+     * @return T
+     */
+    public function enum(OperationalParameterKey|string $key, string $enumClass): BackedEnum
     {
-        $value = $this->get($key);
-
-        return is_array($value) ? $value : $default;
+        return $enumClass::from((string) $this->resolve($key));
     }
 
     /**
      * Persist a parameter value and invalidate the cache.
-     * Only the value (and the editor) change; type/unit/category/description are preserved.
+     * Only the value (and the editor) change; metadata is preserved.
      */
-    public function set(string $key, mixed $value, ?int $userId = null): OperationalParameter
+    public function set(OperationalParameterKey|string $key, mixed $value, ?int $userId = null): OperationalParameter
     {
-        $parameter = OperationalParameter::query()->where('key', $key)->first();
+        $keyString = $this->keyString($key);
+
+        $parameter = OperationalParameter::query()->where('key', $keyString)->first();
 
         if ($parameter === null) {
-            throw new \InvalidArgumentException("Unknown operational parameter: {$key}");
+            throw MissingOperationalParameterException::for($keyString);
         }
 
         $parameter->value = $this->stringify($value, $parameter->type);
@@ -108,6 +106,24 @@ class OperationalParameterService
     {
         $this->resolved = null;
         Cache::forget(self::CACHE_KEY);
+    }
+
+    /** The single point where a missing parameter becomes a loud error. */
+    private function resolve(OperationalParameterKey|string $key): mixed
+    {
+        $keyString = $this->keyString($key);
+        $map = $this->map();
+
+        if (! array_key_exists($keyString, $map)) {
+            throw MissingOperationalParameterException::for($keyString);
+        }
+
+        return $map[$keyString];
+    }
+
+    private function keyString(OperationalParameterKey|string $key): string
+    {
+        return $key instanceof OperationalParameterKey ? $key->value : $key;
     }
 
     private function loadMap(): array

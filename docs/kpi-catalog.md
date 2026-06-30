@@ -573,6 +573,16 @@ Permanent decisions. Status values: Proposed · Accepted · Superseded.
 - **Reason:** dispatch is a distinct capability (dispatch readiness · planned-vs-started · assignment completeness · unassigned trucks · dispatch delay · execution) and must not reuse the Rotation/Capacity/Operations calculators.
 - **Impact:** adds the Dispatch Calculator inside the existing Domain Calculators layer (owns KPI-DSP-300, KPI-DSP-301); no layer, boundary, or rule changes.
 
+### ADR-008 — Operational Parameter Store
+- **Status:** Accepted.
+- **Why parameters exist:** every configurable operational value (threshold, capacity, SLA, fiscal day, maintenance limit) lives in one store — `operational_parameters` — resolved through `OperationalParameterService`. One value, one place, changeable without code.
+- **Why defaults are NOT in code:** the service resolves stored values only; it never knows a business default. A missing parameter throws `MissingOperationalParameterException` rather than guessing. Defaults live in the **seeder** (current production values), the **migration history**, and these **ADRs** — so a value can never silently diverge between a code fallback and the store.
+- **Keys / categories / units / owners are enums, never strings:** `OperationalParameterKey`, `ParameterCategory`, `ParameterUnit`, `ParameterOwner`. Calculators consume the key enum; no duplicated literals.
+- **Cache strategy:** the active key→value map is loaded once and held in a process memo plus `Cache::rememberForever` — never two queries for one key. Any write (model save/delete or `service->set()`) forgets the cache key, so reads never go stale; cross-instance updates are visible on the next request.
+- **Value column:** stays `text` paired with a `type` discriminator (`int|float|bool|string|json`). This stores scalars **and** json-encoded structures without a future migration per new type — reviewed and kept deliberately.
+- **Ownership:** every parameter names one `owner` department (mirrors the KPI Catalog) and carries governance metadata (`editable`, `deprecated`, `introduced_by_adr`, `notes`).
+- **Evolution rules:** add a parameter = add an `OperationalParameterKey` case + a validated seeder row (unique key · known category/unit/owner · value matches type — the seeder fails fast otherwise). Never reuse a retired key. Changing a *meaning* requires a new key + an ADR. New band/rate parameters with no current value are introduced with their KPI's calculator, never invented early.
+
 ---
 
 ## 15. Final validation

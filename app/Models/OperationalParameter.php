@@ -18,13 +18,20 @@ class OperationalParameter extends Model
         'type',
         'unit',
         'category',
+        'owner',
         'description',
         'is_active',
+        'editable',
+        'deprecated',
+        'introduced_by_adr',
+        'notes',
         'updated_by',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'editable' => 'boolean',
+        'deprecated' => 'boolean',
     ];
 
     protected static function booted(): void

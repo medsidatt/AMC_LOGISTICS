@@ -56,7 +56,7 @@ app/Domain/Operations/
 ### L1 · Operational Parameters (`Parameters/` + service)
 - **Responsibility:** store/serve **configurable values only** (thresholds, capacities, SLA days, fiscal-start-day, maintenance limits, warning %, target rotations, cycle/buffer/work hours). No logic.
 - **Dependencies:** none.
-- **Files (new):** migration `…_create_operational_parameters_table`, `app/Models/OperationalParameter.php`, `app/Services/OperationalParameterService.php` (cached, typed `float/int/bool`, audited via `updated_by`), `OperationalParameterSeeder` (seeds each key to its **current** value).
+- **Files (new):** migration `…_create_operational_parameters_table`, `app/Models/OperationalParameter.php`, `app/Services/OperationalParameterService.php` (cached, typed `float/int/bool/string/enum`, **no business defaults** — missing key throws; audited via `updated_by`), `OperationalParameterSeeder` (validated; seeds each key to its **current** value), and enums `app/Enums/{OperationalParameterKey,ParameterCategory,ParameterUnit,ParameterOwner}`. **Defaults live in the seeder/ADRs, never in the service (ADR-008).**
 - **Risks:** cache staleness → invalidate on save; seed must equal current literals.
 - **Verification:** unit tests assert each seeded key == its current hardcoded value (no behaviour change).
 - **Rollback:** additive — drop migration.
