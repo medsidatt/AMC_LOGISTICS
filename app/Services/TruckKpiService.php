@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\UtilizationCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\FleetiDailyRecord;
 use App\Models\FuelEvent;
@@ -17,6 +18,7 @@ class TruckKpiService
     public function __construct(
         private readonly WeightCalculatorInterface $weightCalculator,
         private readonly CapacityCalculatorInterface $capacityCalculator,
+        private readonly UtilizationCalculatorInterface $utilizationCalculator,
     ) {}
 
     public function compute(Truck $truck, Carbon $from, Carbon $to): array
@@ -43,9 +45,7 @@ class TruckKpiService
 
         // Capacity is a single fleet-wide setting, identical for every truck.
         $capacity = max(0.01, $this->capacityCalculator->defaultCapacity());
-        $loadRate = $rotationsCount > 0
-            ? $tonnageDelivered / ($capacity * $rotationsCount)
-            : 0.0;
+        $loadRate = $this->utilizationCalculator->loadRate($tonnageDelivered, $capacity, $rotationsCount);
 
         $fuelLitres = (float) FleetiDailyRecord::query()
             ->where('truck_id', $truck->id)

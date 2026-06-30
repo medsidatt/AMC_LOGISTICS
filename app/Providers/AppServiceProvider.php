@@ -46,6 +46,20 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Operations\Contracts\CapacityCalculatorInterface::class,
             \App\Domain\Operations\Calculations\CapacityCalculator::class,
         );
+
+        // R1.3 inc3: rotation, cycle, utilization.
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\RotationCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\RotationCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\CycleCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\CycleCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\UtilizationCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\UtilizationCalculator::class,
+        );
     }
 
     /**

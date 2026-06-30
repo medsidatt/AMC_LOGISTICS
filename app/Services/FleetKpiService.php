@@ -6,6 +6,8 @@ use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\RotationCalculatorInterface;
+use App\Domain\Operations\Contracts\UtilizationCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\DriverDisciplineRecord;
 use App\Models\FleetiDailyRecord;
@@ -23,6 +25,8 @@ class FleetKpiService
         private readonly ObjectiveTargetResolver $objectiveResolver,
         private readonly WeightCalculatorInterface $weightCalculator,
         private readonly CapacityCalculatorInterface $capacityCalculator,
+        private readonly UtilizationCalculatorInterface $utilizationCalculator,
+        private readonly RotationCalculatorInterface $rotationCalculator,
     ) {}
 
     public function compute(Carbon $from, Carbon $to): array
@@ -34,19 +38,13 @@ class FleetKpiService
         $trucksTotal = $trucks->count();
         $trucksAvailable = $trucks->filter(fn (Truck $t) => $t->isAvailable())->count();
 
-        $rotationsPerTruck = TransportTracking::query()
-            ->select('truck_id', DB::raw('COUNT(*) as rotations'), DB::raw('SUM(client_net_weight) as tonnage'))
-            ->whereBetween('client_date', [$from, $to])
-            ->whereNotNull('truck_id')
-            ->groupBy('truck_id')
-            ->get()
-            ->keyBy('truck_id');
+        $rotationsPerTruck = $this->rotationCalculator->byTruck($from, $to)->keyBy(fn ($a) => $a->truckId);
 
         $activeTruckIds = $rotationsPerTruck->keys()->all();
         $trucksActive = count($activeTruckIds);
 
         $totalRotations = (int) $rotationsPerTruck->sum('rotations');
-        $totalTonnageDelivered = (float) $rotationsPerTruck->sum('tonnage');
+        $totalTonnageDelivered = (float) $rotationsPerTruck->sum('clientTonnage');
 
         $fuelLitres = (float) FleetiDailyRecord::query()
             ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
@@ -67,7 +65,7 @@ class FleetKpiService
         $productionTarget = $plannedTonnage > 0 ? $totalTonnageDelivered / $plannedTonnage : 0.0;
 
         $theoreticalCapacity = $avgCapacity * $totalRotations;
-        $loadRate = $theoreticalCapacity > 0 ? $totalTonnageDelivered / $theoreticalCapacity : 0.0;
+        $loadRate = $this->utilizationCalculator->loadRate($totalTonnageDelivered, $avgCapacity, $totalRotations);
 
         $fuelYieldLPerT = $totalTonnageDelivered > 0 ? $fuelLitres / $totalTonnageDelivered : 0.0;
 
@@ -127,9 +125,9 @@ class FleetKpiService
 
         $rows = $trucks->map(function (Truck $truck) use ($rotationsPerTruck, $fuelPerTruck, $capacity) {
             $row = $rotationsPerTruck->get($truck->id);
-            $rotations = (int) ($row->rotations ?? 0);
-            $tonnage = (float) ($row->tonnage ?? 0);
-            $loadRate = $rotations > 0 ? $tonnage / ($capacity * $rotations) : 0.0;
+            $rotations = (int) ($row?->rotations ?? 0);
+            $tonnage = (float) ($row?->clientTonnage ?? 0);
+            $loadRate = $this->utilizationCalculator->loadRate($tonnage, $capacity, $rotations);
             $litres = (float) ($fuelPerTruck->get($truck->id)->litres ?? 0);
             $yield = $tonnage > 0 ? $litres / $tonnage : null;
 
@@ -171,13 +169,7 @@ class FleetKpiService
     {
         $drivers = Driver::where('is_active', true)->get();
 
-        $rotationsPerDriver = TransportTracking::query()
-            ->select('driver_id', DB::raw('COUNT(*) as rotations'), DB::raw('SUM(client_net_weight) as tonnage'))
-            ->whereBetween('client_date', [$from, $to])
-            ->whereNotNull('driver_id')
-            ->groupBy('driver_id')
-            ->get()
-            ->keyBy('driver_id');
+        $rotationsPerDriver = $this->rotationCalculator->byDriver($from, $to)->keyBy(fn ($a) => $a->driverId);
 
         $gapThreshold = $this->weightCalculator->gapThreshold();
 
@@ -192,8 +184,8 @@ class FleetKpiService
 
         $rows = $drivers->map(function (Driver $driver) use ($from, $to, $rotationsPerDriver, $gapThreshold, $disciplinePerDriver, $capacity) {
             $row = $rotationsPerDriver->get($driver->id);
-            $rotations = (int) ($row->rotations ?? 0);
-            $tonnage = (float) ($row->tonnage ?? 0);
+            $rotations = (int) ($row?->rotations ?? 0);
+            $tonnage = (float) ($row?->clientTonnage ?? 0);
 
             $weighedTrips = TransportTracking::query()
                 ->where('driver_id', $driver->id)
