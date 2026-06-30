@@ -6,6 +6,7 @@ use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\FuelCalculatorInterface;
 use App\Domain\Operations\Contracts\RotationCalculatorInterface;
 use App\Domain\Operations\Contracts\UtilizationCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
@@ -27,6 +28,7 @@ class FleetKpiService
         private readonly CapacityCalculatorInterface $capacityCalculator,
         private readonly UtilizationCalculatorInterface $utilizationCalculator,
         private readonly RotationCalculatorInterface $rotationCalculator,
+        private readonly FuelCalculatorInterface $fuelCalculator,
     ) {}
 
     public function compute(Carbon $from, Carbon $to): array
@@ -67,7 +69,7 @@ class FleetKpiService
         $theoreticalCapacity = $avgCapacity * $totalRotations;
         $loadRate = $this->utilizationCalculator->loadRate($totalTonnageDelivered, $avgCapacity, $totalRotations);
 
-        $fuelYieldLPerT = $totalTonnageDelivered > 0 ? $fuelLitres / $totalTonnageDelivered : 0.0;
+        $fuelYieldLPerT = $this->fuelCalculator->yieldPerTonne($fuelLitres, $totalTonnageDelivered) ?? 0.0;
 
         return [
             'period' => [
@@ -129,7 +131,7 @@ class FleetKpiService
             $tonnage = (float) ($row?->clientTonnage ?? 0);
             $loadRate = $this->utilizationCalculator->loadRate($tonnage, $capacity, $rotations);
             $litres = (float) ($fuelPerTruck->get($truck->id)->litres ?? 0);
-            $yield = $tonnage > 0 ? $litres / $tonnage : null;
+            $yield = $this->fuelCalculator->yieldPerTonne($litres, $tonnage);
 
             return [
                 'id' => $truck->id,
@@ -213,7 +215,7 @@ class FleetKpiService
                 ->whereBetween('record_date', [$from->toDateString(), $to->toDateString()])
                 ->whereIn('truck_id', $weighedTrips->pluck('truck_id')->filter()->unique())
                 ->sum('consumed');
-            $yield = $tonnage > 0 ? $fuelLitres / $tonnage : null;
+            $yield = $this->fuelCalculator->yieldPerTonne($fuelLitres, $tonnage);
 
             $weeklyChecklists = DailyChecklist::query()
                 ->where('driver_id', $driver->id)

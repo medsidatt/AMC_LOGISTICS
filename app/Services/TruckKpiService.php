@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\FuelCalculatorInterface;
+use App\Domain\Operations\Contracts\MaintenanceCalculatorInterface;
 use App\Domain\Operations\Contracts\UtilizationCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\FleetiDailyRecord;
@@ -19,6 +21,8 @@ class TruckKpiService
         private readonly WeightCalculatorInterface $weightCalculator,
         private readonly CapacityCalculatorInterface $capacityCalculator,
         private readonly UtilizationCalculatorInterface $utilizationCalculator,
+        private readonly FuelCalculatorInterface $fuelCalculator,
+        private readonly MaintenanceCalculatorInterface $maintenanceCalculator,
     ) {}
 
     public function compute(Truck $truck, Carbon $from, Carbon $to): array
@@ -53,7 +57,7 @@ class TruckKpiService
             ->sum('consumed');
 
         $fuelPerRotation = $rotationsCount > 0 ? $fuelLitres / $rotationsCount : null;
-        $fuelYield = $tonnageDelivered > 0 ? $fuelLitres / $tonnageDelivered : null;
+        $fuelYield = $this->fuelCalculator->yieldPerTonne($fuelLitres, $tonnageDelivered);
 
         $anomalies = FuelEvent::query()
             ->where('truck_id', $truck->id)
@@ -67,12 +71,7 @@ class TruckKpiService
         $intervalKm = (float) $truck->kmMaintenanceInterval();
         $kmSince = (float) $truck->km_since_maintenance;
         $remainingKm = max(0.0, $intervalKm - $kmSince);
-        $maintLevel = 'green';
-        if ($remainingKm <= 0) {
-            $maintLevel = 'red';
-        } elseif ($remainingKm <= ($intervalKm * 0.1)) {
-            $maintLevel = 'orange';
-        }
+        $maintLevel = $this->maintenanceCalculator->level($remainingKm, $intervalKm);
 
         return [
             'period' => [

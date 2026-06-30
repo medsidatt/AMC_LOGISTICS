@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
+use App\Domain\Operations\Contracts\ProductivityCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
 use App\Models\DailyChecklist;
 use App\Models\DailyChecklistIssue;
@@ -26,6 +27,7 @@ class DriverKpiService
         private readonly ObjectiveTargetResolver $objectiveResolver,
         private readonly WeightCalculatorInterface $weightCalculator,
         private readonly CapacityCalculatorInterface $capacityCalculator,
+        private readonly ProductivityCalculatorInterface $productivityCalculator,
     ) {}
 
     public function compute(Driver $driver, Carbon $from, Carbon $to): array
@@ -182,16 +184,12 @@ class DriverKpiService
                 ->whereBetween('week_start_date', [$from, $to]))
             ->count();
 
-        // Normalize manual points around 0 (positive = good, negative = bad).
-        // Mapping: -10 pts → 0, 0 → 50, +10 pts → 100, clamped.
-        $manualN = max(0.0, min(1.0, ($manualPoints + 10) / 20));
-
-        $issuesN = max(0.0, 1.0 - min(1.0, $flaggedIssues / 10));
-        $gapRatio = $rotationsCount > 0 ? $gapViolations / $rotationsCount : 0.0;
-        $gapsN = 1.0 - min(1.0, $gapRatio);
-
-        $score = ($manualN * 0.4 + $checklistOnTimeRate * 0.2 + $issuesN * 0.2 + $gapsN * 0.2) * 100;
-
-        return $score;
+        return $this->productivityCalculator->disciplineScore(
+            $manualPoints,
+            $checklistOnTimeRate,
+            $flaggedIssues,
+            $gapViolations,
+            $rotationsCount,
+        );
     }
 }

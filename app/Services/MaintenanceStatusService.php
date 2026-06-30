@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Domain\Operations\Contracts\MaintenanceCalculatorInterface;
 use App\Models\Maintenance;
 use App\Models\Truck;
 use App\Models\TruckMaintenanceProfile;
@@ -10,6 +11,8 @@ use Illuminate\Support\Facades\Schema;
 
 class MaintenanceStatusService
 {
+    public function __construct(private readonly MaintenanceCalculatorInterface $maintenance) {}
+
     public function recalculateForTruck(Truck $truck): Collection
     {
         if (! Schema::hasTable('truck_maintenance_profiles')) {
@@ -144,15 +147,7 @@ class MaintenanceStatusService
 
     public function statusFromRemaining(float $remainingKm, float $warningThresholdKm): string
     {
-        if ($remainingKm <= 0) {
-            return 'red';
-        }
-
-        if ($remainingKm <= $warningThresholdKm) {
-            return 'yellow';
-        }
-
-        return 'green';
+        return $this->maintenance->statusFromRemaining($remainingKm, $warningThresholdKm);
     }
 
     public function ensureProfile(Truck $truck, string $maintenanceType): TruckMaintenanceProfile

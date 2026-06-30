@@ -205,6 +205,11 @@ class OperationalParameterSeeder extends Seeder
                 'unit' => $u(ParameterUnit::KILOMETRES), 'category' => $c(ParameterCategory::MAINTENANCE), 'owner' => $o(ParameterOwner::MAINTENANCE),
                 'description' => 'Remaining kilometres at which a maintenance warning is raised.',
             ],
+            [
+                'key' => $k(OperationalParameterKey::MAINTENANCE_WARNING_RATIO), 'value' => '0.1', 'type' => 'float',
+                'unit' => $u(ParameterUnit::RATIO), 'category' => $c(ParameterCategory::MAINTENANCE), 'owner' => $o(ParameterOwner::MAINTENANCE),
+                'description' => 'Share of the maintenance interval remaining below which a truck is flagged as a warning.',
+            ],
         ];
     }
 }

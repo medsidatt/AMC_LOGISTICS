@@ -60,6 +60,20 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Operations\Contracts\UtilizationCalculatorInterface::class,
             \App\Domain\Operations\Calculations\UtilizationCalculator::class,
         );
+
+        // R1.3 inc4: fuel, maintenance, productivity.
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\FuelCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\FuelCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\MaintenanceCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\MaintenanceCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\ProductivityCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\ProductivityCalculator::class,
+        );
     }
 
     /**

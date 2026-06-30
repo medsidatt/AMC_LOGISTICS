@@ -24,4 +24,5 @@ enum OperationalParameterKey: string
     case MAX_ROTATIONS_BEFORE_MAINTENANCE = 'max_rotations_before_maintenance';
     case MAX_KM_BEFORE_MAINTENANCE = 'max_km_before_maintenance';
     case WARNING_THRESHOLD_KM = 'warning_threshold_km';
+    case MAINTENANCE_WARNING_RATIO = 'maintenance_warning_ratio';
 }
