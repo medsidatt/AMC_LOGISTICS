@@ -36,6 +36,16 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Operations\Contracts\FleetReadModelInterface::class,
             \App\Domain\Operations\ReadModels\FleetReadModel::class,
         );
+
+        // Operational Intelligence — Domain Calculators (L2). First dups: weight, capacity.
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\WeightCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\WeightCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\CapacityCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\CapacityCalculator::class,
+        );
     }
 
     /**
