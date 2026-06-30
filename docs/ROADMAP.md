@@ -14,8 +14,18 @@
 
 **Production Phase 1** — **Step 1 (WhatsApp dispatch)** on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2/3 (SharePoint upload)** — implemented + locally verified (local-first + `sync_status` lifecycle; Driver/Maintenance `Document` devis via `Document::storeLocalAndQueueSync()`); on `develop`, deployment to `main` gated on Step 1 approval.
 
-## Next Phase
-Open Step 1's production gate → deploy Step 2 → then Step 3 (serialized). Administration SPA continues: Providers → Transporters → Entities → Projects. (Excel import dropped — orphaned legacy; OpenAI → P1.5.)
+## Next Phase — Decision-Support / Operations Command Center (approved direction 2026-06-29)
+Build value-first per the [Platform Constitution](workspace-standard.md) governance (Feature Approval Gate → build → Page Acceptance merge gate):
+- **R1 · Operational Calculation Engine** ★★★★★ — `OperationalParameter` + `OperationalParameterService` + `CalculationEngine`; one source of truth; remove ~20 duplicated KPI calcs + 8 hardcoded thresholds (incl. the 25t/45t capacity conflict). **Foundation — next.**
+- **R2 · Operations Command Center** ★★★★★ — responsibility centers (Exec/Operations/Fleet/Maintenance/Finance/HSE); 4-layer (Situation→Problems→Decisions→Prediction); remove module dashboards + orphaned `TransportDashboard`.
+- **R3 · KPI consolidation** ★★★★★ — single KPI registry + event + threshold engines.
+- **R4 · Operational intelligence** ★★★★★ — conclusions not reports (objective-at-risk, revenue-blocked, capacity-at-risk, billing-readiness…).
+- **R5 · Planning↔Dispatch integration** ★★★★ — TruckAssignment→dispatch, crew validation, capacity prediction, reallocations.
+- **R6 · Ticket entry optimization** ★★★★ — (was 5.3B) auto-net, slip refs, Save & New, smart defaults, context.
+- **R7 · Maintenance intelligence** ★★★ — failure forecast, recurring trends, workshop load.
+- **R8 · Master data** ★★ — Entities/Projects/Places, only if multi-project growth justifies (backlog).
+- **R9 · Platform polish** ★★ — dead code, perf, code-splitting, a11y, tests, docs.
+(Production Phase 1: open Step 1's gate → deploy Step 2 → Step 3 — runs in parallel, ops-owned.)
 
 ## Standard integration pattern (platform rule)
 Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
