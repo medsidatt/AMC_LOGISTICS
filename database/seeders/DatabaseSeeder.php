@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionTableSeeder::class,
             RoleAndPermissionSeeder::class,
+            OperationalParameterSeeder::class,
             TransportBasaltSeeder::class,
             ProviderCarrierSeeder::class,
             ProviderClientSeeder::class,
