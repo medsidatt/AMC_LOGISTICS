@@ -33,7 +33,7 @@ app/Domain/Operations/
 ├── Parameters/        OperationalParameter usage helpers (values live in DB + service)
 ├── Contracts/         one interface per calculator (+ ReadModel / Event contracts)
 ├── ReadModels/        TransportTracking/Fleet/Fuel/Maintenance/Inspection/Dispatch read models
-├── Calculations/      Capacity/Weight/Rotation/Productivity/Fuel/Cycle/Maintenance/Inspection/Billing/Objective/Utilization
+├── Calculations/      Capacity/Weight/Rotation/Dispatch/Productivity/Fuel/Cycle/Maintenance/Inspection/Billing/Objective/Utilization
 ├── Events/            immutable business-event value objects + derivers
 ├── KPI/               KpiRegistry + KPI definitions
 ├── Intelligence/      OperationalIntelligenceEngine + conclusion value objects
@@ -63,7 +63,7 @@ app/Domain/Operations/
 
 ### L2 · Domain Calculators (`Calculations/` + `Contracts/`)
 - **Responsibility:** **own the business rules.** One responsibility each, behind an **interface** (Contracts) and the `OperationsDomain` facade. Logic lives here; values come from Parameters; data comes from Read Models.
-- **Calculators ↔ interfaces:** Capacity/Weight/Rotation/Productivity/Fuel/Cycle/Maintenance/Inspection/Billing/Objective/Utilization, each with `…CalculatorInterface`.
+- **Calculators ↔ interfaces:** Capacity/Weight/Rotation/**Dispatch**/Productivity/Fuel/Cycle/Maintenance/Inspection/Billing/Objective/Utilization, each with `…CalculatorInterface`. **Dispatch** is a distinct business capability (dispatch readiness · planned-vs-started · assignment completeness · unassigned trucks · dispatch delay · execution) and does not reuse Rotation/Capacity calculators — added inside this layer, no layer/boundary/rule change.
 - **Absorbs (move, not rewrite):** weight-gap-violations ×4, default-capacity ×6, cycle-days ×2, discipline ×2, fuel-yield ×4, load-rate ×3, tonnage/rotation aggregations ×4, fiscal-month 22→21 ×5, maintenance-level ×3, availability/saturation.
 - **Dependencies:** Read Models + OperationalParameterService.
 - **Files (new):** `Domain/Operations/Calculations/*`, `Contracts/*CalculatorInterface`, `OperationsDomain.php`. **Refactor:** Driver/Truck/Fleet KPI services, RotationAchievement, FleetCapacity, DashboardDataService, TrackingDashboardController, HseController delegate to calculators.
