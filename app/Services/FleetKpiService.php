@@ -7,6 +7,7 @@ use App\Models\DailyChecklistIssue;
 use App\Models\Driver;
 use App\Domain\Operations\Contracts\CapacityCalculatorInterface;
 use App\Domain\Operations\Contracts\FuelCalculatorInterface;
+use App\Domain\Operations\Contracts\ObjectiveCalculatorInterface;
 use App\Domain\Operations\Contracts\RotationCalculatorInterface;
 use App\Domain\Operations\Contracts\UtilizationCalculatorInterface;
 use App\Domain\Operations\Contracts\WeightCalculatorInterface;
@@ -29,6 +30,7 @@ class FleetKpiService
         private readonly UtilizationCalculatorInterface $utilizationCalculator,
         private readonly RotationCalculatorInterface $rotationCalculator,
         private readonly FuelCalculatorInterface $fuelCalculator,
+        private readonly ObjectiveCalculatorInterface $objectiveCalculator,
     ) {}
 
     public function compute(Carbon $from, Carbon $to): array
@@ -64,7 +66,7 @@ class FleetKpiService
 
         $periodDays = max(1, (int) ceil($from->diffInDays($to)) + 1);
         $plannedTonnage = $this->objectiveResolver->resolve($from, $to, FleetObjective::PERIOD_CUSTOM)['fleet']['target_tons'];
-        $productionTarget = $plannedTonnage > 0 ? $totalTonnageDelivered / $plannedTonnage : 0.0;
+        $productionTarget = $this->objectiveCalculator->achievement($totalTonnageDelivered, $plannedTonnage);
 
         $theoreticalCapacity = $avgCapacity * $totalRotations;
         $loadRate = $this->utilizationCalculator->loadRate($totalTonnageDelivered, $avgCapacity, $totalRotations);

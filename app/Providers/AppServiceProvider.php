@@ -74,6 +74,24 @@ class AppServiceProvider extends ServiceProvider
             \App\Domain\Operations\Contracts\ProductivityCalculatorInterface::class,
             \App\Domain\Operations\Calculations\ProductivityCalculator::class,
         );
+
+        // R1.3 inc5 (final calculators): dispatch, objective, inspection, finance.
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\DispatchCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\DispatchCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\ObjectiveCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\ObjectiveCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\InspectionCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\InspectionCalculator::class,
+        );
+        $this->app->bind(
+            \App\Domain\Operations\Contracts\FinanceCalculatorInterface::class,
+            \App\Domain\Operations\Calculations\FinanceCalculator::class,
+        );
     }
 
     /**
