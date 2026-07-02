@@ -5,7 +5,7 @@
 > mark phases done, record the completing commit hash, add/remove technical
 > debt, and refresh *Current Focus* / *Next Phase*. Keep it concise.
 
-**Last updated:** 2026-06-29
+**Last updated:** 2026-07-02
 
 ---
 
@@ -13,6 +13,8 @@
 **`develop` integration complete (2026-06-29).** All SPA workspaces — Trucks, Transport Tracking, Drivers, Fuel, Maintenance, Inspections (Fleet) + Roles & Users (Administration) on the shared `useWorkspaceDrawer` URL-driven standard — plus **GPS Infrastructure Decoupling** and **SharePoint Step 2/3** (local-first background upload) are now consolidated on `develop`.
 
 **Production Phase 1** — **Step 1 (WhatsApp dispatch)** on `main`, **Waiting for Production Validation** (gate CLOSED). **Step 2/3 (SharePoint upload)** — implemented + locally verified (local-first + `sync_status` lifecycle; Driver/Maintenance `Document` devis via `Document::storeLocalAndQueueSync()`); on `develop`, deployment to `main` gated on Step 1 approval.
+
+**Operational Intelligence Platform (frozen architecture, `develop`).** Layers L0–L6 built and green: R1.1 Parameters · R1.2 Read Models · R1.3 Calculators · R1.4 Business Events · R1.5 KPI Registry · R1.5.1 Identity · R1.6 Operational Intelligence · R1.7 Dashboard Translators. **R2.1 Executive Command Center** + **R2.1.1 hardening** + **R2.2 Operations Command Center** landed — end-to-end pipeline consumers (facts → Intelligence → {Executive,Operations} Translator → CommandCenter → Controller → React `executive/Index` / `operations/CommandCenter`), additive and parallel to the legacy dashboards. **R3.0** Read Model extension (Maintenance/Inspection/Dispatch aggregate owners + `loads`/`missingTickets` folded into Transport/Dispatch; hardened to a pure query layer with a frozen public API). **R3.1** Business Event Derivers (Maintenance/Inspection/TransportTracking/Dispatch → 5 events; decisions added to calculators, never derivers). **R3.2** `DerivedBusinessEventSource` — the single event producer (resolves one context, invokes each deriver once, merges + de-dups); replaced `PendingBusinessEventSource`. The pipeline is now wired end-to-end: Read Models → Calculators → Derivers → Source → Intelligence → Translators → Command Centers → React. **Pipeline frozen at 5/8 canonical events** (2026-07-01 decision): `MaintenanceOverdue`(km)/`InspectionExpired`/`WeightAnomalyDetected`/`MissingTransportTicket`/`TruckUnavailable` are production-ready. `BillingBlocked`/`ObjectiveBehindSchedule`/`CapacityReduced` are **formally deferred** — blocked on stakeholder-provided business rules + operational parameters (and some Read Model data); see [deferred-business-events ADR](backlog/deferred-business-events.md). No provisional/placeholder logic shipped. Next: dashboard end-to-end (DB-backed) once MySQL is available.
 
 ## Next Phase — Decision-Support / Operations Command Center (approved direction 2026-06-29)
 Build value-first per the [Platform Constitution](workspace-standard.md) governance (Feature Approval Gate → build → Page Acceptance merge gate):
@@ -29,6 +31,105 @@ Build value-first per the [Platform Constitution](workspace-standard.md) governa
 
 ## Standard integration pattern (platform rule)
 Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): **persist locally first → mark sync state → queue the external sync → retry automatically → never lose local data when the provider is down → expose the sync state for ops.** First implemented for documents (`Document.sync_status`, `SyncDocumentToSharePoint`).
+
+---
+
+## Roadmap Philosophy
+The roadmap is organized by **architectural maturity**, not implementation convenience. Each phase
+**stabilizes one layer of the system before the next begins**:
+
+```
+Presentation           (Phase 1 — Dashboard Migration)
+      ↓
+Implementation Quality (Phase 2 — Project Cleanup & Enterprise Hardening)
+      ↓
+Business Rules         (Phase 3 — Business Rule Migrations)
+      ↓
+Business Measurement   (Phase 4 — Enterprise KPI Catalog)
+      ↓
+Decision Intelligence  (Phase 5 — Advanced Analytics)
+```
+
+---
+
+## Forward Phases — Sequenced Program (2026-07-02)
+> Forward work runs in ordered phases. **Business Rule Migrations (Phase 3) change how the business
+> operates and are kept SEPARATE from Technical Debt / Project Cleanup (Phase 2), which improves
+> implementation WITHOUT changing business behavior.** Never reclassify a business-rule change as technical debt.
+
+### Phase 1 — Dashboard Migration — **ACTIVE**
+Migrate dashboards onto the frozen architecture; **presentation cleanup only**: remove duplicated
+information, remove explanations/methodology, remove React business logic, enforce dashboard ownership.
+- Done: Admin Home · Role Home (Driver / HSE / Logistics Responsible) · Transport Dashboard · Transport Analytics · Fleet Analytics.
+- Remaining: Maintenance Dashboard (+ any remaining surface). One dashboard per step; stop after each and await approval.
+
+### Phase 2 — Project Cleanup & Enterprise Hardening — scheduled (after Phase 1)
+Implementation-only improvements, **no business-behavior change**: frontend cleanup · backend cleanup ·
+dead-code removal · duplicate-logic removal · SOLID improvements · architecture cleanup · security ·
+permissions · authorization · authentication · performance · documentation · testing · enterprise-audit fixes.
+- The **Technical Debt** section below is this phase's working backlog (implementation fixes only).
+
+### Phase 3 — Business Rule Migrations — scheduled (after Phase 2) · **changes business behavior, NOT technical debt**
+Every future change to *how the business operates* lives here — do not place these in Technical Debt.
+
+**Business Rule Migration Principles.** Business Rule Migrations intentionally change business behavior.
+They are **not** bug fixes. They are **not** technical debt. They are **planned architectural initiatives**.
+Every Business Rule Migration must follow the complete enterprise workflow below.
+
+**Prerequisites — Business Rule Migrations must NEVER begin until the platform is stable:**
+- ✓ Dashboard Migration completed
+- ✓ Project Cleanup & Enterprise Hardening completed
+- ✓ Enterprise Architecture Audit findings resolved
+- ✓ No Critical or High security findings remaining
+- ✓ All application tests passing
+- ✓ Documentation synchronized with the implementation
+
+**Standard Workflow — every Business Rule Migration must include all ten steps; no migration may skip these:**
+1. Repository Audit
+2. Dependency Map
+3. Business Impact Analysis
+4. Architecture Verification
+5. Implementation Plan
+6. Implementation
+7. Regression Tests
+8. Documentation Update
+9. Enterprise Architecture Verification
+10. Final Acceptance Audit
+
+**3.1 · Calendar Month Migration** — **Status: Scheduled · Not Started.**
+- **Dependencies:** Dashboard Migration · Project Cleanup & Enterprise Hardening · Enterprise Architecture Audit.
+- **Objective:** replace the custom fiscal month (**22 → 21**) with the standard **calendar month** throughout the application.
+- **Scope:** backend · read models · calculators · reports · analytics · filters · exports · scheduled jobs · documentation · tests · frontend.
+- **Constraints:** one month implementation · **no compatibility layer** · remove the old fiscal-month implementation completely.
+- **Deliverables:** repository audit · dependency map · business-impact analysis · implementation · test migration · documentation update · architecture verification.
+- **Audit head-start (observed during Phase 1 — NOT exhaustive):** single source today = `OperationalParameter.fiscal_month_start_day = 22` (retire, don't repoint) · owner `TransportTrackingReadModel` (grouping) + `RotationCalculator` · inline duplicates in `TrackingDashboardController` + `DashboardDataService` (audit finding **A3**) · `docs/scoring-formulas.md` · dashboard frontend labels already stripped in Phase 1 (cosmetic — the rule still lives in the backend read model/parameter).
+
+**3.2+ · Future business-rule migrations** — *reserved.* Register additional business-behavior changes here
+as they arise (threshold/parameter redefinitions, classification-rule changes, etc.). Every future Business
+Rule Migration entry **must** use this template:
+
+```
+Title
+Status
+Business Objective
+Business Owner
+Technical Owner
+Dependencies
+Repository Audit
+Affected Modules
+Business Impact
+Implementation Plan
+Regression Tests
+Documentation
+Architecture Verification
+Final Acceptance
+```
+
+### Phase 4 — Enterprise KPI Catalog — scheduled (after Phase 3)
+Design and register KPIs once the architecture and business rules are stable (the fuel KPI catalog stays frozen until then).
+
+### Phase 5 — Advanced Analytics — scheduled (after Phase 4)
+Advanced analytics, predictions, BI improvements, and optimization — built on the stable KPI registry.
 
 ---
 
@@ -92,6 +193,11 @@ Every external provider (SharePoint, Office365, WhatsApp, future SMS/AI/APIs): *
 | SharePoint · Graph file access | ✅ | — |
 | SMS | ⚪ not present | — |
 | MCP / API Gateway · Sanctum + Swagger REST | ✅ basic | MCP not present |
+| **Fuel Domain · Architecture** (EDK reclassified: recharge≠purchase) | ✅ approved | `docs/fuel-domain-architecture.md` + `docs/fuel-edk-reclassification.md` |
+| **Fuel Domain · F1 Consolidation** — `EdkFuelRecharge` rename (est. litres + UNIQUE dedupe/upsert); layout-aware `FleetiFuelParser` (Volume 2.0 + Carburant + legacy, source-owned partial columns); recharge/estimated terminology across API+UI | ✅ | `develop` |
+| **Fuel Domain · F1 Validation + Stabilization** — real multi-month files; fixed EDK "Jui"(June) date drop + Volume2/Carburant deterministic ownership (import-order independent); proved no impossible month (UNIQUE truck+date); 7/7 criteria green | ✅ | `docs/fuel-f1-stabilization.md` |
+| **Fuel Domain · EDK Import Validation layer** — classify every row (VALID/UNKNOWN_TRUCK/INACTIVE_TRUCK/CARD_MISMATCH/DRIVER_MISMATCH/DUPLICATE/MANUAL_REVIEW); quarantine exceptions with full CSV+context in `edk_import_exceptions`; `fuel_import_batches` audit; nothing discarded | ✅ | `docs/fuel-import-validation.md` |
+| Fuel Domain · F2+ (FuelReadModel → Calculator → params → KPIs → reconciliation → command center) | ⚪ next (pending F1 approval + V3–V5 decisions) | blocked entities: FuelPurchase/FuelStation (need EDK transaction export) |
 
 ---
 
