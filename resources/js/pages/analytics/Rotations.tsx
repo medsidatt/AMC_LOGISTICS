@@ -52,8 +52,8 @@ export default function RotationsDashboard(props: Props) {
             {/* Filters */}
             <Card className="mb-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
-                    <FormInput label="Du (22/mm)" type="date" name="from" value={filters.from ?? ''} onChange={(e) => applyFilter('from', e.target.value)} />
-                    <FormInput label="Au (21/mm)" type="date" name="to" value={filters.to ?? ''} onChange={(e) => applyFilter('to', e.target.value)} />
+                    <FormInput label="Du" type="date" name="from" value={filters.from ?? ''} onChange={(e) => applyFilter('from', e.target.value)} />
+                    <FormInput label="Au" type="date" name="to" value={filters.to ?? ''} onChange={(e) => applyFilter('to', e.target.value)} />
                     <FormSelect label="Conducteur" placeholder="Tous" options={drivers.map(d => ({ value: d.id, label: d.name }))} value={filters.driver_id ?? null} onChange={(v) => applyFilter('driver_id', v)} wrapperClass="mb-0" />
                     <FormSelect label="Camion" placeholder="Tous" options={trucks.map(t => ({ value: t.id, label: t.matricule }))} value={filters.truck_id ?? null} onChange={(v) => applyFilter('truck_id', v)} wrapperClass="mb-0" />
                     <FormSelect label="Fournisseur" placeholder="Tous" options={providers.map(p => ({ value: p.id, label: p.name }))} value={filters.provider_id ?? null} onChange={(v) => applyFilter('provider_id', v)} wrapperClass="mb-0" />
@@ -64,7 +64,6 @@ export default function RotationsDashboard(props: Props) {
                         <button onClick={clearFilters} className="text-xs text-[var(--color-danger)] hover:underline flex items-center gap-1"><X size={12} /> Réinitialiser</button>
                     </div>
                 )}
-                <p className="text-xs text-[var(--color-text-muted)] mt-2">Période comptable : du 22 au 21. Basé sur la date client.</p>
             </Card>
 
             {/* KPIs */}
@@ -78,7 +77,7 @@ export default function RotationsDashboard(props: Props) {
             {/* Monthly breakdown */}
             {months.length > 0 && (
                 <Card className="mt-6">
-                    <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Tonnage par période (22→21)</h3>
+                    <h3 className="text-lg font-semibold text-[var(--color-text)] mb-4">Tonnage par période</h3>
                     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
                         <table className="w-full text-sm">
                             <thead>
@@ -121,7 +120,6 @@ export default function RotationsDashboard(props: Props) {
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Rotations</span><span className="font-mono">{p.trips}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Transporté</span><span className="font-mono">{fmtT(p.prov)}</span></div>
                                     <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Reçu</span><span className="font-mono">{fmtT(p.client)}</span></div>
-                                    <div className="flex justify-between"><span className="text-[var(--color-text-muted)]">Écart</span><span className={clsx('font-mono', (p.client - p.prov) < 0 ? 'text-[var(--color-danger)]' : (p.client - p.prov) > 0 ? 'text-blue-600' : '')}>{(p.client - p.prov) > 0 ? '+' : ''}{fmtT(p.client - p.prov)}</span></div>
                                 </div>
                             </div>
                         ))}

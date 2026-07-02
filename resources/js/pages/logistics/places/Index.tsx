@@ -80,7 +80,7 @@ export default function PlacesIndex({ places }: Props) {
 
             <div className="flex justify-between items-center mb-4">
                 <p className="text-sm text-[var(--color-text-muted)]">
-                    {places.length} lieu(x). Les bases auto-détectées sont rafraîchies chaque nuit depuis la télémétrie.
+                    {places.length} lieu(x).
                 </p>
                 {isAdmin && (
                     <Button icon={<Plus size={16} />} onClick={() => router.visit('/logistics/places/create')}>

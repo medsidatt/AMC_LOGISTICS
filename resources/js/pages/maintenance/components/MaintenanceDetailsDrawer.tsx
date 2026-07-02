@@ -50,7 +50,6 @@ export default function MaintenanceDetailsDrawer({ record: m, refs, canEdit, can
     };
 
     const items = m.items ?? [];
-    const itemsTotal = items.reduce((s, it) => s + (it.line_total ?? 0), 0);
     const checks = m.control_checks ?? {};
     const checkedEntries = Object.entries(refs.controlChecks).filter(([key]) => checks[key]);
     const filters: Array<[string, boolean | undefined]> = [['Huile', m.filter_oil_changed], ['Hydraulique', m.filter_hydraulic_changed], ['Air', m.filter_air_changed], ['Carburant', m.filter_fuel_changed]];
@@ -142,7 +141,6 @@ export default function MaintenanceDetailsDrawer({ record: m, refs, canEdit, can
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot><tr className="bg-[var(--color-surface-hover)] font-semibold"><td className="px-3 py-2" colSpan={4}>Total général</td><td className="px-3 py-2 text-right font-mono">{Math.round(itemsTotal).toLocaleString('fr-FR')} FCFA</td></tr></tfoot>
                         </table>
                     </div>
                 </section>

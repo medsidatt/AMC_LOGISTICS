@@ -100,14 +100,16 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                     <KpiCard
                         icon={<Calendar size={18} />}
                         label="Inspections cette semaine"
-                        value={kpis.inspections_this_week}
+                        value={kpis.inspections_this_week > 0 ? kpis.inspections_this_week : '—'}
+                        sublabel={kpis.inspections_this_week > 0 ? undefined : 'Aucune activité'}
                         variant="info"
                         href="/hse/inspections"
                     />
                     <KpiCard
                         icon={<ClipboardList size={18} />}
                         label="Inspections 30 jours"
-                        value={kpis.inspections_this_month}
+                        value={kpis.inspections_this_month > 0 ? kpis.inspections_this_month : '—'}
+                        sublabel={kpis.inspections_this_month > 0 ? undefined : 'Aucune activité'}
                         variant="default"
                         href="/hse/inspections"
                     />
@@ -120,78 +122,8 @@ export default function HseDashboard({ kpis, recentInspections, trucksNeedingIns
                     />
                 </div>
 
-                {/* ── Alertes ── */}
-                <SectionLabel>Alertes &amp; non-conformités</SectionLabel>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <KpiCard
-                        icon={<AlertTriangle size={18} />}
-                        label="Camions à inspecter"
-                        value={kpis.trucks_overdue_inspection}
-                        sublabel="aucune inspection > 30 j"
-                        variant={kpis.trucks_overdue_inspection > 0 ? 'warning' : 'success'}
-                    />
-                    <KpiCard
-                        icon={<Wrench size={18} />}
-                        label="Maintenance en retard"
-                        value={kpis.maintenance_overdue}
-                        variant={kpis.maintenance_overdue > 0 ? 'danger' : 'success'}
-                        href="/maintenance"
-                    />
-                </div>
-
-                {/* ── Inspections récentes ── */}
-                <SectionLabel>Inspections récentes</SectionLabel>
-                <Card>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-base font-semibold flex items-center gap-2">
-                            <ClipboardList size={16} className="text-emerald-500" /> 8 dernières inspections
-                        </h2>
-                        <Link href="/hse/inspections" className="text-sm text-[var(--color-primary)] hover:underline">Voir toutes →</Link>
-                    </div>
-                    {recentInspections.length === 0 ? (
-                        <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucune inspection enregistrée.</p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-                                        <th className="py-2 pr-2"></th>
-                                        <th className="py-2 pr-2">Date</th>
-                                        <th className="py-2 pr-2">Camion</th>
-                                        <th className="py-2 pr-2">Conducteur</th>
-                                        <th className="py-2 pr-2">Inspecteur</th>
-                                        <th className="py-2 pr-2"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recentInspections.map((i) => (
-                                        <tr key={i.id} className="border-b border-[var(--color-border)] last:border-0">
-                                            <td className="py-2 pr-2 w-12">
-                                                {i.vehicle_photo_url ? (
-                                                    <a href={i.vehicle_photo_url} target="_blank" rel="noopener noreferrer">
-                                                        <img src={i.vehicle_photo_url} alt="" className="w-10 h-8 object-cover rounded border border-[var(--color-border)] cursor-zoom-in hover:opacity-90 transition" />
-                                                    </a>
-                                                ) : (
-                                                    <span className="text-[var(--color-text-muted)] text-xs">—</span>
-                                                )}
-                                            </td>
-                                            <td className="py-2 pr-2 whitespace-nowrap">{i.inspection_date}</td>
-                                            <td className="py-2 pr-2 font-medium">{i.truck ?? '—'}</td>
-                                            <td className="py-2 pr-2">{i.driver ?? '—'}</td>
-                                            <td className="py-2 pr-2">{i.inspector ?? '—'}</td>
-                                            <td className="py-2 pr-2 text-right">
-                                                <Link href={`/hse/inspections/${i.id}`} className="text-[var(--color-primary)] hover:underline text-xs">Voir</Link>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </Card>
-
-                {/* ── 3 listes d'alerte côte à côte ── */}
-                <SectionLabel>Listes de suivi</SectionLabel>
+                {/* ── Listes de suivi ── */}
+                <SectionLabel>À traiter</SectionLabel>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Card>
                         <h2 className="text-sm font-semibold flex items-center gap-2 mb-3">

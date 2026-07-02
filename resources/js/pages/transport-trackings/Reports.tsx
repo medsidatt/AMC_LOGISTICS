@@ -123,7 +123,6 @@ export default function Reports(props: Props) {
                     </div>
                 )}
 
-                <p className="text-[10px] text-[var(--color-text-muted)] mt-3">Les périodes mensuelles vont du 22 au 21 (ex : mars = 22/02 au 21/03). Basé sur la date client.</p>
             </Card>
 
             {/* ── KPIs ── */}
@@ -139,7 +138,6 @@ export default function Reports(props: Props) {
                 <Card>
                     <div className="text-xs text-[var(--color-text-muted)] uppercase font-medium">Ce mois</div>
                     <div className="text-xl font-bold text-[var(--color-text)] mt-1">{fmtT(thisMonthTonnage)}</div>
-                    <div className="text-[10px] text-[var(--color-text-muted)]">Période 22→21</div>
                 </Card>
                 <Card>
                     <div className="text-xs text-[var(--color-text-muted)] uppercase font-medium">Cette année</div>
@@ -159,7 +157,7 @@ export default function Reports(props: Props) {
             {/* ── Monthly tonnage ── */}
             {months.length > 0 && (
                 <Card className="mt-6">
-                    <h3 className="text-sm font-semibold text-[var(--color-text)] mb-3">Tonnage par période (22→21)</h3>
+                    <h3 className="text-sm font-semibold text-[var(--color-text)] mb-3">Tonnage par période</h3>
                     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
                         <table className="w-full text-sm">
                             <thead>
@@ -183,14 +181,6 @@ export default function Reports(props: Props) {
                                         </td>
                                     </tr>
                                 ))}
-                                {/* Totals row */}
-                                <tr className="bg-[var(--color-surface-hover)] font-bold">
-                                    <td className="px-4 py-2.5 text-[var(--color-text)]">Total</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmt(monthlyTrips.reduce((a, b) => a + b, 0))}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyProvider.reduce((a, b) => a + b, 0))}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-[var(--color-text)]">{fmtT(monthlyClient.reduce((a, b) => a + b, 0))}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-red-600">{fmtT(monthlyGap.reduce((a, b) => a + b, 0))}</td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>

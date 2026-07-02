@@ -74,7 +74,7 @@ export default function PlacesEdit({ place, providers }: Props) {
             {place.is_auto_detected && (
                 <div className="mb-4 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 px-4 py-3 text-sm text-blue-800 dark:text-blue-300 flex items-center gap-2">
                     <Badge variant="info">Auto</Badge>
-                    Ce lieu est auto-détecté depuis la télémétrie. Les coordonnées sont rafraîchies chaque nuit et ne sont pas éditables ici.
+                    Les coordonnées ne sont pas modifiables ici.
                 </div>
             )}
 

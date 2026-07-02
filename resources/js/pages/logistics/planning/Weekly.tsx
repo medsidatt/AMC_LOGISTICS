@@ -68,9 +68,6 @@ export default function Realisation({ mode, period, achievement }: Props) {
                             <>
                                 <p className="font-semibold pt-1">Référence de pilotage</p>
                                 <p><strong>{fmt(f.target_tons)} t</strong></p>
-                                <p className="text-[var(--color-text-muted)]">Calculée à partir des objectifs planifiés.</p>
-                                <p className="text-[var(--color-text-muted)]">Les périodes non planifiées sont estimées à partir de la moyenne des périodes déjà planifiées.</p>
-                                <p className="text-[var(--color-text-muted)]">Cette référence est indicative et n'est jamais enregistrée.</p>
                                 <p className="pt-1"><strong>{fmt(f.done_tons)} t</strong> réalisées · écart <strong>{diff >= 0 ? '+' : ''}{fmt(diff)} t</strong> vs référence.</p>
                             </>
                         )}

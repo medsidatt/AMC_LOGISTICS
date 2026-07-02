@@ -290,7 +290,7 @@ export default function MaintenanceWorkspace(props: Props) {
                 open={deactivateId !== null}
                 onClose={() => setDeactivateId(null)}
                 title="Désactiver la règle ?"
-                message="Cette règle d'intervalle ne sera plus utilisée pour calculer les échéances."
+                message="Cette règle d'intervalle ne sera plus appliquée."
                 confirmLabel="Désactiver"
                 onConfirm={() => { if (deactivateId) router.post(`/maintenance/rules/${deactivateId}/deactivate`, {}, { preserveScroll: true, onFinish: () => setDeactivateId(null) }); }}
             />

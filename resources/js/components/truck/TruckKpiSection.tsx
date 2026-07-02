@@ -154,7 +154,7 @@ export default function TruckKpiSection({ truckId, kpi, filter }: Props) {
                     numerator={kpi.load_rate.delivered}
                     denominator={kpi.load_rate.theoretical}
                     numeratorLabel=" T"
-                    denominatorLabel=" T théorique"
+                    denominatorLabel=" T"
                     icon={<Gauge size={18} />}
                 />
                 <NumberCard

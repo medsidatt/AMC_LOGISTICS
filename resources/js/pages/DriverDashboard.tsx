@@ -2,12 +2,10 @@ import { Head, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import DataTable from '@/components/ui/DataTable';
 import { usePolling } from '@/hooks/usePolling';
-import { usePermission } from '@/hooks/usePermission';
 import {
     Route, Weight, ClipboardCheck, Truck, Fuel, Gauge,
-    Activity, Timer, ArrowRight, AlertTriangle, Wrench, Calendar,
+    ArrowRight, AlertTriangle, Calendar,
 } from 'lucide-react';
 import StatusIcon from '@/components/drivers/StatusIcon';
 
@@ -48,25 +46,6 @@ interface Props {
     }>;
 }
 
-const MOVEMENT_LABEL: Record<string, string> = {
-    moving: 'En mouvement',
-    idle: 'Ralenti',
-    parked: 'Stationné',
-};
-
-const MOVEMENT_VARIANT: Record<string, 'success' | 'warning' | 'muted'> = {
-    moving: 'success',
-    idle: 'warning',
-    parked: 'muted',
-};
-
-const MAINT_LEVEL_VARIANT: Record<string, 'success' | 'warning' | 'danger'> = {
-    green: 'success', yellow: 'warning', red: 'danger',
-};
-const MAINT_LEVEL_LABEL: Record<string, string> = {
-    green: 'OK', yellow: 'Bientôt', red: 'Urgent',
-};
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
         <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-2 mb-1">
@@ -105,7 +84,6 @@ function KpiCard({ icon, label, value, sublabel, variant, href }: {
 
 export default function DriverDashboard(props: Props) {
     usePolling({ interval: 120 });
-    const { isAdmin } = usePermission();
 
     if (!props.driver) {
         return (
@@ -209,11 +187,11 @@ export default function DriverDashboard(props: Props) {
                     </Link>
                 </div>
 
-                {/* ── Telemetry strip (live truck data) ── */}
+                {/* ── Mon camion (état courant) ── */}
                 {t && (
                     <>
-                        <SectionLabel>Camion en temps réel</SectionLabel>
-                        <div className={`grid grid-cols-2 ${isAdmin ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3`}>
+                        <SectionLabel>Mon camion</SectionLabel>
+                        <div className="grid grid-cols-2 gap-3">
                             <Card>
                                 <div className="flex items-center gap-2">
                                     <Gauge size={18} className="text-blue-500 shrink-0" />
@@ -232,28 +210,6 @@ export default function DriverDashboard(props: Props) {
                                     </div>
                                 </div>
                             </Card>
-                            <Card>
-                                <div className="flex items-center gap-2">
-                                    <Activity size={18} className="text-emerald-500 shrink-0" />
-                                    <div className="min-w-0">
-                                        <div className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">État</div>
-                                        <Badge variant={MOVEMENT_VARIANT[t.movement_status ?? ''] ?? 'muted'} size="sm">
-                                            {MOVEMENT_LABEL[t.movement_status ?? ''] ?? 'Inconnu'}
-                                        </Badge>
-                                    </div>
-                                </div>
-                            </Card>
-                            {isAdmin && (
-                                <Card>
-                                    <div className="flex items-center gap-2">
-                                        <Timer size={18} className="text-[var(--color-text-muted)] shrink-0" />
-                                        <div className="min-w-0">
-                                            <div className="text-[10px] uppercase text-[var(--color-text-muted)] font-medium">Dernière sync</div>
-                                            <div className="text-xs font-medium truncate">{t.last_sync ?? '—'}</div>
-                                        </div>
-                                    </div>
-                                </Card>
-                            )}
                         </div>
                     </>
                 )}
@@ -264,107 +220,27 @@ export default function DriverDashboard(props: Props) {
                     <KpiCard
                         icon={<Calendar size={18} />}
                         label="Cette semaine"
-                        value={props.myTripsWeek}
-                        sublabel="rotations"
+                        value={props.myTripsWeek > 0 ? props.myTripsWeek : '—'}
+                        sublabel={props.myTripsWeek > 0 ? 'rotations' : 'Aucune activité'}
                         variant="info"
                         href="/drivers/my-trips"
                     />
                     <KpiCard
                         icon={<Route size={18} />}
                         label="Ce mois"
-                        value={props.myTripsMonth}
-                        sublabel="rotations"
+                        value={props.myTripsMonth > 0 ? props.myTripsMonth : '—'}
+                        sublabel={props.myTripsMonth > 0 ? 'rotations' : 'Aucune activité'}
                         variant="default"
                         href="/drivers/my-trips"
                     />
                     <KpiCard
                         icon={<Weight size={18} />}
                         label="Tonnage du mois"
-                        value={`${props.myTonnageMonth.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} t`}
+                        value={props.myTonnageMonth > 0 ? `${props.myTonnageMonth.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} t` : '—'}
                         variant="default"
                     />
                 </div>
 
-                {/* ── Actions à faire ── */}
-                <SectionLabel>À faire</SectionLabel>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <KpiCard
-                        icon={<ClipboardCheck size={18} />}
-                        label="Checklist de la semaine"
-                        value={props.weekChecklistDone ? 'Faite' : 'À faire'}
-                        variant={props.weekChecklistDone ? 'success' : 'warning'}
-                        href="/drivers/checklist-page"
-                    />
-                    <KpiCard
-                        icon={<AlertTriangle size={18} />}
-                        label="Problèmes non résolus"
-                        value={props.openIssuesCount}
-                        variant={props.openIssuesCount > 0 ? 'warning' : 'success'}
-                        href="/drivers/issues"
-                    />
-                    {t && (
-                        <KpiCard
-                            icon={<Wrench size={18} />}
-                            label="État maintenance"
-                            value={MAINT_LEVEL_LABEL[t.maintenance_level] ?? '—'}
-                            variant={MAINT_LEVEL_VARIANT[t.maintenance_level] ?? 'default'}
-                            href="/drivers/my-truck"
-                        />
-                    )}
-                </div>
-
-                {/* ── Mes derniers voyages ── */}
-                <SectionLabel>Derniers voyages</SectionLabel>
-                <Card padding={false}>
-                    <div className="p-5">
-                        <DataTable
-                            data={props.recentTrips}
-                            columns={[
-                                { key: 'reference', label: 'Réf' },
-                                { key: 'provider_date', label: 'Date' },
-                                { key: 'truck', label: 'Camion' },
-                                { key: 'provider', label: 'Fournisseur', hideOnMobile: true },
-                                {
-                                    key: 'provider_net_weight', label: 'Poids',
-                                    render: (r) => r.provider_net_weight != null
-                                        ? `${Number(r.provider_net_weight).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} t`
-                                        : '—',
-                                },
-                            ]}
-                            perPage={5}
-                            searchable={false}
-                            emptyMessage="Aucun voyage enregistré."
-                        />
-                    </div>
-                    <div className="px-5 pb-4">
-                        <Link href="/drivers/my-trips" className="text-sm text-[var(--color-primary)] hover:underline">
-                            Voir tous mes voyages →
-                        </Link>
-                    </div>
-                </Card>
-
-                {/* ── Historique checklists ── */}
-                <SectionLabel>Historique des checklists</SectionLabel>
-                <Card padding={false}>
-                    <div className="p-5">
-                        <DataTable
-                            data={props.checklistHistory}
-                            columns={[
-                                { key: 'checklist_date', label: 'Date' },
-                                { key: 'issues_count', label: 'Problèmes' },
-                                {
-                                    key: 'unresolved_count', label: 'Non résolus',
-                                    render: (r) => r.unresolved_count > 0
-                                        ? <Badge variant="danger">{r.unresolved_count}</Badge>
-                                        : <Badge variant="success">0</Badge>,
-                                },
-                            ]}
-                            perPage={5}
-                            searchable={false}
-                            emptyMessage="Aucune checklist enregistrée."
-                        />
-                    </div>
-                </Card>
             </div>
         </AuthenticatedLayout>
     );

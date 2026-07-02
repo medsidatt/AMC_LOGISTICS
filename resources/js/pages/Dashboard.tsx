@@ -3,19 +3,12 @@ import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
 import AlertBanner from '@/components/dashboard/AlertBanner';
-import InsightCard from '@/components/dashboard/InsightCard';
-import TonnageChart from '@/components/charts/TonnageChart';
+import RatioCard from '@/components/dashboard/RatioCard';
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
-import DataTable from '@/components/ui/DataTable';
-import PeriodFilter from '@/components/dashboard/PeriodFilter';
-import RatioCard from '@/components/dashboard/RatioCard';
-import TopList from '@/components/dashboard/TopList';
 import { usePolling } from '@/hooks/usePolling';
-import { generateAdminInsights } from '@/utils/insights';
-import { formatNumber, formatDate, calcChange } from '@/utils/formatters';
-import { Truck, Users, Route, Weight, Wrench, Download, Activity, Target, Gauge, Fuel, Trophy, UserCheck, BarChart3, TrendingDown } from 'lucide-react';
-import { useExport } from '@/hooks/useExport';
+import { calcChange } from '@/utils/formatters';
+import { Truck, Users, Route, Weight, Wrench, Activity } from 'lucide-react';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
@@ -25,144 +18,60 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-interface KpiRatio {
-    rate: number;
-}
-
-interface AvailabilityKpi extends KpiRatio { available: number; total: number; }
-interface SaturationKpi extends KpiRatio { active: number; available: number; }
-interface ProductionKpi extends KpiRatio { delivered: number; planned: number; }
-interface LoadKpi extends KpiRatio { delivered: number; theoretical: number; avg_capacity: number; }
-interface RotationsKpi { total: number; }
-interface FuelYieldKpi { litres_per_tonne: number; litres: number; tonnage: number; }
-
-interface TopTruckRow {
-    id: number; label: string; rotations: number; tonnage: number;
-    load_rate: number; fuel_yield: number | null; score: number;
-}
-interface TopDriverRow extends TopTruckRow {
-    avg_load_rate: number; manual_points: number; checklist_on_time_rate: number;
-    flagged_issues: number; gap_violations: number; gap_ratio: number; discipline_score: number;
+/**
+ * An activity KPI that shows a clear empty state instead of a misleading 0 when the period
+ * has no activity. Presentation only.
+ */
+function ActivityKpi({ label, value, unit, change, changeLabel, icon, color }: {
+    label: string;
+    value: number;
+    unit?: string;
+    change?: number;
+    changeLabel?: string;
+    icon: React.ReactNode;
+    color?: string;
+}) {
+    if (!value) {
+        const accent = color ?? 'var(--color-primary)';
+        return (
+            <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-[var(--shadow-sm)]">
+                <div className="flex items-start justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)] mb-2">{label}</p>
+                    <div className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${accent}15`, color: accent }}>
+                        {icon}
+                    </div>
+                </div>
+                <div className="flex items-baseline">
+                    <span className="text-2xl font-bold text-[var(--color-text-muted)]">—</span>
+                </div>
+                <p className="text-xs text-[var(--color-text-muted)] mt-2">Aucune activité</p>
+            </div>
+        );
+    }
+    return <KpiCard label={label} value={value} unit={unit} change={change} changeLabel={changeLabel} icon={icon} color={color} />;
 }
 
 interface Props {
-    trucksCount: number;
     driversCount: number;
     tripsToday: number;
     tripsYesterday: number;
     tonnageMonth: number;
     tonnageLastMonth: number;
     unresolvedAlerts: number;
-    recentTrackings: Array<{
-        id: number;
-        reference: string;
-        truck: string | null;
-        driver: string | null;
-        provider: string | null;
-        provider_net_weight: number | null;
-        client_net_weight: number | null;
-        gap: number | null;
-        client_date: string | null;
-    }>;
-    months: string[];
-    monthlyProvider: number[];
-    monthlyClient: number[];
-    monthlyTrips: number[];
-    trucksDueMaintenance: Array<{
-        id: number;
-        matricule: string;
-        maintenance_type: string;
-        total_kilometers: number;
-    }>;
-    utilization: Array<{ label: string; value: number }>;
-    fleetCapacity: {
-        active_trucks: number;
-        target_source: 'client_demand' | 'mixed' | 'default';
-        target_rotations_per_truck_per_week: number;
-        default_capacity_tonnage: number;
-        avg_capacity_t: number;
-        custom_truck_count: number;
-        target_weekly_capacity_t: number;
-        delivered_this_week_t: number;
-        rotations_this_week: number;
-        target_rotations_this_week: number;
-        utilization_pct: number;
-        top_trucks: Array<{
-            truck_id: number;
-            matricule: string;
-            capacity_tonnage: number;
-            avg_rotations_per_week: number;
-            target_weekly_capacity_t: number;
-            empirical_weekly_capacity_t: number;
-            this_week_rotations: number;
-            this_week_tonnage_t: number;
-            target_rate: number;
-        }>;
-        bottom_trucks: Array<{
-            truck_id: number;
-            matricule: string;
-            capacity_tonnage: number;
-            avg_rotations_per_week: number;
-            target_weekly_capacity_t: number;
-            empirical_weekly_capacity_t: number;
-            this_week_rotations: number;
-            this_week_tonnage_t: number;
-            target_rate: number;
-        }>;
-    };
-    kpi: {
-        period: { from: string; to: string; days: number };
-        kpis: {
-            availability: AvailabilityKpi;
-            saturation: SaturationKpi;
-            production_target: ProductionKpi;
-            load_rate: LoadKpi;
-            rotations: RotationsKpi;
-            fuel_yield: FuelYieldKpi;
-        };
-        topTrucks: TopTruckRow[];
-        topDrivers: TopDriverRow[];
-    };
-    filter: { from: string; to: string; preset: 'day' | 'week' | 'month' | 'year' | 'custom' };
+    trucksDueMaintenance: Array<{ id: number; matricule: string; maintenance_type: string }>;
+    // Owner-sourced headline KPIs (keyed by Business KPI id). Presentation reads value/components only.
+    businessKpis: Record<string, { id: string; label: string; unit: string; value: number; components: Record<string, number> }>;
 }
 
 export default function Dashboard(props: Props) {
-    usePolling({ interval: 30, only: ['trucksCount', 'driversCount', 'tripsToday', 'unresolvedAlerts'] });
-
-    const { download } = useExport();
-
-    const insights = generateAdminInsights({
-        trucksCount: props.trucksCount,
-        driversCount: props.driversCount,
-        tripsToday: props.tripsToday,
-        tripsTodayYesterday: props.tripsYesterday,
-        tonnageMonth: props.tonnageMonth,
-        tonnageLastMonth: props.tonnageLastMonth,
-        unresolvedAlerts: props.unresolvedAlerts,
-        trucksDueMaintenance: props.trucksDueMaintenance.length,
-    });
+    usePolling({ interval: 30, only: ['driversCount', 'tripsToday', 'tonnageMonth', 'unresolvedAlerts', 'businessKpis', 'trucksDueMaintenance'] });
 
     const tripsChange = calcChange(props.tripsToday, props.tripsYesterday);
     const tonnageChange = calcChange(props.tonnageMonth, props.tonnageLastMonth);
 
-    const k = props.kpi.kpis;
-
-    const trackingColumns = [
-        { key: 'reference', label: 'Réf' },
-        { key: 'client_date', label: 'Date', render: (r: any) => formatDate(r.client_date) },
-        { key: 'truck', label: 'Camion' },
-        { key: 'driver', label: 'Conducteur', hideOnMobile: true },
-        { key: 'provider_net_weight', label: 'Poids Fourni.', render: (r: any) => r.provider_net_weight ? `${formatNumber(r.provider_net_weight)} T` : '-' },
-        { key: 'client_net_weight', label: 'Poids Client', render: (r: any) => r.client_net_weight ? `${formatNumber(r.client_net_weight)} T` : '-' },
-        {
-            key: 'gap', label: 'Perte / Exc.', render: (r: any) => {
-                const g = r.gap ?? 0;
-                if (g < 0) return <Badge variant="danger">Perte {formatNumber(Math.abs(g), 2)} T</Badge>;
-                if (g > 0) return <Badge variant="info">Exc. +{formatNumber(g, 2)} T</Badge>;
-                return <Badge variant="success">OK</Badge>;
-            },
-        },
-    ];
+    // Owner-sourced headline accessors (presentation only — pure lookups, never a calculation).
+    const bkVal = (id: string) => props.businessKpis?.[id]?.value ?? 0;
+    const bkComp = (id: string, key: string) => props.businessKpis?.[id]?.components?.[key] ?? 0;
 
     return (
         <AuthenticatedLayout title="Dashboard">
@@ -170,17 +79,11 @@ export default function Dashboard(props: Props) {
 
             <AlertBanner count={props.unresolvedAlerts} href="/logistics/dashboard" />
 
-            <PeriodFilter
-                from={props.filter.from}
-                to={props.filter.to}
-                preset={props.filter.preset}
-            />
-
             <SectionLabel>Aperçu général</SectionLabel>
             <KpiGrid>
                 <KpiCard
                     label="Camions"
-                    value={props.trucksCount}
+                    value={bkVal('BI-FLT-001')}
                     icon={<Truck size={22} />}
                     color="var(--color-primary)"
                 />
@@ -190,7 +93,7 @@ export default function Dashboard(props: Props) {
                     icon={<Users size={22} />}
                     color="var(--color-info)"
                 />
-                <KpiCard
+                <ActivityKpi
                     label="Rotations aujourd'hui"
                     value={props.tripsToday}
                     change={tripsChange}
@@ -198,7 +101,7 @@ export default function Dashboard(props: Props) {
                     icon={<Route size={22} />}
                     color="var(--color-success)"
                 />
-                <KpiCard
+                <ActivityKpi
                     label="Tonnage du mois"
                     value={props.tonnageMonth}
                     unit="T"
@@ -209,298 +112,31 @@ export default function Dashboard(props: Props) {
                 />
             </KpiGrid>
 
-            <SectionLabel>Performance sur la période</SectionLabel>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <SectionLabel>État de la flotte</SectionLabel>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <RatioCard
                     label="Disponibilité flotte"
-                    ratio={k.availability.rate}
-                    numerator={k.availability.available}
-                    denominator={k.availability.total}
-                    numeratorLabel=" marqués disponibles"
+                    ratio={bkVal('BI-FLT-003')}
+                    numerator={bkComp('BI-FLT-003', 'available')}
+                    denominator={bkComp('BI-FLT-003', 'total')}
+                    numeratorLabel=" disponibles"
                     denominatorLabel=" total"
                     icon={<Truck size={18} />}
                 />
                 <RatioCard
                     label="Taux de saturation"
-                    ratio={k.saturation.rate}
-                    numerator={k.saturation.active}
-                    denominator={k.saturation.available}
+                    ratio={bkVal('BI-FLT-004')}
+                    numerator={bkComp('BI-FLT-004', 'active')}
+                    denominator={bkComp('BI-FLT-004', 'available')}
                     numeratorLabel=" ayant roulé"
                     denominatorLabel=" disponibles"
                     icon={<Activity size={18} />}
                 />
-                <RatioCard
-                    label="Objectif de production"
-                    ratio={k.production_target.rate}
-                    numerator={k.production_target.delivered}
-                    denominator={k.production_target.planned}
-                    numeratorLabel=" T livrées"
-                    denominatorLabel=" T planifiées"
-                    icon={<Target size={18} />}
-                />
-                <RatioCard
-                    label="Taux de chargement"
-                    ratio={k.load_rate.rate}
-                    numerator={k.load_rate.delivered}
-                    denominator={k.load_rate.theoretical}
-                    numeratorLabel=" T"
-                    denominatorLabel=" T théorique"
-                    icon={<Gauge size={18} />}
-                />
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all duration-300 animate-slide-up">
-                    <div className="flex items-start justify-between mb-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-                            Nombre de rotations
-                        </p>
-                        <div
-                            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                            style={{ background: 'var(--color-primary)15', color: 'var(--color-primary)' }}
-                        >
-                            <Route size={18} />
-                        </div>
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl font-bold text-[var(--color-text)]">
-                            {formatNumber(k.rotations.total)}
-                        </span>
-                        <span className="text-sm font-medium text-[var(--color-text-secondary)]">rotations</span>
-                    </div>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                        Sur {props.kpi.period.days} jour(s)
-                    </p>
-                </div>
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all duration-300 animate-slide-up">
-                    <div className="flex items-start justify-between mb-3">
-                        <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-                            Rendement carburant
-                        </p>
-                        <div
-                            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                            style={{ background: 'var(--color-warning)15', color: 'var(--color-warning)' }}
-                        >
-                            <Fuel size={18} />
-                        </div>
-                    </div>
-                    <div className="flex items-baseline gap-1.5">
-                        <span className="text-3xl font-bold text-[var(--color-text)]">
-                            {formatNumber(k.fuel_yield.litres_per_tonne, 2)}
-                        </span>
-                        <span className="text-sm font-medium text-[var(--color-text-secondary)]">L/T</span>
-                    </div>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-2">
-                        {formatNumber(k.fuel_yield.litres, 0)} L · {formatNumber(k.fuel_yield.tonnage, 1)} T livrées
-                    </p>
-                </div>
             </div>
 
-            {/* ── Capacité de la flotte ── */}
-            <div>
-                <div className="text-xs uppercase tracking-wider font-semibold text-[var(--color-text-muted)] mt-6 mb-1 flex items-center gap-2 flex-wrap">
-                    <BarChart3 size={14} className="text-emerald-500" /> Capacité de la flotte (semaine en cours)
-                    {props.fleetCapacity.target_source === 'client_demand' && (
-                        <Badge variant="info">Cible définie par demandes client</Badge>
-                    )}
-                    {props.fleetCapacity.target_source === 'mixed' && (
-                        <Badge variant="warning">
-                            {props.fleetCapacity.custom_truck_count} camion{props.fleetCapacity.custom_truck_count > 1 ? 's' : ''} avec cible personnalisée
-                        </Badge>
-                    )}
-                </div>
-                <div className="text-xs text-[var(--color-text-muted)] normal-case mb-2">
-                    Formule : <strong className="text-[var(--color-text)]">tonnage cible = rotations × capacité</strong> par camion.
-                    {props.fleetCapacity.target_source === 'default' && (
-                        <span> Cible flotte : {props.fleetCapacity.active_trucks} camions × {props.fleetCapacity.target_rotations_per_truck_per_week} rot. × {formatNumber(props.fleetCapacity.avg_capacity_t, 1)} t (moyenne) = {formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)} t / semaine.</span>
-                    )}
-                    {props.fleetCapacity.target_source === 'mixed' && (
-                        <span> Cible flotte = somme des cibles par camion ({props.fleetCapacity.custom_truck_count} avec rotation personnalisée).</span>
-                    )}
-                    {props.fleetCapacity.target_source === 'client_demand' && (
-                        <span> Cible flotte = tonnage demandé par le client = {formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)} t (≈ {props.fleetCapacity.target_rotations_this_week} rotations à {formatNumber(props.fleetCapacity.avg_capacity_t, 1)} t en moyenne).</span>
-                    )}
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                                <Truck size={18} />
-                            </div>
-                            <div>
-                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Camions actifs</div>
-                                <div className="text-2xl font-bold leading-tight">{props.fleetCapacity.active_trucks}</div>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                                <Gauge size={18} />
-                            </div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Objectif semaine</div>
-                                <div className="text-2xl font-bold leading-tight">{formatNumber(props.fleetCapacity.target_weekly_capacity_t, 0)}<span className="text-sm font-normal ml-1">t</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">{props.fleetCapacity.target_rotations_this_week} rotations cibles</div>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                <Weight size={18} />
-                            </div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Livré cette semaine</div>
-                                <div className="text-2xl font-bold leading-tight">{formatNumber(props.fleetCapacity.delivered_this_week_t, 1)}<span className="text-sm font-normal ml-1">t</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">{props.fleetCapacity.rotations_this_week} rotations</div>
-                            </div>
-                        </div>
-                    </Card>
-                    <Card>
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-lg ${props.fleetCapacity.utilization_pct >= 85 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : props.fleetCapacity.utilization_pct >= 50 ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                <Activity size={18} />
-                            </div>
-                            <div className="min-w-0">
-                                <div className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Atteinte objectif</div>
-                                <div className="text-2xl font-bold leading-tight">{props.fleetCapacity.utilization_pct}<span className="text-sm font-normal">%</span></div>
-                                <div className="text-xs text-[var(--color-text-muted)]">livré / objectif</div>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <Card
-                        header={
-                            <div className="flex items-center gap-2">
-                                <Trophy size={16} className="text-emerald-500" />
-                                <span className="text-sm font-semibold">Top 5 cette semaine</span>
-                            </div>
-                        }
-                    >
-                        {props.fleetCapacity.top_trucks.length === 0 ? (
-                            <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucune donnée.</p>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-                                        <th className="py-2 pr-2">Camion</th>
-                                        <th className="py-2 pr-2 text-right">Rot. sem.</th>
-                                        <th className="py-2 pr-2 text-right">Livré (t)</th>
-                                        <th className="py-2 pr-2 text-right">Objectif</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {props.fleetCapacity.top_trucks.map((t) => {
-                                        const pct = Math.round(t.target_rate * 100);
-                                        return (
-                                            <tr key={t.truck_id} className="border-b border-[var(--color-border)] last:border-0">
-                                                <td className="py-2 pr-2 font-medium">
-                                                    <a href={`/trucks/${t.truck_id}/show-page`} className="hover:underline text-[var(--color-primary)]">{t.matricule}</a>
-                                                </td>
-                                                <td className="py-2 pr-2 text-right">{t.this_week_rotations}</td>
-                                                <td className="py-2 pr-2 text-right font-semibold">{formatNumber(t.this_week_tonnage_t, 1)}</td>
-                                                <td className="py-2 pr-2 text-right">
-                                                    <Badge variant={pct >= 100 ? 'success' : pct >= 60 ? 'warning' : 'danger'}>{pct}%</Badge>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
-                    </Card>
-
-                    <Card
-                        header={
-                            <div className="flex items-center gap-2">
-                                <TrendingDown size={16} className="text-amber-500" />
-                                <span className="text-sm font-semibold">À surveiller (en dessous de l'objectif)</span>
-                            </div>
-                        }
-                    >
-                        {props.fleetCapacity.bottom_trucks.length === 0 ? (
-                            <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucun camion sous-performant.</p>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-                                        <th className="py-2 pr-2">Camion</th>
-                                        <th className="py-2 pr-2 text-right">Rot. sem.</th>
-                                        <th className="py-2 pr-2 text-right">Livré (t)</th>
-                                        <th className="py-2 pr-2 text-right">Objectif</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {props.fleetCapacity.bottom_trucks.map((t) => {
-                                        const pct = Math.round(t.target_rate * 100);
-                                        return (
-                                            <tr key={t.truck_id} className="border-b border-[var(--color-border)] last:border-0">
-                                                <td className="py-2 pr-2 font-medium">
-                                                    <a href={`/trucks/${t.truck_id}/show-page`} className="hover:underline text-[var(--color-primary)]">{t.matricule}</a>
-                                                </td>
-                                                <td className="py-2 pr-2 text-right">{t.this_week_rotations}</td>
-                                                <td className="py-2 pr-2 text-right font-semibold text-amber-600 dark:text-amber-400">{formatNumber(t.this_week_tonnage_t, 1)}</td>
-                                                <td className="py-2 pr-2 text-right">
-                                                    <Badge variant={pct >= 100 ? 'success' : pct >= 60 ? 'warning' : 'danger'}>{pct}%</Badge>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )}
-                    </Card>
-                </div>
-            </div>
-
-            <SectionLabel>Top performers (période)</SectionLabel>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Card
-                    header={
-                        <div className="flex items-center gap-2">
-                            <Trophy size={16} className="text-[var(--color-warning)]" />
-                            <span className="text-sm font-semibold">Top 5 Camions</span>
-                        </div>
-                    }
-                >
-                    <TopList
-                        rows={props.kpi.topTrucks as any}
-                        hrefPrefix="/trucks"
-                        extraColumn={{ key: 'fuel_yield', label: 'L/T', format: 'number' }}
-                    />
-                </Card>
-
-                <Card
-                    header={
-                        <div className="flex items-center gap-2">
-                            <UserCheck size={16} className="text-[var(--color-success)]" />
-                            <span className="text-sm font-semibold">Top 5 Chauffeurs</span>
-                        </div>
-                    }
-                >
-                    <TopList
-                        rows={props.kpi.topDrivers as any}
-                        hrefPrefix="/drivers"
-                        extraColumn={{ key: 'discipline_score', label: 'discipline', format: 'percent' }}
-                    />
-                </Card>
-            </div>
-
-            <SectionLabel>Évolution mensuelle</SectionLabel>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <Card header="Tonnage mensuel" className="lg:col-span-2">
-                    <TonnageChart
-                        months={props.months}
-                        providerData={props.monthlyProvider}
-                        clientData={props.monthlyClient}
-                    />
-                </Card>
-                <InsightCard insights={insights} />
-            </div>
-
-            <SectionLabel>Suivi opérationnel</SectionLabel>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {props.trucksDueMaintenance.length > 0 && (
+            {props.trucksDueMaintenance.length > 0 && (
+                <>
+                    <SectionLabel>À traiter</SectionLabel>
                     <Card
                         header={
                             <div className="flex items-center gap-2">
@@ -525,39 +161,8 @@ export default function Dashboard(props: Props) {
                             ))}
                         </div>
                     </Card>
-                )}
-
-                <Card
-                    className={props.trucksDueMaintenance.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3'}
-                    header={
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold">Dernières rotations</span>
-                            <button
-                                onClick={() => download(props.recentTrackings, [
-                                    { key: 'reference', label: 'Référence' },
-                                    { key: 'client_date', label: 'Date' },
-                                    { key: 'truck', label: 'Camion' },
-                                    { key: 'driver', label: 'Conducteur' },
-                                    { key: 'provider_net_weight', label: 'Poids Fournisseur' },
-                                    { key: 'client_net_weight', label: 'Poids Client' },
-                                    { key: 'gap', label: 'Perte' },
-                                ], 'rotations.csv')}
-                                className="p-1.5 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
-                                title="Exporter CSV"
-                            >
-                                <Download size={14} />
-                            </button>
-                        </div>
-                    }
-                >
-                    <DataTable
-                        data={props.recentTrackings}
-                        columns={trackingColumns}
-                        perPage={5}
-                        searchable={false}
-                    />
-                </Card>
-            </div>
+                </>
+            )}
         </AuthenticatedLayout>
     );
 }

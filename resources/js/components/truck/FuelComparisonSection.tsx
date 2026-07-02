@@ -1,7 +1,7 @@
 import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { formatNumber } from '@/utils/formatters';
-import { Fuel, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Fuel, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export interface FuelComparisonRow {
     month: string;
@@ -57,7 +57,7 @@ export default function FuelComparisonSection({ rows }: Props) {
                         <Fuel size={16} className="text-[var(--color-primary)]" />
                         <span className="text-sm font-semibold">Comparaison carburant mensuelle</span>
                     </div>
-                    <span className="text-xs text-[var(--color-text-muted)]">EDK (acheté) vs Fleeti (consommé)</span>
+                    <span className="text-xs text-[var(--color-text-muted)]">EDK rechargé vs Fleeti consommé</span>
                 </div>
             }
         >
@@ -66,7 +66,7 @@ export default function FuelComparisonSection({ rows }: Props) {
                     <thead>
                         <tr className="text-xs text-[var(--color-text-muted)] uppercase border-b border-[var(--color-border)]">
                             <th className="text-left py-2 pr-3">Mois</th>
-                            <th className="text-right py-2 pr-3">EDK acheté</th>
+                            <th className="text-right py-2 pr-3">EDK est. (rechargé)</th>
                             <th className="text-right py-2 pr-3">Fleeti consommé</th>
                             <th className="text-right py-2 pr-3">Écart</th>
                             <th className="text-right py-2 pr-3">Km</th>
@@ -110,14 +110,6 @@ export default function FuelComparisonSection({ rows }: Props) {
                 </table>
             </div>
 
-            <p className="text-xs text-[var(--color-text-muted)] mt-3 flex items-start gap-1">
-                <AlertTriangle size={12} className="mt-0.5 flex-shrink-0 text-[var(--color-warning)]" />
-                <span>
-                    Un écart positif (acheté &gt; consommé) peut indiquer un stockage ou un détournement.
-                    Un écart négatif (acheté &lt; consommé) peut indiquer un défaut de saisie EDK.
-                    Le seuil typique de tolérance est ±5 %.
-                </span>
-            </p>
         </Card>
     );
 }

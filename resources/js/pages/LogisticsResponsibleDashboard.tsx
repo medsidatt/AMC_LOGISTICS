@@ -156,24 +156,24 @@ export default function LogisticsResponsibleDashboard({
                     <KpiCard
                         icon={<ShieldCheck size={18} />}
                         label="Cette semaine"
-                        value={kpis.my_inspections_week}
-                        sublabel="mes inspections"
+                        value={kpis.my_inspections_week > 0 ? kpis.my_inspections_week : '—'}
+                        sublabel={kpis.my_inspections_week > 0 ? 'mes inspections' : 'Aucune activité'}
                         variant="info"
                         href="/hse/inspections"
                     />
                     <KpiCard
                         icon={<FileEdit size={18} />}
                         label="Sur 30 jours"
-                        value={kpis.inspections_this_month}
-                        sublabel="inspections flotte"
+                        value={kpis.inspections_this_month > 0 ? kpis.inspections_this_month : '—'}
+                        sublabel={kpis.inspections_this_month > 0 ? 'inspections flotte' : 'Aucune activité'}
                         variant="default"
                         href="/hse/inspections"
                     />
                     <KpiCard
                         icon={<Route size={18} />}
                         label="Aujourd'hui"
-                        value={kpis.trips_today}
-                        sublabel="rotations"
+                        value={kpis.trips_today > 0 ? kpis.trips_today : '—'}
+                        sublabel={kpis.trips_today > 0 ? 'rotations' : 'Aucune activité'}
                         variant="default"
                         href="/transport_tracking"
                     />
@@ -183,39 +183,6 @@ export default function LogisticsResponsibleDashboard({
                         value={kpis.active_trucks}
                         variant="default"
                         href="/trucks"
-                    />
-                </div>
-
-                {/* ── À traiter ── */}
-                <SectionLabel>À traiter</SectionLabel>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <KpiCard
-                        icon={<ClipboardCheck size={18} />}
-                        label="Checklists à valider"
-                        value={kpis.pending_checklists}
-                        variant={kpis.pending_checklists > 0 ? 'warning' : 'success'}
-                        href="/logistics/validation/checklists"
-                    />
-                    <KpiCard
-                        icon={<AlertTriangle size={18} />}
-                        label="Problèmes signalés"
-                        value={kpis.unresolved_flagged}
-                        sublabel="non résolus"
-                        variant={kpis.unresolved_flagged > 0 ? 'danger' : 'success'}
-                    />
-                    <KpiCard
-                        icon={<Calendar size={18} />}
-                        label="Camions à inspecter"
-                        value={kpis.trucks_overdue_inspection}
-                        sublabel="> 30 jours"
-                        variant={kpis.trucks_overdue_inspection > 0 ? 'warning' : 'success'}
-                    />
-                    <KpiCard
-                        icon={<Wrench size={18} />}
-                        label="Maintenance en retard"
-                        value={kpis.maintenance_overdue}
-                        variant={kpis.maintenance_overdue > 0 ? 'danger' : 'success'}
-                        href="/maintenance"
                     />
                 </div>
 
@@ -276,47 +243,6 @@ export default function LogisticsResponsibleDashboard({
                                 </li>
                             ))}
                         </ul>
-                    )}
-                </Card>
-
-                {/* ── Inspections récentes ── */}
-                <SectionLabel>Inspections récentes</SectionLabel>
-                <Card>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-base font-semibold flex items-center gap-2">
-                            <ShieldCheck size={16} className="text-emerald-500" /> Dernières inspections de la flotte
-                        </h2>
-                        <Link href="/hse/inspections" className="text-sm text-[var(--color-primary)] hover:underline">Voir toutes →</Link>
-                    </div>
-                    {recentInspections.length === 0 ? (
-                        <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">Aucune inspection enregistrée.</p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-xs uppercase text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-                                        <th className="py-2 pr-2">Date</th>
-                                        <th className="py-2 pr-2">Camion</th>
-                                        <th className="py-2 pr-2">Conducteur</th>
-                                        <th className="py-2 pr-2">Inspecteur</th>
-                                        <th className="py-2 pr-2"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recentInspections.map((i) => (
-                                        <tr key={i.id} className="border-b border-[var(--color-border)] last:border-0">
-                                            <td className="py-2 pr-2 whitespace-nowrap">{i.inspection_date}</td>
-                                            <td className="py-2 pr-2 font-medium">{i.truck ?? '—'}</td>
-                                            <td className="py-2 pr-2">{i.driver ?? '—'}</td>
-                                            <td className="py-2 pr-2">{i.inspector ?? '—'}</td>
-                                            <td className="py-2 pr-2 text-right">
-                                                <Link href={`/hse/inspections/${i.id}`} className="text-[var(--color-primary)] hover:underline text-xs">Voir</Link>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
                     )}
                 </Card>
 

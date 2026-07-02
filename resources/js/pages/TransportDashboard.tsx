@@ -2,18 +2,14 @@ import { Head } from '@inertiajs/react';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout';
 import KpiCard from '@/components/dashboard/KpiCard';
 import KpiGrid from '@/components/dashboard/KpiGrid';
-import InsightCard from '@/components/dashboard/InsightCard';
-import TonnageChart from '@/components/charts/TonnageChart';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { useFilters } from '@/hooks/useFilters';
 import { usePolling } from '@/hooks/usePolling';
-import { useExport } from '@/hooks/useExport';
-import { generateTransportInsights } from '@/utils/insights';
 import { formatNumber } from '@/utils/formatters';
-import { Weight, Scale, AlertTriangle, Route, TrendingDown, CheckCircle, Download, Filter, RotateCcw } from 'lucide-react';
+import { Weight, Scale, AlertTriangle, TrendingDown, Filter, RotateCcw } from 'lucide-react';
 
 interface FilterOption {
     value: number;
@@ -55,23 +51,14 @@ interface Props {
     }>;
 }
 
-export default function TransportDashboard({ filters: initialFilters, filterOptions, kpis, months, monthlyWeights, timelineEvents }: Props) {
+export default function TransportDashboard({ filters: initialFilters, filterOptions, kpis }: Props) {
     const { filters, updateFilter, applyFilters, resetFilters, loading } = useFilters(
         initialFilters as any,
         '/transport_tracking/dashboard',
     );
-    const { download } = useExport();
     usePolling({ interval: 60, only: ['kpis'] });
 
-    const insights = generateTransportInsights({
-        totalGap: kpis.totalDifference,
-        totalTransported: kpis.totalTransported,
-        anomaliesCount: kpis.totalCount - kpis.rotationsNormal,
-        totalTrips: kpis.totalCount,
-        suspiciousDrivers: kpis.suspiciousDrivers,
-    });
-
-    const conflictCount = timelineEvents.filter((e) => e.hasConflict).length;
+    const hasActivity = kpis.totalCount > 0;
 
     return (
         <AuthenticatedLayout title="Dashboard Transport">
@@ -125,66 +112,58 @@ export default function TransportDashboard({ filters: initialFilters, filterOpti
                 </div>
             </Card>
 
-            {/* KPIs Row 1 */}
-            <KpiGrid>
-                <KpiCard
-                    label="Poids transporté"
-                    value={kpis.totalTransported}
-                    unit="t"
-                    icon={<Weight size={22} />}
-                    color="var(--color-primary)"
-                />
-                <KpiCard
-                    label="Poids reçu"
-                    value={kpis.totalReceived}
-                    unit="t"
-                    change={kpis.pctReceived - 100}
-                    changeLabel="vs transporté"
-                    icon={<Scale size={22} />}
-                    color="var(--color-success)"
-                />
-                <KpiCard
-                    label="Poids perdu"
-                    value={kpis.totalDifference}
-                    unit="t"
-                    icon={<TrendingDown size={22} />}
-                    color="var(--color-danger)"
-                />
-                <KpiCard
-                    label="Anomalies poids"
-                    value={kpis.totalPoidsAnomalies}
-                    icon={<AlertTriangle size={22} />}
-                    color="var(--color-warning)"
-                />
-            </KpiGrid>
-
-            {/* KPIs Row 2 */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
-                    <p className="text-2xl font-bold text-[var(--color-text)]">{formatNumber(kpis.totalCount)}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Rotations totales</p>
-                </div>
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
-                    <p className="text-2xl font-bold text-[var(--color-danger)]">{formatNumber(kpis.rotationsPerdues)}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Perdues ({kpis.pctPerdues}%)</p>
-                </div>
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
-                    <p className="text-2xl font-bold text-[var(--color-success)]">{formatNumber(kpis.rotationsNormal)}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Normales ({kpis.pctNormal}%)</p>
-                </div>
-                <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
-                    <p className="text-2xl font-bold text-amber-500">{conflictCount}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] mt-1">Conflits détectés</p>
-                </div>
-            </div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
-                <Card header="Poids mensuel" className="lg:col-span-2">
-                    <TonnageChart months={months} providerData={monthlyWeights} />
+            {!hasActivity ? (
+                <Card>
+                    <div className="py-12 text-center text-sm text-[var(--color-text-muted)]">
+                        Aucune activité de transport sur cette période.
+                    </div>
                 </Card>
-                <InsightCard insights={insights} />
-            </div>
+            ) : (
+                <>
+                    {/* Transport operations */}
+                    <KpiGrid>
+                        <KpiCard
+                            label="Poids transporté"
+                            value={kpis.totalTransported}
+                            unit="t"
+                            icon={<Weight size={22} />}
+                            color="var(--color-primary)"
+                        />
+                        <KpiCard
+                            label="Poids reçu"
+                            value={kpis.totalReceived}
+                            unit="t"
+                            icon={<Scale size={22} />}
+                            color="var(--color-success)"
+                        />
+                        <KpiCard
+                            label="Poids perdu"
+                            value={kpis.totalDifference}
+                            unit="t"
+                            icon={<TrendingDown size={22} />}
+                            color="var(--color-danger)"
+                        />
+                        <KpiCard
+                            label="Anomalies poids"
+                            value={kpis.totalPoidsAnomalies}
+                            icon={<AlertTriangle size={22} />}
+                            color="var(--color-warning)"
+                        />
+                    </KpiGrid>
+
+                    {/* Rotations — current + attention */}
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                        <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
+                            <p className="text-2xl font-bold text-[var(--color-text)]">{formatNumber(kpis.totalCount)}</p>
+                            <p className="text-xs text-[var(--color-text-muted)] mt-1">Rotations totales</p>
+                        </div>
+                        <div className="bg-[var(--color-surface)] rounded-xl border border-[var(--color-border)] p-4 text-center">
+                            <p className="text-2xl font-bold text-[var(--color-danger)]">{formatNumber(kpis.rotationsPerdues)}</p>
+                            <p className="text-xs text-[var(--color-text-muted)] mt-1">Rotations perdues</p>
+                        </div>
+                    </div>
+                </>
+            )}
         </AuthenticatedLayout>
     );
 }
