@@ -17,7 +17,8 @@ interface Props {
 /**
  * Tabbed fuel-record details (Détails / Validation / Historique). Validation
  * cross-references the other data source (EDK ↔ Fleeti) for the same truck/day —
- * the operational comparison between accounting data and GPS telemetry. Read-only.
+ * a budget-vs-consumption check between EDK card recharges (estimated litres) and
+ * Fleeti GPS consumption. Read-only. EDK figures are estimates, not measured purchases.
  */
 export default function FuelDetailsDrawer({ type, id, onClose }: Props) {
     const [tab, setTab] = useState('details');
@@ -46,7 +47,7 @@ export default function FuelDetailsDrawer({ type, id, onClose }: Props) {
             onClose={onClose}
             size="lg"
             icon={type === 'edk' ? <Fuel size={18} className="text-[var(--color-primary)]" /> : <FileSpreadsheet size={18} className="text-[var(--color-info)]" />}
-            title={type === 'edk' ? `Transaction ${r?.transaction_id ?? ''}` : `Consommation ${r?.truck ?? ''}`}
+            title={type === 'edk' ? `Recharge ${r?.transaction_id ?? ''}` : `Consommation ${r?.truck ?? ''}`}
         >
             {loading ? (
                 <div className="flex flex-col items-center justify-center py-16">
@@ -73,10 +74,10 @@ export default function FuelDetailsDrawer({ type, id, onClose }: Props) {
                                     <DetailItem label="Date" value={r.date} />
                                     <DetailItem label="Camion" value={r.truck} />
                                     <DetailItem label="Chauffeur" value={r.driver} />
-                                    <DetailItem label="Montant" value={`${formatNumber(r.amount, 0)} FCFA`} />
-                                    <DetailItem label="Litres" value={`${formatNumber(r.litres, 1)} L`} />
+                                    <DetailItem label="Montant rechargé" value={`${formatNumber(r.amount, 0)} FCFA`} />
+                                    <DetailItem label="Litres estimés" value={`${formatNumber(r.litres, 1)} L`} />
                                     <DetailItem label="Prix / litre" value={`${formatNumber(r.price_per_litre, 0)} FCFA`} />
-                                    <DetailItem label="Transaction" value={r.transaction_id} />
+                                    <DetailItem label="Réf. recharge" value={r.transaction_id} />
                                     <DetailItem label="Importé par" value={r.imported_by ? `${r.imported_by} · ${r.imported_at}` : '—'} />
                                 </DetailPanel>
                             ) : (
@@ -95,7 +96,7 @@ export default function FuelDetailsDrawer({ type, id, onClose }: Props) {
 
                         {tab === 'validation' && (
                             !v ? (
-                                <EmptyState icon={<ShieldCheck size={28} />} title="Aucune correspondance" description={type === 'edk' ? 'Pas de données Fleeti pour ce camion à cette date.' : 'Pas de transaction EDK pour ce camion à cette date.'} />
+                                <EmptyState icon={<ShieldCheck size={28} />} title="Aucune correspondance" description={type === 'edk' ? 'Pas de données Fleeti pour ce camion à cette date.' : 'Pas de recharge EDK pour ce camion à cette date.'} />
                             ) : type === 'edk' ? (
                                 <div className="space-y-3">
                                     <p className="text-xs text-[var(--color-text-muted)]">Consommation Fleeti (GPS) pour ce camion le {v.date} :</p>
@@ -106,14 +107,14 @@ export default function FuelDetailsDrawer({ type, id, onClose }: Props) {
                                         <DetailItem label="Remplis (GPS)" value={`${formatNumber(v.refills_volume, 0)} L`} />
                                     </DetailPanel>
                                     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-hover)] p-3 text-sm flex items-center justify-between">
-                                        <span className="text-[var(--color-text-secondary)]">Écart litres (EDK − Fleeti remplis)</span>
+                                        <span className="text-[var(--color-text-secondary)]">Écart estimé</span>
                                         <Badge variant="info">{formatNumber(r.litres - v.refills_volume, 1)} L</Badge>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
                                     <div className="flex flex-wrap gap-2">
-                                        <Badge variant="success">{v.count} transaction(s) EDK</Badge>
+                                        <Badge variant="success">{v.count} recharge(s) EDK</Badge>
                                         <Badge variant="info">{formatNumber(v.litres, 1)} L</Badge>
                                         <Badge variant="muted">{formatNumber(v.amount, 0)} FCFA</Badge>
                                     </div>

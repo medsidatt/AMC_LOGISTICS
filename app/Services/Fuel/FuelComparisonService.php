@@ -2,8 +2,8 @@
 
 namespace App\Services\Fuel;
 
-use App\Models\EdkFuelTransaction;
 use App\Models\FleetiDailyRecord;
+use App\Models\FuelCardTransaction;
 use App\Models\Truck;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
 class FuelComparisonService
 {
     /**
-     * Returns monthly comparison rows for the truck: L purchased (EDK) vs L consumed (Fleeti).
+     * Monthly card-float / budget-vs-burn rows for a truck: EDK money recharged (and its ESTIMATED
+     * litres = amount ÷ price) vs Fleeti litres consumed. This is NOT a purchased-vs-consumed
+     * reconciliation — EDK is a recharge ledger with no measured volume (docs/fuel-edk-reclassification.md).
      *
      * @return array<int, array{
      *     month: string,
@@ -29,10 +31,10 @@ class FuelComparisonService
     {
         $start = now()->subMonths($monthsBack)->startOfMonth();
 
-        $edk = EdkFuelTransaction::query()
+        $edk = FuelCardTransaction::query()
             ->select(
                 DB::raw("DATE_FORMAT(occurred_at, '%Y-%m') as ym"),
-                DB::raw('SUM(litres) as litres'),
+                DB::raw('SUM(estimated_litres) as litres'),
                 DB::raw('SUM(amount_fcfa) as fcfa'),
             )
             ->where('truck_id', $truck->id)

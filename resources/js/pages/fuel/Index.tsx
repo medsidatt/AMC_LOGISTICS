@@ -35,7 +35,7 @@ interface Props {
     filters: Record<string, string>;
     trucks: Opt[];
     drivers: Opt[];
-    totals: { edk_transactions: number; edk_litres: number; edk_fcfa: number; fleeti_days: number; fleeti_litres: number };
+    totals: { edk_recharges: number; edk_estimated_litres: number; edk_fcfa: number; fleeti_days: number; fleeti_litres: number };
     pricePerLitre: number;
 }
 
@@ -68,9 +68,9 @@ export default function FuelIndex({ tab, records, filters, trucks, drivers, tota
         { label: 'Date', render: (r) => r.date ?? '-' },
         { label: 'Camion', render: (r) => <span className="font-medium">{r.truck ?? '-'}</span> },
         { label: 'Chauffeur', render: (r) => r.driver ?? '-' },
-        { label: 'FCFA', align: 'text-right', render: (r) => formatNumber(r.amount ?? 0, 0) },
-        { label: 'Litres', align: 'text-right', render: (r) => <span className="font-medium">{formatNumber(r.litres ?? 0, 1)}</span> },
-        { label: 'Transaction', render: (r) => <span className="text-[var(--color-text-muted)]">{r.transaction_id ?? '-'}</span> },
+        { label: 'FCFA rechargé', align: 'text-right', render: (r) => formatNumber(r.amount ?? 0, 0) },
+        { label: 'Litres est.', align: 'text-right', render: (r) => <span className="font-medium">{formatNumber(r.litres ?? 0, 1)}</span> },
+        { label: 'Recharge', render: (r) => <span className="text-[var(--color-text-muted)]">{r.transaction_id ?? '-'}</span> },
     ];
     const fleetiColumns: { label: string; align?: string; render: (r: FuelRecord) => React.ReactNode }[] = [
         { label: 'Date', render: (r) => r.date ?? '-' },
@@ -103,18 +103,18 @@ export default function FuelIndex({ tab, records, filters, trucks, drivers, tota
             />
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-                <Stat label="Transactions EDK" value={formatNumber(totals.edk_transactions)} />
-                <Stat label="Litres EDK" value={`${formatNumber(totals.edk_litres, 0)} L`} />
-                <Stat label="Montant EDK" value={`${formatNumber(totals.edk_fcfa, 0)} F`} />
+                <Stat label="Recharges EDK" value={formatNumber(totals.edk_recharges)} />
+                <Stat label="Litres estimés EDK" value={`${formatNumber(totals.edk_estimated_litres, 0)} L`} />
+                <Stat label="Montant rechargé EDK" value={`${formatNumber(totals.edk_fcfa, 0)} F`} />
                 <Stat label="Jours Fleeti" value={formatNumber(totals.fleeti_days)} />
-                <Stat label="Litres Fleeti" value={`${formatNumber(totals.fleeti_litres, 0)} L`} />
+                <Stat label="Litres consommés Fleeti" value={`${formatNumber(totals.fleeti_litres, 0)} L`} />
             </div>
 
             <Tabs
                 active={tab}
                 onChange={switchTab}
                 tabs={[
-                    { key: 'edk', label: 'Transactions EDK', icon: <Fuel size={15} /> },
+                    { key: 'edk', label: 'Recharges EDK', icon: <Fuel size={15} /> },
                     { key: 'fleeti', label: 'Consommation Fleeti', icon: <Download size={15} /> },
                 ]}
                 className="mb-4"

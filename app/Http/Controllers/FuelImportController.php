@@ -3,17 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Driver;
-use App\Models\EdkFuelTransaction;
 use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
-use App\Models\FuelTracking;
+use App\Models\FuelCardTransaction;
 use App\Models\Truck;
-use App\Services\Fuel\EdkFuelParser;
 use App\Services\Fuel\FleetiFuelParser;
-use Carbon\Carbon;
+use App\Services\Fuel\FleetiImportService;
+use App\Services\Fuel\FuelImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -21,8 +19,9 @@ use Inertia\Inertia;
 class FuelImportController extends Controller
 {
     public function __construct(
-        private readonly EdkFuelParser $edkParser,
+        private readonly FuelImportService $fuelImportService,
         private readonly FleetiFuelParser $fleetiParser,
+        private readonly FleetiImportService $fleetiImportService,
     ) {
         $this->middleware('auth');
         $this->middleware('permission:fuel-import');
@@ -35,14 +34,14 @@ class FuelImportController extends Controller
         $filters = array_filter($request->only(['truck_id', 'driver_id', 'start_date', 'end_date']));
 
         $records = $tab === 'edk'
-            ? $this->edkQuery($filters)->latest('occurred_at')->paginate(15)->through(fn (EdkFuelTransaction $r) => [
+            ? $this->edkQuery($filters)->latest('occurred_at')->paginate(15)->through(fn (FuelCardTransaction $r) => [
                 'id' => $r->id,
                 'date' => $r->occurred_at?->format('d/m/Y H:i'),
                 'truck' => $r->truck?->matricule,
                 'driver' => $r->driver?->name,
                 'amount' => (float) $r->amount_fcfa,
-                'litres' => round((float) $r->litres, 1),
-                'transaction_id' => $r->transaction_id,
+                'litres' => round((float) $r->estimated_litres, 1),
+                'transaction_id' => $r->transaction_ref,
             ])->appends($request->query())
             : $this->fleetiQuery($filters)->latest('record_date')->paginate(15)->through(fn (FleetiDailyRecord $r) => [
                 'id' => $r->id,
@@ -62,9 +61,9 @@ class FuelImportController extends Controller
             'trucks' => Truck::where('is_active', true)->orderBy('matricule')->get(['id', 'matricule'])->map(fn ($t) => ['id' => $t->id, 'name' => $t->matricule])->all(),
             'drivers' => Driver::where('is_active', true)->orderBy('name')->get(['id', 'name'])->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->all(),
             'totals' => [
-                'edk_transactions' => EdkFuelTransaction::count(),
-                'edk_litres' => round((float) EdkFuelTransaction::sum('litres'), 0),
-                'edk_fcfa' => (float) EdkFuelTransaction::sum('amount_fcfa'),
+                'edk_recharges' => FuelCardTransaction::count(),
+                'edk_estimated_litres' => round((float) FuelCardTransaction::sum('estimated_litres'), 0),
+                'edk_fcfa' => (float) FuelCardTransaction::sum('amount_fcfa'),
                 'fleeti_days' => FleetiDailyRecord::count(),
                 'fleeti_litres' => round((float) FleetiDailyRecord::sum('consumed'), 0),
             ],
@@ -74,7 +73,7 @@ class FuelImportController extends Controller
 
     private function edkQuery(array $filters)
     {
-        return EdkFuelTransaction::query()
+        return FuelCardTransaction::query()
             ->with(['truck:id,matricule', 'driver:id,name'])
             ->when($filters['truck_id'] ?? null, fn ($q, $v) => $q->where('truck_id', $v))
             ->when($filters['driver_id'] ?? null, fn ($q, $v) => $q->where('driver_id', $v))
@@ -91,28 +90,28 @@ class FuelImportController extends Controller
             ->when($filters['end_date'] ?? null, fn ($q, $v) => $q->whereDate('record_date', '<=', $v));
     }
 
-    /** EDK transaction details + matching Fleeti consumption (validation) + truck history. */
-    public function showEdk(EdkFuelTransaction $transaction)
+    /** EDK recharge details + matching Fleeti consumption (validation) + truck history. */
+    public function showEdk(FuelCardTransaction $recharge)
     {
-        $transaction->load(['truck:id,matricule', 'driver:id,name', 'importedBy:id,name']);
-        $date = $transaction->occurred_at?->toDateString();
+        $recharge->load(['truck:id,matricule', 'driver:id,name', 'importedBy:id,name']);
+        $date = $recharge->occurred_at?->toDateString();
 
-        $fleeti = ($transaction->truck_id && $date)
-            ? FleetiDailyRecord::where('truck_id', $transaction->truck_id)->whereDate('record_date', $date)->first()
+        $fleeti = ($recharge->truck_id && $date)
+            ? FleetiDailyRecord::where('truck_id', $recharge->truck_id)->whereDate('record_date', $date)->first()
             : null;
 
         return response()->json([
             'record' => [
-                'id' => $transaction->id,
-                'date' => $transaction->occurred_at?->format('d/m/Y H:i'),
-                'truck' => $transaction->truck?->matricule,
-                'driver' => $transaction->driver?->name,
-                'amount' => (float) $transaction->amount_fcfa,
-                'litres' => round((float) $transaction->litres, 1),
-                'price_per_litre' => (float) $transaction->price_per_litre,
-                'transaction_id' => $transaction->transaction_id,
-                'imported_by' => $transaction->importedBy?->name,
-                'imported_at' => $transaction->created_at?->format('d/m/Y H:i'),
+                'id' => $recharge->id,
+                'date' => $recharge->occurred_at?->format('d/m/Y H:i'),
+                'truck' => $recharge->truck?->matricule,
+                'driver' => $recharge->driver?->name,
+                'amount' => (float) $recharge->amount_fcfa,
+                'litres' => round((float) $recharge->estimated_litres, 1),
+                'price_per_litre' => (float) $recharge->price_per_litre,
+                'transaction_id' => $recharge->transaction_ref,
+                'imported_by' => $recharge->importedBy?->name,
+                'imported_at' => $recharge->created_at?->format('d/m/Y H:i'),
             ],
             'validation' => $fleeti ? [
                 'date' => $fleeti->record_date?->format('d/m/Y'),
@@ -121,20 +120,20 @@ class FuelImportController extends Controller
                 'consumed_per_100km' => $fleeti->consumed_per_100km !== null ? round((float) $fleeti->consumed_per_100km, 1) : null,
                 'refills_volume' => round((float) $fleeti->refills_volume, 1),
             ] : null,
-            'history' => EdkFuelTransaction::where('truck_id', $transaction->truck_id)->where('id', '!=', $transaction->id)
+            'history' => FuelCardTransaction::where('truck_id', $recharge->truck_id)->where('id', '!=', $recharge->id)
                 ->latest('occurred_at')->take(8)->get()
-                ->map(fn ($r) => ['id' => $r->id, 'date' => $r->occurred_at?->format('d/m/Y'), 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->litres, 1)])->all(),
+                ->map(fn ($r) => ['id' => $r->id, 'date' => $r->occurred_at?->format('d/m/Y'), 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->estimated_litres, 1)])->all(),
         ]);
     }
 
-    /** Fleeti daily record details + matching EDK purchases (validation) + truck history. */
+    /** Fleeti daily record details + matching EDK recharges (validation) + truck history. */
     public function showFleeti(FleetiDailyRecord $record)
     {
         $record->load(['truck:id,matricule', 'importedBy:id,name']);
         $date = $record->record_date?->toDateString();
 
         $edk = ($record->truck_id && $date)
-            ? EdkFuelTransaction::with('driver:id,name')->where('truck_id', $record->truck_id)->whereDate('occurred_at', $date)->get()
+            ? FuelCardTransaction::with('driver:id,name')->where('truck_id', $record->truck_id)->whereDate('occurred_at', $date)->get()
             : collect();
 
         return response()->json([
@@ -156,9 +155,9 @@ class FuelImportController extends Controller
             ],
             'validation' => $edk->isNotEmpty() ? [
                 'count' => $edk->count(),
-                'litres' => round((float) $edk->sum('litres'), 1),
+                'litres' => round((float) $edk->sum('estimated_litres'), 1),
                 'amount' => (float) $edk->sum('amount_fcfa'),
-                'transactions' => $edk->map(fn ($r) => ['id' => $r->id, 'driver' => $r->driver?->name, 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->litres, 1)])->all(),
+                'transactions' => $edk->map(fn ($r) => ['id' => $r->id, 'driver' => $r->driver?->name, 'amount' => (float) $r->amount_fcfa, 'litres' => round((float) $r->estimated_litres, 1)])->all(),
             ] : null,
             'history' => FleetiDailyRecord::where('truck_id', $record->truck_id)->where('id', '!=', $record->id)
                 ->latest('record_date')->take(8)->get()
@@ -176,10 +175,10 @@ class FuelImportController extends Controller
         return response()->streamDownload(function () use ($tab, $filters) {
             $out = fopen('php://output', 'w');
             if ($tab === 'edk') {
-                fputcsv($out, ['Date', 'Camion', 'Chauffeur', 'Montant FCFA', 'Litres', 'Transaction']);
+                fputcsv($out, ['Date', 'Camion', 'Chauffeur', 'Montant FCFA', 'Litres estimes', 'Transaction']);
                 $this->edkQuery($filters)->latest('occurred_at')->chunk(500, function ($rows) use ($out) {
                     foreach ($rows as $r) {
-                        fputcsv($out, [$r->occurred_at?->format('Y-m-d H:i'), $r->truck?->matricule, $r->driver?->name, $r->amount_fcfa, $r->litres, $r->transaction_id]);
+                        fputcsv($out, [$r->occurred_at?->format('Y-m-d H:i'), $r->truck?->matricule, $r->driver?->name, $r->amount_fcfa, $r->estimated_litres, $r->transaction_ref]);
                     }
                 });
             } else {
@@ -205,9 +204,8 @@ class FuelImportController extends Controller
 
         try {
             $contents = file_get_contents($request->file('file')->getRealPath());
-            $setting = FleetSetting::current();
-            $price = (float) ($request->input('price_per_litre') ?: $setting->price_per_litre);
-            $preview = $this->edkParser->parse($contents, $price);
+            $price = (float) ($request->input('price_per_litre') ?: FleetSetting::current()->price_per_litre);
+            $preview = $this->fuelImportService->preview($contents, $price);
         } catch (\Throwable $e) {
             Log::error('EDK import preview failed', [
                 'error' => $e->getMessage(),
@@ -215,17 +213,20 @@ class FuelImportController extends Controller
             ]);
             return response()->json([
                 'error' => 'Le fichier EDK n\'a pas pu être analysé : ' . $e->getMessage(),
-                'valid' => [],
-                'invalid' => [],
-                'totals' => ['count_rows' => 0, 'litres' => 0, 'amount' => 0],
+                'summary' => ['accepted_rows' => 0, 'rejected_rows' => 0],
+                'rows' => [],
             ], 422);
         }
 
+        // Cache the raw file so commit re-runs the authoritative pipeline (single source of persistence).
         $token = 'fuel-import:edk:' . auth()->id() . ':' . Str::random(16);
-        Cache::put($token, $preview['valid'], now()->addHour());
-        $preview['token'] = $token;
+        Cache::put($token, [
+            'contents' => $contents,
+            'price' => $price,
+            'filename' => $request->file('file')->getClientOriginalName(),
+        ], now()->addHour());
 
-        return response()->json($preview);
+        return response()->json($preview + ['price_per_litre' => $price, 'token' => $token]);
     }
 
     public function commitEdk(Request $request)
@@ -235,46 +236,22 @@ class FuelImportController extends Controller
         ]);
 
         $token = $request->input('token');
-        $rows = Cache::get($token);
-        if (! is_array($rows) || empty($rows)) {
+        $cached = Cache::get($token);
+        if (! is_array($cached) || empty($cached['contents'])) {
             return back()->with('error', 'Données expirées. Relance la prévisualisation.');
         }
 
-        $setting = FleetSetting::current();
-        $price = (float) $setting->price_per_litre;
-        $userId = auth()->id();
-
-        $inserted = 0;
-        $skipped = 0;
-        DB::transaction(function () use ($rows, $price, $userId, &$inserted, &$skipped) {
-            foreach ($rows as $row) {
-                $exists = EdkFuelTransaction::query()
-                    ->where('transaction_id', $row['txn_id'])
-                    ->where('truck_id', $row['truck_id'])
-                    ->exists();
-                if ($exists) {
-                    $skipped++;
-                    continue;
-                }
-                EdkFuelTransaction::create([
-                    'truck_id' => $row['truck_id'],
-                    'driver_id' => $row['driver_id'] ?? null,
-                    'transaction_id' => $row['txn_id'],
-                    'card_number' => $row['carte'] ?? null,
-                    'holder_raw' => $row['porteur'] ?? null,
-                    'amount_fcfa' => $row['montant'],
-                    'litres' => $row['litres'],
-                    'price_per_litre' => $price,
-                    'occurred_at' => $row['date'],
-                    'imported_by' => $userId,
-                ]);
-                $inserted++;
-            }
-        });
+        // Thin: the entire pipeline + persistence lives in FuelImportService (the sole owner).
+        $batch = $this->fuelImportService->import(
+            $cached['contents'],
+            (float) ($cached['price'] ?? FleetSetting::current()->price_per_litre),
+            $cached['filename'] ?? null,
+            auth()->id(),
+        );
 
         Cache::forget($token);
 
-        return back()->with('success', "EDK : {$inserted} transactions importées, {$skipped} doublons ignorés.");
+        return back()->with('success', "EDK : {$batch->accepted_rows} acceptée(s), {$batch->rejected_rows} rejetée(s).");
     }
 
     public function previewFleeti(Request $request)
@@ -327,43 +304,12 @@ class FuelImportController extends Controller
             return back()->with('error', 'Données expirées. Relance la prévisualisation.');
         }
 
-        $userId = auth()->id();
-
-        $inserted = 0;
-        $updated = 0;
-        DB::transaction(function () use ($rows, $userId, &$inserted, &$updated) {
-            foreach ($rows as $row) {
-                $payload = [
-                    'kilometers' => $row['kilometers'] ?? 0,
-                    'volume_initial' => $row['volume_initial'] ?? 0,
-                    'volume_final' => $row['volume_final'] ?? 0,
-                    'consumed' => $row['consumed'] ?? 0,
-                    'consumed_per_100km' => $row['consumed_per_100km'] ?? null,
-                    'refills_count' => $row['refills_count'] ?? 0,
-                    'refills_volume' => $row['refills_volume'] ?? 0,
-                    'drains_count' => $row['drains_count'] ?? 0,
-                    'drains_volume' => $row['drains_volume'] ?? 0,
-                    'imported_by' => $userId,
-                ];
-                $existing = FleetiDailyRecord::query()
-                    ->where('truck_id', $row['truck_id'])
-                    ->where('record_date', $row['date'])
-                    ->first();
-                if ($existing) {
-                    $existing->update($payload);
-                    $updated++;
-                } else {
-                    FleetiDailyRecord::create(array_merge($payload, [
-                        'truck_id' => $row['truck_id'],
-                        'record_date' => $row['date'],
-                    ]));
-                    $inserted++;
-                }
-            }
-        });
+        // Persistence (upsert by truck+date, source-owned columns) is owned by FleetiImportService
+        // so the HTTP commit and the historical CLI importer share exactly one path.
+        $counts = $this->fleetiImportService->persist($rows, auth()->id());
 
         Cache::forget($token);
 
-        return back()->with('success', "Fleeti : {$inserted} jours ajoutés, {$updated} jours mis à jour.");
+        return back()->with('success', "Fleeti : {$counts['inserted']} jours ajoutés, {$counts['updated']} jours mis à jour.");
     }
 }

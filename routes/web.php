@@ -71,7 +71,7 @@ Route::get('/admin/audit-logs/export', [App\Http\Controllers\AuditLogController:
 Route::group(['middleware' => ['auth'], 'prefix' => 'fuel'], function () {
     Route::get('', [App\Http\Controllers\FuelImportController::class, 'index'])->name('fuel.index');
     Route::get('export', [App\Http\Controllers\FuelImportController::class, 'export'])->name('fuel.export');
-    Route::get('edk/{transaction}', [App\Http\Controllers\FuelImportController::class, 'showEdk'])->name('fuel.edk.show');
+    Route::get('edk/{recharge}', [App\Http\Controllers\FuelImportController::class, 'showEdk'])->name('fuel.edk.show');
     Route::get('fleeti/{record}', [App\Http\Controllers\FuelImportController::class, 'showFleeti'])->name('fuel.fleeti.show');
 
     Route::prefix('import')->group(function () {
@@ -80,6 +80,13 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'fuel'], function () {
         Route::post('edk/commit', [App\Http\Controllers\FuelImportController::class, 'commitEdk'])->name('fuel.import.edk.commit');
         Route::post('fleeti/preview', [App\Http\Controllers\FuelImportController::class, 'previewFleeti'])->name('fuel.import.fleeti.preview');
         Route::post('fleeti/commit', [App\Http\Controllers\FuelImportController::class, 'commitFleeti'])->name('fuel.import.fleeti.commit');
+    });
+
+    // R10 — manual review workflow (pending transactions).
+    Route::prefix('review')->group(function () {
+        Route::get('', [App\Http\Controllers\FuelReviewController::class, 'queue'])->name('fuel.review');
+        Route::get('{transaction}', [App\Http\Controllers\FuelReviewController::class, 'show'])->name('fuel.review.show');
+        Route::post('{transaction}', [App\Http\Controllers\FuelReviewController::class, 'resolve'])->name('fuel.review.resolve');
     });
 });
 

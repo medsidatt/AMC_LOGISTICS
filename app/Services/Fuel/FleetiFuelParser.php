@@ -53,85 +53,41 @@ class FleetiFuelParser
             }
         }
 
-        // Iterate sheets to find truck details. Pattern:
-        //   Sheet N : "Rapport de carburant: 6078-TTA1 / FAW J6P-420" (header)
-        //   Sheet N+1 : "Détail par dates" (daily breakdown)
+        // Fleeti workbooks interleave, per truck, a header/chart sheet followed by one or more
+        // "Détail par dates" sheets. The current exports split into two files — "Volume de
+        // carburant 2.0: PLATE" (refuel + consumption) and "Carburant: PLATE" (tank telemetry) —
+        // while the retired single export used "Rapport de carburant: PLATE". All three are handled
+        // by (a) recognising any of those header titles and (b) reading each detail sheet's own
+        // layout. The truck carries over from the most recent header sheet.
         $currentTruck = null;
+        $currentFormat = 'rapport';
         foreach ($sheets as $sheetIdx => $sheet) {
             $first = $sheet[0][0] ?? null;
             if (! is_string($first)) {
                 continue;
             }
 
-            // Detect a per-truck header sheet
-            if (stripos($first, 'Rapport de carburant') === 0 && stripos($first, 'Résumé') === false) {
+            if ($this->isTruckHeader($first)) {
                 $currentTruck = $this->matchTruckFromHeader($first, $matriculeMap);
+                $currentFormat = $this->detectFormat($first);
                 continue;
             }
 
-            // If "Détail par dates" sheet, parse rows with the most recent truck context
-            if (str_contains(strtolower((string) $first), 'détail par dates') || stripos((string) $first, 'detail par date') !== false) {
-                if (! $currentTruck) {
-                    $invalid[] = ['line' => $sheetIdx, 'reason' => "Feuille 'Détail par dates' sans en-tête camion identifiable"];
-                    continue;
-                }
+            if (! $this->isDetailSheet($first)) {
+                continue;
+            }
 
-                // Headers occupy rows 0, 1, 2. Data starts at row 3.
-                for ($i = 3; $i < count($sheet); $i++) {
-                    $row = $sheet[$i];
-                    $dateRaw = $row[0] ?? null;
-                    if (! is_string($dateRaw) || $dateRaw === '') {
-                        continue;
-                    }
-                    if (stripos($dateRaw, 'total') !== false || stripos($dateRaw, 'date') !== false) {
-                        continue;
-                    }
+            if (! $currentTruck) {
+                $invalid[] = ['line' => $sheetIdx, 'reason' => "Feuille 'Détail par dates' sans en-tête camion identifiable"];
+                continue;
+            }
 
-                    $date = $this->parseDayDate($dateRaw);
-                    if (! $date) {
-                        continue;
-                    }
-
-                    $kmDay = $this->numericOrZero($row[1] ?? 0);
-                    $consoCalcL = $this->numericOrNull($row[2] ?? null);
-                    $consoCalcLPer100 = $this->numericOrNull($row[3] ?? null);
-                    $volumeInitial = $this->numericOrZero($row[4] ?? 0);
-                    $volumeFinal = $this->numericOrZero($row[5] ?? 0);
-                    $consumed = $this->numericOrZero($row[6] ?? 0);
-                    $consumedLPer100 = $this->numericOrNull($row[7] ?? null);
-                    $refillsCount = (int) ($row[8] ?? 0);
-                    $refillsVolume = $this->numericOrZero($row[9] ?? 0);
-                    $drainsCount = (int) ($row[10] ?? 0);
-                    $drainsVolume = $this->numericOrZero($row[11] ?? 0);
-
-                    // Skip days with absolutely no activity
-                    if ($kmDay == 0 && $consumed == 0 && $refillsCount == 0 && $refillsVolume == 0 && $drainsCount == 0 && $drainsVolume == 0) {
-                        continue;
-                    }
-
-                    $totalRefilled += $refillsVolume;
-                    $totalConsumed += $consumed;
-                    $totalKm += $kmDay;
-                    $trucksSeen[$currentTruck->id] = true;
-
-                    $valid[] = [
-                        'sheet' => $sheetIdx,
-                        'row' => $i + 1,
-                        'truck_id' => $currentTruck->id,
-                        'truck_matricule' => $currentTruck->matricule,
-                        'date' => $date->toDateString(),
-                        'date_display' => $date->translatedFormat('d/m/Y'),
-                        'kilometers' => round($kmDay, 2),
-                        'volume_initial' => round($volumeInitial, 2),
-                        'volume_final' => round($volumeFinal, 2),
-                        'consumed' => round($consumed, 2),
-                        'consumed_per_100km' => $consumedLPer100,
-                        'refills_count' => $refillsCount,
-                        'refills_volume' => round($refillsVolume, 2),
-                        'drains_count' => $drainsCount,
-                        'drains_volume' => round($drainsVolume, 2),
-                    ];
-                }
+            foreach ($this->parseDetailSheet($sheet, $currentTruck, $currentFormat) as $entry) {
+                $totalRefilled += $entry['refills_volume'] ?? 0;
+                $totalConsumed += $entry['consumed'] ?? 0;
+                $totalKm += $entry['kilometers'] ?? 0;
+                $trucksSeen[$currentTruck->id] = true;
+                $valid[] = $entry;
             }
         }
 
@@ -147,6 +103,183 @@ class FleetiFuelParser
                 'km' => round($totalKm, 2),
             ],
         ];
+    }
+
+    /** A per-truck header/chart sheet ("Volume de carburant 2.0: …", "Carburant: …", legacy "Rapport …"). */
+    private function isTruckHeader(string $first): bool
+    {
+        if ($this->looksLikeSummary($first)) {
+            return false;
+        }
+
+        return stripos($first, 'Rapport de carburant') === 0
+            || stripos($first, 'Volume de carburant') === 0
+            || stripos($first, 'Carburant') === 0;
+    }
+
+    /**
+     * Which export produced this workbook — decides deterministic field ownership (V2):
+     *   volume2   → owns consumption + refuel (km, consumed, refills)
+     *   carburant → owns tank telemetry only (volume_initial/final, drains)
+     *   rapport   → the retired single file owns everything (sole source)
+     * "Volume de carburant" is checked before "Carburant" because it contains that word.
+     */
+    private function detectFormat(string $first): string
+    {
+        $f = strtolower($first);
+        if (str_contains($f, 'volume de carburant')) {
+            return 'volume2';
+        }
+        if (str_contains($f, 'rapport de carburant')) {
+            return 'rapport';
+        }
+
+        return 'carburant';
+    }
+
+    /**
+     * The FleetiDailyRecord columns a given export is authoritative for. Volume 2.0 and Carburant
+     * own disjoint sets, so importing both (in any order) is deterministic — neither overwrites the
+     * other's columns. The legacy single "Rapport" owns all columns.
+     *
+     * @return array<int, string>
+     */
+    private function ownedFields(string $format): array
+    {
+        $consumption = ['kilometers', 'consumed', 'consumed_per_100km', 'refills_count', 'refills_volume'];
+        $tank = ['volume_initial', 'volume_final', 'drains_count', 'drains_volume'];
+
+        return match ($format) {
+            'volume2' => $consumption,
+            'carburant' => $tank,
+            default => array_merge($consumption, $tank),
+        };
+    }
+
+    private function looksLikeSummary(string $first): bool
+    {
+        $f = strtolower($first);
+
+        return str_contains($f, 'résumé') || str_contains($f, 'resume');
+    }
+
+    private function isDetailSheet(string $first): bool
+    {
+        $f = strtolower($first);
+
+        return str_contains($f, 'détail par dates') || str_contains($f, 'detail par date');
+    }
+
+    /**
+     * Parse one "Détail par dates" sheet into canonical daily rows. The column layout is read from
+     * the sheet header (6-col refuel vs 12-col tank), while WHICH columns get persisted is decided
+     * by the export `$format` via `_owned` — so Volume 2.0 (consumption) and Carburant (tank) write
+     * disjoint columns and the merged result is import-order independent (§4 ownership; V2 fix).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function parseDetailSheet(array $sheet, Truck $truck, string $format): array
+    {
+        [$dataStart, $hasTank] = $this->detectLayout($sheet);
+        $owned = $this->ownedFields($format);
+        $rows = [];
+
+        for ($i = $dataStart; $i < count($sheet); $i++) {
+            $row = $sheet[$i];
+            $dateRaw = $row[0] ?? null;
+            if (! is_string($dateRaw) || $dateRaw === '') {
+                continue;
+            }
+            if (stripos($dateRaw, 'total') !== false || stripos($dateRaw, 'date') !== false) {
+                continue;
+            }
+
+            $date = $this->parseDayDate($dateRaw);
+            if (! $date) {
+                continue;
+            }
+
+            $km = $this->numericOrZero($row[1] ?? 0);
+
+            if ($hasTank) {
+                $volumeInitial = $this->numericOrZero($row[4] ?? 0);
+                $volumeFinal = $this->numericOrZero($row[5] ?? 0);
+                $consumed = $this->numericOrZero($row[6] ?? 0);
+                $consumedPer100 = $this->numericOrNull($row[7] ?? null);
+                $refillsCount = (int) ($row[8] ?? 0);
+                $refillsVolume = $this->numericOrZero($row[9] ?? 0);
+                $drainsCount = (int) ($row[10] ?? 0);
+                $drainsVolume = $this->numericOrZero($row[11] ?? 0);
+            } else {
+                $refillsCount = (int) ($row[2] ?? 0);
+                $refillsVolume = $this->numericOrZero($row[3] ?? 0);
+                $consumed = $this->numericOrZero($row[4] ?? 0);
+                $consumedPer100 = $this->numericOrNull($row[5] ?? null);
+                $drainsCount = 0;
+                $drainsVolume = 0.0;
+            }
+
+            // Skip days with absolutely no activity.
+            if ($km == 0 && $consumed == 0 && $refillsCount == 0 && $refillsVolume == 0 && $drainsCount == 0 && $drainsVolume == 0) {
+                continue;
+            }
+
+            // All parsed values are attached for preview/totals display; `_owned` restricts which
+            // ones are actually persisted (see FuelImportController::commitFleeti).
+            $entry = [
+                'truck_id' => $truck->id,
+                'truck_matricule' => $truck->matricule,
+                'date' => $date->toDateString(),
+                'date_display' => $date->translatedFormat('d/m/Y'),
+                'kilometers' => round($km, 2),
+                'consumed' => round($consumed, 2),
+                'consumed_per_100km' => $consumedPer100,
+                'refills_count' => $refillsCount,
+                'refills_volume' => round($refillsVolume, 2),
+                '_owned' => $owned,
+            ];
+
+            if ($hasTank) {
+                $entry['volume_initial'] = round($volumeInitial, 2);
+                $entry['volume_final'] = round($volumeFinal, 2);
+                $entry['drains_count'] = $drainsCount;
+                $entry['drains_volume'] = round($drainsVolume, 2);
+            }
+
+            $rows[] = $entry;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Read a detail sheet's header to locate the first data row and whether it is a tank layout.
+     *
+     * @return array{0:int, 1:bool} [dataStartRowIndex, hasTankColumns]
+     */
+    private function detectLayout(array $sheet): array
+    {
+        $lastDateRow = 1;
+        $hasTank = false;
+
+        foreach (array_slice($sheet, 0, 4, true) as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            foreach ($row as $cell) {
+                if (! is_string($cell)) {
+                    continue;
+                }
+                if (trim($cell) === 'Date') {
+                    $lastDateRow = max($lastDateRow, (int) $idx);
+                }
+                if (stripos($cell, 'Volume initial') !== false) {
+                    $hasTank = true;
+                }
+            }
+        }
+
+        return [$lastDateRow + 1, $hasTank];
     }
 
     private function matchTruckFromHeader(string $text, $matriculeMap): ?Truck
