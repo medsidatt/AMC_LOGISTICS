@@ -28,6 +28,14 @@ Auth::routes(['reset' => false, 'register' => false]);
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
     Route::get('', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+    // R2.1 — Executive Command Center (first end-to-end pipeline consumer). Additive and
+    // parallel to the legacy home dashboard; no existing route is changed.
+    Route::get('executive', [App\Http\Controllers\ExecutiveDashboardController::class, 'index'])->name('dashboard.executive');
+
+    // R2.2 — Operations Command Center. Additive and parallel to the legacy /operations
+    // workflow pages (Planning/Dispatch/Reconciliation/Exceptions); no existing route changed.
+    Route::get('operations', [App\Http\Controllers\OperationsDashboardController::class, 'index'])->name('dashboard.operations');
 });
 
 Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
