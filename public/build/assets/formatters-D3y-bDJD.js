@@ -1,0 +1,1 @@
+function a(n,t=0){const r=Number(n)||0;return new Intl.NumberFormat("fr-FR",{minimumFractionDigits:t,maximumFractionDigits:t}).format(r)}function m(n,t=1){return`${n>=0?"+":""}${a(n,t)}%`}function f(n,t){return t===0?n>0?100:0:(n-t)/Math.abs(t)*100}export{m as a,f as c,a as f};
