@@ -71,6 +71,7 @@ Route::get('/admin/audit-logs/export', [App\Http\Controllers\AuditLogController:
 Route::group(['middleware' => ['auth'], 'prefix' => 'fuel'], function () {
     Route::get('', [App\Http\Controllers\FuelImportController::class, 'index'])->name('fuel.index');
     Route::get('export', [App\Http\Controllers\FuelImportController::class, 'export'])->name('fuel.export');
+    Route::get('analytics', [App\Http\Controllers\FuelImportController::class, 'analytics'])->name('fuel.analytics');
     Route::get('edk/{recharge}', [App\Http\Controllers\FuelImportController::class, 'showEdk'])->name('fuel.edk.show');
     Route::get('fleeti/{record}', [App\Http\Controllers\FuelImportController::class, 'showFleeti'])->name('fuel.fleeti.show');
 

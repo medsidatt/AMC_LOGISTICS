@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Analytics\Fuel\FuelDashboardDataProvider;
 use App\Models\Driver;
 use App\Models\FleetiDailyRecord;
 use App\Models\FleetSetting;
@@ -25,6 +26,24 @@ class FuelImportController extends Controller
     ) {
         $this->middleware('auth');
         $this->middleware('permission:fuel-import');
+    }
+
+    /**
+     * Descriptive fuel analytics payload for dashboards. Thin boundary: validates the period and
+     * returns exactly what FuelDashboardDataProvider composed — no query, no shaping, no KPI.
+     */
+    public function analytics(Request $request, FuelDashboardDataProvider $provider)
+    {
+        $validated = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+
+        // Default period: current calendar year to date (descriptive default, not a business rule).
+        $from = new \DateTimeImmutable(($validated['from'] ?? now()->startOfYear()->toDateString()).' 00:00:00');
+        $to = new \DateTimeImmutable(($validated['to'] ?? now()->toDateString()).' 23:59:59');
+
+        return response()->json($provider->dashboard($from, $to));
     }
 
     /** Fuel workspace — server-paginated EDK or Fleeti records (tabbed). */
