@@ -283,7 +283,7 @@ class SeedInspectionTestData extends Command
                     ? $drivers[($tIdx + $i) % count($drivers)]
                     : null;
 
-                $reportedAt = now()->subDays(($tIdx * 2 + $i))->subHours(rand(1, 23));
+                $reportedAt = now()->subDays(($tIdx * 2 + $i))->subHoqurs(rand(1, 23));
 
                 DailyChecklistIssue::create([
                     'truck_id' => $truck->id,

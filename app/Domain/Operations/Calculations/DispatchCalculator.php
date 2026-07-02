@@ -24,4 +24,9 @@ class DispatchCalculator implements DispatchCalculatorInterface
     {
         return $required > 0 ? $assigned / $required : 0.0;
     }
+
+    public function isNotStarted(?string $currentStatus): bool
+    {
+        return $currentStatus === null;
+    }
 }

@@ -4,13 +4,14 @@ namespace App\Domain\Operations\ReadModels;
 
 use App\Domain\Operations\Contracts\TransportTrackingReadModelInterface;
 use App\Domain\Operations\ReadModels\Data\DriverPeriodAggregate;
+use App\Domain\Operations\ReadModels\Data\LoadProjection;
 use App\Domain\Operations\ReadModels\Data\MonthlyTonnage;
 use App\Domain\Operations\ReadModels\Data\PeriodTotals;
 use App\Domain\Operations\ReadModels\Data\TruckPeriodAggregate;
 use App\Models\TransportTracking;
 use Carbon\CarbonInterface;
+use DateTimeImmutable;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Read-only projections over `transport_trackings`.
@@ -88,7 +89,7 @@ class TransportTrackingReadModel implements TransportTrackingReadModelInterface
     {
         return TransportTracking::query()
             ->selectRaw(
-                "CASE WHEN DAY(client_date) >= ? "
+                'CASE WHEN DAY(client_date) >= ? '
                 ."THEN DATE_FORMAT(DATE_ADD(client_date, INTERVAL 1 MONTH), '%Y-%m') "
                 ."ELSE DATE_FORMAT(client_date, '%Y-%m') END as ym, "
                 .'COALESCE(SUM(provider_net_weight), 0) as provider_tonnage, '
@@ -107,6 +108,25 @@ class TransportTrackingReadModel implements TransportTrackingReadModelInterface
                 (float) $r->client_tonnage,
                 (float) $r->gap_tonnage,
                 (int) $r->trips,
+            ))
+            ->values();
+    }
+
+    public function loads(CarbonInterface $from, CarbonInterface $to): Collection
+    {
+        return TransportTracking::query()
+            ->whereBetween('client_date', [$from, $to])
+            ->orderBy('client_date')
+            ->orderBy('id')
+            ->get(['id', 'reference', 'truck_id', 'driver_id', 'provider_net_weight', 'client_net_weight', 'client_date'])
+            ->map(fn (TransportTracking $t): LoadProjection => new LoadProjection(
+                (int) $t->id,
+                $t->reference !== null ? (string) $t->reference : null,
+                $t->truck_id !== null ? (int) $t->truck_id : null,
+                $t->driver_id !== null ? (int) $t->driver_id : null,
+                $t->provider_net_weight !== null ? (float) $t->provider_net_weight : null,
+                $t->client_net_weight !== null ? (float) $t->client_net_weight : null,
+                $t->client_date !== null ? new DateTimeImmutable((string) $t->client_date->toDateString()) : null,
             ))
             ->values();
     }

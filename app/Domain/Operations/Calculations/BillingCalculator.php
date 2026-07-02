@@ -2,13 +2,13 @@
 
 namespace App\Domain\Operations\Calculations;
 
-use App\Domain\Operations\Contracts\FinanceCalculatorInterface;
+use App\Domain\Operations\Contracts\BillingCalculatorInterface;
 
 /**
  * Billing-readiness / blocked-revenue arithmetic. Pure over supplied tonnages/rate.
  * No Eloquent, SQL, config, env, or app().
  */
-class FinanceCalculator implements FinanceCalculatorInterface
+class BillingCalculator implements BillingCalculatorInterface
 {
     public function readinessRate(float $readyTonnage, float $totalTonnage): float
     {

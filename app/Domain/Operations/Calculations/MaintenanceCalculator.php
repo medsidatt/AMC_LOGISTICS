@@ -40,4 +40,12 @@ class MaintenanceCalculator implements MaintenanceCalculatorInterface
 
         return 'green';
     }
+
+    public function isKilometersOverdue(float $totalKilometers, ?float $lastMaintenanceKm, ?float $perTruckIntervalKm): bool
+    {
+        $interval = $perTruckIntervalKm ?? $this->parameters->float(OperationalParameterKey::MAX_KM_BEFORE_MAINTENANCE);
+        $nextServiceKm = ($lastMaintenanceKm ?? 0.0) + $interval;
+
+        return $totalKilometers >= $nextServiceKm;
+    }
 }

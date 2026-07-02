@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Operations;
 
-use App\Domain\Operations\Calculations\FinanceCalculator;
+use App\Domain\Operations\Calculations\BillingCalculator;
 use Tests\TestCase;
 
-/** R1.3 inc5 — FinanceCalculator owns billing-readiness / blocked-revenue arithmetic (pure). */
-class FinanceCalculatorTest extends TestCase
+/** R1.3 inc5 — BillingCalculator owns billing-readiness / blocked-revenue arithmetic (pure). */
+class BillingCalculatorTest extends TestCase
 {
-    private function calc(): FinanceCalculator
+    private function calc(): BillingCalculator
     {
-        return new FinanceCalculator();
+        return new BillingCalculator();
     }
 
     public function test_readiness_rate(): void

@@ -271,7 +271,7 @@ A retired KPI's identifier is **never reused**; it is marked retired in §9.
 - **Owner:** Fleet
 - **Data sources:** Fleet Read Model, Maintenance Read Model
 - **Calculator:** Capacity Calculator
-- **Parameters:** `maintenance_warning_pct`, `warning_threshold_km`, `max_rotations_before_maintenance`
+- **Parameters:** `maintenance_warning_ratio`, `warning_threshold_km`, `max_rotations_before_maintenance`
 - **Refresh:** Daily
 - **Severity:** High
 - **Drill-down:** At-risk trucks
@@ -364,7 +364,7 @@ A retired KPI's identifier is **never reused**; it is marked retired in §9.
 - **Owner:** Maintenance
 - **Data sources:** Maintenance Read Model, Fleet Read Model
 - **Calculator:** Maintenance Calculator
-- **Parameters:** `maintenance_warning_pct`, `warning_threshold_km`, `max_rotations_before_maintenance`
+- **Parameters:** `maintenance_warning_ratio`, `warning_threshold_km`, `max_rotations_before_maintenance`
 - **Refresh:** Daily
 - **Severity:** Critical
 - **Drill-down:** Maintenance-due list

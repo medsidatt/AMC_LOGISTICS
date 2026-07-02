@@ -17,4 +17,11 @@ interface InspectionCalculatorInterface
     public function isValid(?CarbonInterface $lastInspection, int $slaDays, CarbonInterface $asOf): bool;
 
     public function isExpired(?CarbonInterface $lastInspection, int $slaDays, CarbonInterface $asOf): bool;
+
+    /**
+     * Whether the last inspection is expired against the fleet SLA. Owns reading the
+     * inspection SLA-days parameter so callers need not (and must not) resolve it; delegates
+     * the date comparison to {@see isExpired}.
+     */
+    public function isExpiredForFleet(?\DateTimeInterface $lastInspection, \DateTimeInterface $asOf): bool;
 }

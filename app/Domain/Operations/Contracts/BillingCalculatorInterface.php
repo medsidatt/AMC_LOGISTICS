@@ -10,7 +10,7 @@ namespace App\Domain\Operations\Contracts;
  * No consumer migrated in this increment: billing readiness / blocked revenue
  * (FIN-100/101) are new outcomes wired when their KPIs are built. This is the owner.
  */
-interface FinanceCalculatorInterface
+interface BillingCalculatorInterface
 {
     /** Share of delivered tonnage that is invoice-ready; 0 when nothing delivered. */
     public function readinessRate(float $readyTonnage, float $totalTonnage): float;

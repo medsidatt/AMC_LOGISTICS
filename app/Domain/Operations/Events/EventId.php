@@ -17,7 +17,6 @@ enum EventId: string
     case MISSING_TRANSPORT_TICKET = 'missing_transport_ticket';
     case GPS_LOAD_WITHOUT_TICKET = 'gps_load_without_ticket';
     case BILLING_BLOCKED = 'billing_blocked';
-    case REVENUE_BLOCKED = 'revenue_blocked';
     case OBJECTIVE_BEHIND_SCHEDULE = 'objective_behind_schedule';
     case OBJECTIVE_REACHED = 'objective_reached';
     case CAPACITY_REDUCED = 'capacity_reduced';

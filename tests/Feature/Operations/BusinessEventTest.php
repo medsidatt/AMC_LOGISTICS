@@ -32,7 +32,6 @@ class BusinessEventTest extends TestCase
         \App\Domain\Operations\Events\MissingTransportTicket::class,
         \App\Domain\Operations\Events\GPSLoadWithoutTicket::class,
         \App\Domain\Operations\Events\BillingBlocked::class,
-        \App\Domain\Operations\Events\RevenueBlocked::class,
         \App\Domain\Operations\Events\ObjectiveBehindSchedule::class,
         \App\Domain\Operations\Events\ObjectiveReached::class,
         \App\Domain\Operations\Events\CapacityReduced::class,
@@ -97,7 +96,7 @@ class BusinessEventTest extends TestCase
         }
 
         $this->assertSame(count($ids), count(array_unique($ids)), 'every event has a unique EventId');
-        $this->assertCount(17, $ids);
+        $this->assertCount(16, $ids);
     }
 
     public function test_readonly_blocks_mutation(): void

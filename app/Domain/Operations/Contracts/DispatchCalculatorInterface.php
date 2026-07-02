@@ -20,4 +20,10 @@ interface DispatchCalculatorInterface
 
     /** Share of required assignments filled; 0 when none required. */
     public function assignmentCompletion(int $assigned, int $required): float;
+
+    /**
+     * Whether a planned dispatch has not started — i.e. no live movement status has been
+     * recorded yet. Owns the "started vs not-started" classification over the raw status.
+     */
+    public function isNotStarted(?string $currentStatus): bool;
 }
