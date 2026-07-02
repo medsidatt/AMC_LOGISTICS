@@ -38,6 +38,18 @@ Route::group(['middleware' => ['auth'], 'prefix' => 'dashboard'], function () {
     Route::get('operations', [App\Http\Controllers\OperationsDashboardController::class, 'index'])->name('dashboard.operations');
 });
 
+// R4.5 — Business Intelligence dashboards (descriptive reports). Additive; read-only.
+Route::group(['middleware' => ['auth'], 'prefix' => 'business', 'as' => 'business.'], function () {
+    Route::get('executive', [App\Http\Controllers\BusinessDashboardController::class, 'executive'])->name('executive');
+    Route::get('operations', [App\Http\Controllers\BusinessDashboardController::class, 'operations'])->name('operations');
+    Route::get('fleet', [App\Http\Controllers\BusinessDashboardController::class, 'fleet'])->name('fleet');
+
+    // R5.1 — BI report exports (HTML/CSV/JSON download). Read-only.
+    Route::get('executive/export/{format}', [App\Http\Controllers\ExportController::class, 'executive'])->name('executive.export');
+    Route::get('operations/export/{format}', [App\Http\Controllers\ExportController::class, 'operations'])->name('operations.export');
+    Route::get('fleet/export/{format}', [App\Http\Controllers\ExportController::class, 'fleet'])->name('fleet.export');
+});
+
 Route::group(['middleware' => ['auth'], 'prefix' => 'settings'], function () {
     Route::get('fleet', [App\Http\Controllers\FleetSettingsController::class, 'edit'])->name('settings.fleet.edit');
     Route::put('fleet', [App\Http\Controllers\FleetSettingsController::class, 'update'])->name('settings.fleet.update');
